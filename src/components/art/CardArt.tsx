@@ -78,10 +78,10 @@ export function CardArtDefs() {
 const ARCH = "M4 100 V38 C4 14 32 4 70 4 C108 4 136 14 136 38 V100 Z";
 
 /** Janela em arco com cenário (céu, brilho, colinas) e a ilustração da carta. */
-function ArtWindow({ d }: { d: CardDef }) {
+function ArtWindow({ d, compact = false }: { d: CardDef; compact?: boolean }) {
   const [, , ground] = SCENE[d.kind];
   return (
-    <div className="absolute inset-x-[12%] top-[34%] h-[37%]">
+    <div className={`absolute ${compact ? "inset-x-[10%] top-[43%] h-[38%]" : "inset-x-[12%] top-[34%] h-[37%]"}`}>
       <svg viewBox="0 0 140 100" className="h-full w-full" preserveAspectRatio="none" aria-hidden>
         <path d={ARCH} fill={`url(#sky-${d.kind})`} />
         <g clipPath="url(#art-arch)">
@@ -249,7 +249,7 @@ export function CardFront({ d, inst, size = "md" }: { d: CardDef; inst?: CardIns
     <div className="absolute inset-0 [container-type:inline-size]">
       <div className="parchment absolute inset-x-[5.2%] inset-y-[3.7%] overflow-hidden rounded-[4%/3%]">
         {TINT[d.kind] && <div className="absolute inset-0" style={{ background: TINT[d.kind] }} />}
-        {!compact && <ArtWindow d={d} />}
+        <ArtWindow d={d} compact={compact} />
       </div>
       <MetalFrame metal={metal} gem={gem} />
       <div
@@ -259,8 +259,8 @@ export function CardFront({ d, inst, size = "md" }: { d: CardDef; inst?: CardIns
         {inst?.tamed ? "Montaria" : KIND_LABEL[d.kind]}
       </div>
       <div
-        className={`absolute inset-x-[9%] text-center font-display font-bold leading-[1.08] text-[#2b1a0d] ${compact ? "top-[26%] line-clamp-4" : "top-[22.5%] line-clamp-3"}`}
-        style={fs(compact ? 12.5 : 9.6, 9)}
+        className={`absolute inset-x-[9%] text-center font-display font-bold leading-[1.08] text-[#2b1a0d] ${compact ? "top-[24%] line-clamp-2" : "top-[22.5%] line-clamp-3"}`}
+        style={fs(compact ? 11 : 9.6, 9)}
       >
         {d.name}
       </div>
