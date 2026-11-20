@@ -60,9 +60,9 @@ export function MyArea() {
         {/* Raça, classe e habilidades */}
         <div className="min-w-0 space-y-2 xl:w-[19rem]">
           <div className="flex flex-wrap gap-2">
-            {me.race ? <CardView id={me.race} size="sm" /> : <span className="text-xs text-muted">Sem raça</span>}
+            {me.race ? <CardView id={me.race} size="sm" draggable /> : <span className="text-xs text-muted">Sem raça</span>}
             {me.classes.map((c) => (
-              <CardView key={c} id={c} size="sm" />
+              <CardView key={c} id={c} size="sm" draggable />
             ))}
           </div>
           <div className="space-y-1">
@@ -89,7 +89,7 @@ export function MyArea() {
         {/* Equipamento */}
         <div>
           <p className="mb-1 text-xs uppercase tracking-wide text-muted">Equipado</p>
-          <div className="flex flex-wrap gap-2">
+          <div data-drop="equip" className="drop-zone flex min-h-[4rem] flex-wrap gap-2 rounded-lg pt-2">
             {SLOT_ORDER.map((slot) => {
               const items = bySlot(slot);
               if (items.length === 0) return null;
@@ -98,27 +98,26 @@ export function MyArea() {
                   <p className="px-1 text-[10px] uppercase text-muted">{SLOT_LABEL[slot]}</p>
                   <div className="flex gap-1">
                     {items.map((id) => (
-                      <CardView key={id} id={id} />
+                      <CardView key={id} id={id} draggable />
                     ))}
                   </div>
                 </div>
               );
             })}
             {otherEquipped.map((id) => (
-              <CardView key={id} id={id} />
+              <CardView key={id} id={id} draggable />
             ))}
-            {me.equipped.length === 0 && <p className="text-sm text-muted">Nada equipado. Clique em um item da mão para equipar.</p>}
+            {me.equipped.length === 0 && <p className="text-sm text-muted">Nada equipado. Clique em um item da mão ou arraste-o para cá.</p>}
           </div>
-          {me.carried.length > 0 && (
-            <>
-              <p className="mb-1 mt-3 text-xs uppercase tracking-wide text-muted">Na mesa (não equipado)</p>
-              <div className="flex flex-wrap gap-2">
-                {me.carried.map((id) => (
-                  <CardView key={id} id={id} size="sm" />
-                ))}
-              </div>
-            </>
-          )}
+          <p className="mb-1 mt-3 text-xs uppercase tracking-wide text-muted">Inventário (na mesa, não equipado)</p>
+          <div data-drop="inventory" className="drop-zone flex min-h-[3.5rem] flex-wrap gap-2 rounded-lg border border-dashed border-edge/70 p-2 pt-3">
+            {me.carried.map((id) => (
+              <CardView key={id} id={id} size="sm" draggable />
+            ))}
+            {me.carried.length === 0 && (
+              <p className="self-center text-[11px] text-muted">Arraste um item equipado para cá para desequipar (ou um item da mão para guardar).</p>
+            )}
+          </div>
         </div>
       </div>
 
@@ -126,7 +125,7 @@ export function MyArea() {
         <p className="mb-1 text-xs uppercase tracking-wide text-muted">
           Sua mão ({hand.length}) — clique para ver as ações ou arraste para jogar
         </p>
-        <div className="scroll-thin -mx-1 flex gap-2 overflow-x-auto px-2 pb-3 pt-4" data-zone="hand" data-drop="none">
+        <div className="scroll-thin -mx-1 flex gap-2 overflow-x-auto px-2 pb-3 pt-4" data-zone="hand" data-drop="hand">
           {hand.map((id) => (
             <CardView key={id} id={id} draggable />
           ))}
@@ -145,7 +144,7 @@ export function MobileHand() {
   return (
     <section className="rounded-xl border border-edge bg-panel p-2 lg:hidden">
       <p className="mb-1 text-[11px] uppercase tracking-wide text-muted">Sua mão ({hand.length}) — toque para usar ou arraste para cima para jogar</p>
-      <div className="scroll-thin -mx-1 flex gap-1.5 overflow-x-auto px-2 pb-2 pt-4" data-drop="none">
+      <div className="scroll-thin -mx-1 flex gap-1.5 overflow-x-auto px-2 pb-2 pt-4" data-drop="hand">
         {hand.map((id) => (
           <CardView key={id} id={id} size="sm" draggable />
         ))}

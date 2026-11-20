@@ -19,7 +19,7 @@ export function CardInspector({ cardId, onClose }: { cardId: string | null; onCl
   return (
     <Modal open title={d.name} onClose={onClose}>
       <div className="flex gap-4">
-        <div className="shrink-0">
+        <div className="shrink-0 px-6 pt-2 sm:px-8">
           <FlipCard
             key={cardId}
             d={d}

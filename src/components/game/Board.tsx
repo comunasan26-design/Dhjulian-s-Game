@@ -8,7 +8,7 @@ import { Button } from "../ui/Button";
 import { GameFx, SoundToggle } from "../fx/GameFx";
 import { CardInspector } from "./CardInspector";
 import { CardBackside } from "../art/CardArt";
-import { setDropHandler } from "../art/drag";
+import { DragDiscardZone, setDropHandler } from "../art/drag";
 import { CardView } from "./CardView";
 import { CombatPanel } from "./CombatPanel";
 import { GameProvider, useGame } from "./GameContext";
@@ -171,6 +171,7 @@ export function Board({
         </nav>
         <PromptLayer />
         <DropBridge onInspect={setInspect} />
+        <DragDiscardZone />
         <GameFx view={view} />
         <CardInspector cardId={inspect} onClose={() => setInspect(null)} />
         {winner && (
@@ -243,11 +244,10 @@ function DropBridge({ onInspect }: { onInspect: (id: string) => void }) {
     ref.current = { api, picker, onInspect };
   });
   useEffect(() => {
-    setDropHandler((cardId, target) => {
+    setDropHandler(async (cardId, target) => {
       const { api: a, picker: p, onInspect: open } = ref.current;
-      void dropCard(a, p, cardId, target).then((r) => {
-        if (r === "inspect") open(cardId);
-      });
+      const r = await dropCard(a, p, cardId, target);
+      if (r === "inspect") open(cardId);
     });
     return () => setDropHandler(null);
   }, []);
