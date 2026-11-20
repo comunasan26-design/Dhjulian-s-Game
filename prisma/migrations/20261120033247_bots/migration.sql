@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "Room" ADD COLUMN     "bots" INTEGER NOT NULL DEFAULT 0;

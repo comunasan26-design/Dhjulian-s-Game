@@ -1,6 +1,7 @@
 import "server-only";
 import { randomInt } from "node:crypto";
 import type { Prisma } from "@/generated/prisma/client";
+import { botName, stepBots } from "@/game/bot/ai";
 import { type Action, applyAction, createGame, type Ctx, type GameState, type GameView, nextDeadline, tick, viewFor } from "@/game/engine";
 import { db } from "./db";
 import { HttpError } from "./http";
@@ -44,6 +45,7 @@ export interface RoomInfo {
   status: "LOBBY" | "PLAYING" | "FINISHED";
   hostId: string;
   maxPlayers: number;
+  bots: number;
   version: number;
   players: { id: string; username: string; seat: number; online: boolean }[];
 }
@@ -61,6 +63,7 @@ export function roomInfo(room: RoomWithPlayers): RoomInfo {
     status: room.status,
     hostId: room.hostId,
     maxPlayers: room.maxPlayers,
+    bots: room.bots,
     version: room.version,
     players: room.players.map((p) => ({ id: p.userId, username: p.user.username, seat: p.seat, online: online.has(p.userId) })),
   };
@@ -96,9 +99,13 @@ export async function startGame(code: string, userId: string): Promise<RoomWithP
   const room = await loadRoom(code);
   if (room.hostId !== userId) throw new HttpError(403, "Só o anfitrião pode iniciar a partida.");
   if (room.status !== "LOBBY") throw new HttpError(400, "A partida já começou.");
-  if (room.players.length < MIN_PLAYERS) throw new HttpError(400, `São necessários pelo menos ${MIN_PLAYERS} jogadores.`);
+  if (room.players.length + room.bots < MIN_PLAYERS)
+    throw new HttpError(400, `São necessários pelo menos ${MIN_PLAYERS} jogadores (contando bots).`);
   const state = createGame(
-    room.players.map((p) => ({ id: p.userId, name: p.user.username })),
+    [
+      ...room.players.map((p) => ({ id: p.userId, name: p.user.username })),
+      ...Array.from({ length: room.bots }, (_, i) => ({ id: `bot-${i + 1}`, name: botName(i), bot: true })),
+    ],
     room.hostId,
     serverCtx(),
   );
@@ -159,4 +166,28 @@ export async function tickRoom(roomId: string, version: number, stateJson: unkno
 export function deadlineOf(stateJson: unknown): number | null {
   if (!stateJson) return null;
   return nextDeadline(stateJson as GameState);
+}
+
+/** Deixa um bot agir (chamado pelo stream de eventos). Ignora conflitos de versão. */
+export async function botStepRoom(roomId: string, version: number, stateJson: unknown, offline: Set<string>): Promise<boolean> {
+  const state = structuredClone(stateJson) as GameState;
+  const ctx = serverCtx(offline);
+  const ticked = tick(state, ctx);
+  const acted = stepBots(state, ctx);
+  if (!ticked && !acted) return false;
+  const res = await db().room.updateMany({
+    where: { id: roomId, version },
+    data: {
+      state: state as unknown as Prisma.InputJsonValue,
+      version: { increment: 1 },
+      status: state.phase === "FINISHED" ? "FINISHED" : "PLAYING",
+    },
+  });
+  return res.count === 1;
+}
+
+export function botInfo(stateJson: unknown): { hasBots: boolean; nextAt: number; finished: boolean } {
+  const s = stateJson as GameState | null;
+  if (!s) return { hasBots: false, nextAt: 0, finished: false };
+  return { hasBots: s.players.some((p) => p.bot), nextAt: s.botNextAt ?? 0, finished: s.phase === "FINISHED" };
 }

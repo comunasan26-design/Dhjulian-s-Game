@@ -34,7 +34,7 @@ export function CombatPanel() {
   return (
     <section className="rounded-xl border-2 border-red-900/70 bg-gradient-to-b from-red-950/40 to-panel p-3">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <h2 className="font-display text-xl text-red-200">
+        <h2 className="font-display text-lg text-red-200 sm:text-xl">
           ⚔️ Combate de {fighter.name}
           {c.helperId && (
             <span className="ml-2 text-sm text-muted">
@@ -56,12 +56,12 @@ export function CombatPanel() {
         )}
       </div>
 
-      <div className="grid gap-3 lg:grid-cols-[1fr_auto_1fr]">
+      <div className="grid grid-cols-[1fr_auto_1fr] gap-2 sm:gap-3">
         {/* Lado dos jogadores */}
         <div className="rounded-lg border border-edge bg-panel-2/60 p-2">
           <p className="text-xs uppercase tracking-wide text-muted">Jogadores</p>
-          <p className="font-display text-4xl text-sky-300">{calc?.playerTotal ?? "?"}</p>
-          <p className="text-sm">{side.map((id) => api.playerName(id)).join(" + ")}</p>
+          <p className="font-display text-3xl text-sky-300 sm:text-4xl">{calc?.playerTotal ?? "?"}</p>
+          <p className="truncate text-xs sm:text-sm">{side.map((id) => api.playerName(id)).join(" + ")}</p>
           {c.allies.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-1">
               {c.allies.map((a) => (
@@ -72,7 +72,7 @@ export function CombatPanel() {
         </div>
         <div className="flex items-center justify-center">
           <span
-            className={`rounded-full px-3 py-1 text-sm font-bold ${calc?.winning ? "bg-emerald-700 text-white" : "bg-red-800 text-white"}`}
+            className={`rounded-full px-2 py-1 text-[11px] font-bold sm:px-3 sm:text-sm ${calc?.winning ? "bg-emerald-700 text-white" : "bg-red-800 text-white"}`}
           >
             {calc?.winning ? "VENCENDO" : "PERDENDO"}
           </span>
@@ -80,7 +80,7 @@ export function CombatPanel() {
         {/* Monstros */}
         <div className="rounded-lg border border-edge bg-panel-2/60 p-2">
           <p className="text-xs uppercase tracking-wide text-muted">Monstros</p>
-          <p className="font-display text-4xl text-red-300">{calc?.monsterTotal ?? "?"}</p>
+          <p className="font-display text-3xl text-red-300 sm:text-4xl">{calc?.monsterTotal ?? "?"}</p>
           {(calc?.monsterSide.length ?? 0) > 0 && (
             <p className="text-xs text-red-300">Lutando pelo monstro: {calc!.monsterSide.map((id) => api.playerName(id)).join(", ")}</p>
           )}

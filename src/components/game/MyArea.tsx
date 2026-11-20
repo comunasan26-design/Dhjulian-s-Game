@@ -58,7 +58,7 @@ export function MyArea() {
 
       <div className="mt-3 grid gap-3 xl:grid-cols-[auto_1fr]">
         {/* Raça, classe e habilidades */}
-        <div className="space-y-2 xl:w-[19rem]">
+        <div className="min-w-0 space-y-2 xl:w-[19rem]">
           <div className="flex flex-wrap gap-2">
             {me.race ? <CardView id={me.race} size="sm" /> : <span className="text-xs text-muted">Sem raça</span>}
             {me.classes.map((c) => (
@@ -67,18 +67,18 @@ export function MyArea() {
           </div>
           <div className="space-y-1">
             {view.abilities.map((ab) => (
-              <div key={ab.key} className="flex items-center gap-2">
+              <div key={ab.key} className="flex min-w-0 items-center gap-2">
                 <Button
                   size="sm"
                   variant={ab.available ? "primary" : "secondary"}
                   disabled={!ab.available || api.busy}
                   title={ab.text}
                   onClick={() => flowAbility(api, picker, ab)}
-                  className="min-w-[9rem] justify-start"
+                  className="min-w-[9rem] shrink-0 justify-start"
                 >
                   ✴️ {ab.name}
                 </Button>
-                <span className="truncate text-[11px] text-muted" title={ab.reason ?? ab.costText}>
+                <span className="min-w-0 flex-1 truncate text-[11px] text-muted" title={ab.reason ?? ab.costText}>
                   {ab.reason ?? ab.costText}
                 </span>
               </div>
@@ -132,6 +132,23 @@ export function MyArea() {
           ))}
           {hand.length === 0 && <p className="text-sm text-muted">Sem cartas na mão.</p>}
         </div>
+      </div>
+    </section>
+  );
+}
+
+/** Mão compacta para o celular, mostrada na aba da mesa (útil durante combates). */
+export function MobileHand() {
+  const { me } = useGame();
+  const hand = me.hand ?? [];
+  if (hand.length === 0) return null;
+  return (
+    <section className="rounded-xl border border-edge bg-panel p-2 lg:hidden">
+      <p className="mb-1 text-[11px] uppercase tracking-wide text-muted">Sua mão ({hand.length}) — toque para usar</p>
+      <div className="scroll-thin flex gap-1.5 overflow-x-auto pb-1">
+        {hand.map((id) => (
+          <CardView key={id} id={id} size="sm" />
+        ))}
       </div>
     </section>
   );

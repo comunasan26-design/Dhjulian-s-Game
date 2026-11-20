@@ -219,8 +219,29 @@ export function applyAction(state: GameState, actorId: string, action: Action, c
   const p = player(state, actorId);
   if (state.phase === "FINISHED" && action.type !== "CHAT" && action.type !== "DISMISS_NOTICE" && action.type !== "TICK")
     fail("A partida terminou.");
+  const before = combatKey(state);
   dispatch(state, p, action, ctx);
-  if (action.type !== "TICK" && action.type !== "CHAT") state.lastActionAt = ctx.now;
+  // Qualquer ação que mude o combate durante a janela de ataque reinicia o prazo
+  const c = state.combat;
+  if (c && c.stage === "resolving" && before !== null && action.type !== "RESOLVE" && combatKey(state) !== before) {
+    c.resolveDeadline = ctx.now + TIMERS.resolve;
+    c.passed = [];
+  }
+  if (action.type !== "TICK" && action.type !== "CHAT") {
+    state.lastActionAt = ctx.now;
+    if (!p.bot) state.botNextAt = Math.max(state.botNextAt ?? 0, ctx.now + 1200);
+  }
+}
+
+/** "Impressão digital" do combate (ignora prazo e quem já passou). */
+function combatKey(state: GameState): string | null {
+  const c = state.combat;
+  if (!c) return null;
+  const calc = computeCombat(state);
+  return JSON.stringify([
+    { ...c, resolveDeadline: null, passed: [], stage: null },
+    calc ? [calc.playerTotal, calc.monsterTotal, calc.side, calc.monsterSide] : null,
+  ]);
 }
 
 function dispatch(state: GameState, p: PlayerState, a: Action, ctx: Ctx) {

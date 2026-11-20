@@ -294,7 +294,7 @@ export function PromptLayer() {
   const notices = api.view.notices;
   if (mine.length === 0 && others.length === 0 && notices.length === 0) return null;
   return (
-    <div className="fixed bottom-3 right-3 z-40 flex w-[min(24rem,calc(100vw-1.5rem))] flex-col gap-2">
+    <div className="scroll-thin fixed bottom-[4.5rem] right-3 z-40 flex max-h-[60dvh] w-[min(24rem,calc(100vw-1.5rem))] flex-col gap-2 overflow-y-auto lg:bottom-3 lg:max-h-[80vh]">
       {notices.map((n) => (
         <div key={n.id} className="rounded-xl border-2 border-sky-500 bg-panel p-3 text-sm shadow-2xl">
           <p className="font-display text-sky-200">{n.text}</p>

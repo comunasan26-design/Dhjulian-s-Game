@@ -163,7 +163,7 @@ describe("regras", () => {
     topDoor(state, "monster.estirge");
     applyAction(state, "p0", { type: "KICK_DOOR" }, ctx);
     applyAction(state, "p0", { type: "RESOLVE" }, ctx);
-    ctx.advance(20_000);
+    ctx.advance(61_000);
     applyAction(state, "p1", { type: "TICK" }, ctx);
     expect(state.winnerId).toBe("p0");
     expect(state.phase).toBe("FINISHED");
@@ -209,5 +209,27 @@ describe("regras", () => {
     applyAction(state, "p0", { type: "ABILITY", key: "luzSagrada", discard: [a], params: {} }, ctx);
     expect(computeCombat(state)!.playerTotal).toBe(2 + 4);
     expect(() => applyAction(state, "p0", { type: "ABILITY", key: "luzSagrada", discard: [b], params: {} }, ctx)).toThrow();
+  });
+
+  it("janela de ataque de 60s reinicia quando alguém interfere", () => {
+    const { state, ctx } = setup();
+    P(state, "p0").level = 10;
+    topDoor(state, "monster.estirge");
+    applyAction(state, "p0", { type: "KICK_DOOR" }, ctx);
+    applyAction(state, "p0", { type: "RESOLVE" }, ctx);
+    expect(state.combat!.resolveDeadline).toBe(ctx.now + 60_000);
+    applyAction(state, "p1", { type: "PASS" }, ctx);
+    ctx.advance(50_000);
+    const bonus = give(state, "p2", "bonus.faminto");
+    applyAction(state, "p2", { type: "PLAY_MONSTER_BONUS", cardId: bonus, monsterId: state.combat!.monsters[0].cardId }, ctx);
+    expect(state.combat!.stage).toBe("resolving");
+    expect(state.combat!.resolveDeadline).toBe(ctx.now + 60_000);
+    expect(state.combat!.passed).toEqual([]);
+    ctx.advance(59_000);
+    applyAction(state, "p1", { type: "TICK" }, ctx);
+    expect(state.combat).not.toBeNull();
+    ctx.advance(2_000);
+    applyAction(state, "p1", { type: "TICK" }, ctx);
+    expect(state.combat).toBeNull();
   });
 });

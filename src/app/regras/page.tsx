@@ -10,13 +10,14 @@ const RULES: [string, string][] = [
   ["2. Procurar encrenca", "Se a porta não trouxe monstro, você pode lutar com um monstro da sua mão."],
   ["3. Saquear a sala", "Se não lutou neste turno, compre 1 carta de Porta virada para baixo."],
   ["4. Caridade", "No fim do turno a mão pode ter no máximo 5 cartas (Humano 6, Anão 6/7, Bolsa Devoradora +2). O excesso vai para o jogador de menor nível; se o menor for você, descarte."],
-  ["Combate", "Força = nível + itens equipados + modificadores. Para vencer, sua força precisa passar a soma dos monstros (empate: o monstro vence, exceto Guerreiro). Ao clicar em “Atacar”, os outros têm alguns segundos para interferir ou “Deixar passar”."],
+  ["Combate", "Força = nível + itens equipados + modificadores. Para vencer, sua força precisa passar a soma dos monstros (empate: o monstro vence, exceto Guerreiro). Ao clicar em “Atacar”, os outros têm 60 segundos para interferir ou “Deixar passar”; cada carta ou ação que muda o combate reinicia o contador."],
   ["Ajuda", "Peça ajuda a 1 jogador (ou aceite uma oferta) combinando quantos tesouros ele leva e como dividir: aleatório, quem luta decide, ou ajudante escolhe primeiro. O ajudante não ganha nível (exceto o Elfo)."],
   ["Fugir", "Role 1d6: sucesso com 5+ (somando bônus de Fugir). Role para cada monstro; cada falha aplica as Coisas Ruins dele. O ajudante também rola."],
   ["Recompensa", "Quem vence sobe os níveis da carta e compra os tesouros: virados para baixo se lutou sozinho, abertos se teve ajuda."],
   ["Morte", "Você perde todos os itens e a mão, mas mantém nível, raça e classe. Do maior nível para o menor, cada jogador pega 1 item seu. No seu próximo turno, receba 4 Portas e 4 Tesouros."],
   ["Itens", "Equipar só no seu turno e fora de combate. Itens na mesa não equipados não dão bônus. Só 1 item Grande (Gigante 2; Anão e Fada nenhum) e 1 Lendário equipado. Vender: 1.000 de ouro = 1 nível, só no seu turno e fora de combate."],
   ["A qualquer momento", "Maldições, poções, cartas de subir nível e bônus de monstro podem ser jogados a qualquer momento, até no turno dos outros. Trocas de itens: a qualquer momento, menos durante um combate."],
+  ["Bots", "Na sala de espera o anfitrião pode adicionar bots. Eles jogam para vencer: equipam o melhor que têm, montam combos, atrapalham humanos e quem está na liderança, preferem se aliar a outros bots e negociam itens exclusivos da sua raça/classe. No modo local você joga só contra bots, sem conta e sem servidor."],
   ["Reconexão", "Caiu a internet ou fechou a aba? Entre de novo pelo lobby (Suas salas): o jogo continua exatamente de onde parou. Se o jogador da vez sumir por mais de 45s, qualquer um pode pular o turno dele."],
 ];
 

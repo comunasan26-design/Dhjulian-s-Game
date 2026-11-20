@@ -28,7 +28,7 @@ export const GET = handle(async () => {
     name: r.name,
     status: r.status,
     host: r.host.username,
-    players: r.players.length,
+    players: r.players.length + r.bots,
     online: r.players.filter((p) => now - p.lastSeenAt.getTime() < ONLINE_WINDOW_MS).length,
     maxPlayers: r.maxPlayers,
     isMember: r.players.some((p) => p.userId === user.id),

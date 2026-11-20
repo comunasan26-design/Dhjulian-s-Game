@@ -154,7 +154,7 @@ export function useRoom(code: string) {
   );
 
   const roomCall = useCallback(
-    async (path: "join" | "leave" | "start" | "kick", body?: unknown) => {
+    async (path: "join" | "leave" | "start" | "kick" | "bots", body?: unknown) => {
       setBusy(true);
       try {
         const p = await api<RoomPayload | { ok: boolean }>(`/api/rooms/${code}/${path}`, {

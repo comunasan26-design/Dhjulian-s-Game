@@ -23,8 +23,8 @@ export function CardView({
   const game = useGameOptional();
   const inst = id ? game?.view.cards[id] : undefined;
   const d = defId ? cardDef(defId) : inst ? cardDef(inst.defId) : null;
-  const w = size === "sm" ? "w-[6.5rem]" : "w-[8.5rem]";
-  const h = size === "sm" ? "min-h-[4.5rem]" : "min-h-[7.5rem]";
+  const w = size === "sm" ? "w-[5.75rem] sm:w-[6.5rem]" : "w-[7rem] sm:w-[8.5rem]";
+  const h = size === "sm" ? "min-h-[4.25rem] sm:min-h-[4.5rem]" : "min-h-[6.5rem] sm:min-h-[7.5rem]";
   const click = onClick ?? (id && game ? () => game.inspect(id) : undefined);
 
   if (!d) {
@@ -43,7 +43,7 @@ export function CardView({
       type="button"
       onClick={click}
       title={d.name}
-      className={`relative flex ${w} ${h} flex-col rounded-lg border-2 p-1.5 text-left transition hover:-translate-y-0.5 hover:shadow-lg ${KIND_STYLE[d.kind]} ${
+      className={`relative flex shrink-0 ${w} ${h} flex-col rounded-lg border-2 p-1.5 text-left transition hover:-translate-y-0.5 hover:shadow-lg ${KIND_STYLE[d.kind]} ${
         selected ? "ring-2 ring-gold-2 ring-offset-2 ring-offset-bg" : ""
       } ${dim ? "opacity-50" : ""}`}
     >
@@ -64,7 +64,7 @@ export function CardView({
           </span>
         )}
       </div>
-      <div className={`mt-0.5 font-display leading-tight text-ink ${size === "sm" ? "text-[12px]" : "text-[13px]"}`}>{d.name}</div>
+      <div className={`mt-0.5 font-display leading-tight text-ink ${size === "sm" ? "text-[11px] sm:text-[12px]" : "text-[12px] sm:text-[13px]"}`}>{d.name}</div>
       {size === "md" && <div className="mt-auto pt-1 text-[10px] leading-tight text-muted">{inst?.tamed ? "Monstro domado" : shortInfo(d)}</div>}
       {(inst?.runes?.length ?? 0) > 0 && (
         <span className="absolute -right-1 -top-1 rounded-full bg-cyan-500 px-1 text-[10px] font-bold text-black">ᚱ{inst!.runes!.length}</span>

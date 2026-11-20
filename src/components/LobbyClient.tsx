@@ -85,6 +85,9 @@ export function LobbyClient({ username }: { username: string }) {
           </p>
         </div>
         <div className="flex gap-2">
+          <Link href="/local" className="rounded-md border border-edge px-3 py-1.5 text-sm text-muted hover:text-ink">
+            🤖 Partida local
+          </Link>
           <Link href="/regras" className="rounded-md border border-edge px-3 py-1.5 text-sm text-muted hover:text-ink">
             📖 Regras e cartas
           </Link>
