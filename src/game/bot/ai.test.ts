@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { applyAction } from "../engine/actions";
 import { createGame } from "../engine/core";
 import type { Ctx, GameState } from "../engine/state";
-import { botName, stepBots } from "./ai";
+import { newCard } from "../engine/util";
+import { botName, shouldPayThreat, stepBots } from "./ai";
 
 function mulberry(seed: number) {
   let a = seed >>> 0;
@@ -56,4 +57,48 @@ describe("bots", () => {
     console.log(`partidas de bots terminadas: ${finished}/6, rodadas: ${rounds}, decisão mais lenta: ${worst.toFixed(0)}ms`);
     expect(rounds).toBeGreaterThan(20);
   }, 600_000);
+});
+
+describe("bots e ameaças", () => {
+  function combatWithThreat() {
+    const ctx: Ctx = { now: 1_000, rng: { int: () => 0 } };
+    const state = createGame(
+      [
+        { id: "p0", name: "Bot", bot: true },
+        { id: "p1", name: "Humano" },
+        { id: "p2", name: "Outro" },
+      ],
+      "p0",
+      ctx,
+    );
+    state.order = ["p0", "p1", "p2"];
+    for (const p of state.players) {
+      p.hand = [];
+      p.race = null;
+      p.classes = [];
+      p.equipped = [];
+    }
+    applyAction(state, "p0", { type: "START_NOW" }, ctx);
+    state.players[0].level = 10;
+    state.decks.door.unshift(newCard(state, "monster.gosma")); // nível 5, 2 tesouros, 1 nível
+    applyAction(state, "p0", { type: "KICK_DOOR" }, ctx);
+    return { state, ctx, bot: state.players[0], human: state.players[1] };
+  }
+
+  it("recusa ameaça de quem não tem como atrapalhar", () => {
+    const { state, ctx, bot } = combatWithThreat();
+    expect(shouldPayThreat(state, bot, "p1", 1, ctx)).toBe(false);
+  });
+
+  it("paga um preço justo quando a ameaça é real", () => {
+    const { state, ctx, bot, human } = combatWithThreat();
+    human.hand.push(newCard(state, "bonus.anciao")); // +10 no monstro vira o combate
+    expect(shouldPayThreat(state, bot, "p1", 1, ctx)).toBe(true);
+  });
+
+  it("recusa pedido exagerado (todos os tesouros por um monstro de 1 nível)", () => {
+    const { state, ctx, bot, human } = combatWithThreat();
+    human.hand.push(newCard(state, "bonus.anciao"));
+    expect(shouldPayThreat(state, bot, "p1", 2, ctx)).toBe(false);
+  });
 });

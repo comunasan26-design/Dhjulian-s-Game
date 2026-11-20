@@ -8,12 +8,14 @@ import { Button } from "../ui/Button";
 import { GameFx, SoundToggle } from "../fx/GameFx";
 import { CardInspector } from "./CardInspector";
 import { CardBackside } from "../art/CardArt";
+import { setDropHandler } from "../art/drag";
 import { CardView } from "./CardView";
 import { CombatPanel } from "./CombatPanel";
-import { GameProvider } from "./GameContext";
+import { GameProvider, useGame } from "./GameContext";
+import { dropCard } from "./flows";
 import { LogPanel } from "./LogPanel";
 import { MobileHand, MyArea } from "./MyArea";
-import { PickerProvider } from "./Picker";
+import { PickerProvider, usePicker } from "./Picker";
 import { PlayerPanel } from "./PlayerPanel";
 import { PromptLayer } from "./PromptLayer";
 import { TurnControls } from "./TurnControls";
@@ -168,6 +170,7 @@ export function Board({
           ))}
         </nav>
         <PromptLayer />
+        <DropBridge onInspect={setInspect} />
         <GameFx view={view} />
         <CardInspector cardId={inspect} onClose={() => setInspect(null)} />
         {winner && (
@@ -192,7 +195,7 @@ function TableArea({ view, me, act }: { view: GameView; me: GameView["players"][
   const topDoor = view.decks.doorDiscard[view.decks.doorDiscard.length - 1];
   const topTreasure = view.decks.treasureDiscard[view.decks.treasureDiscard.length - 1];
   return (
-    <section className="flex flex-wrap items-start gap-3 rounded-xl border border-edge bg-panel p-3 sm:gap-4">
+    <section data-drop="table" className="drop-zone flex flex-wrap items-start gap-3 rounded-xl border border-edge bg-panel p-3 sm:gap-4">
       <div className="flex gap-3">
         <DeckPile deck="door" label="Portas" count={view.decks.door} />
         <DeckPile deck="treasure" label="Tesouros" count={view.decks.treasure} />
@@ -203,11 +206,11 @@ function TableArea({ view, me, act }: { view: GameView; me: GameView["players"][
           <CardView id={view.turn.revealed} />
         </div>
       )}
-      <div>
+      <div data-drop="discard" className="drop-zone rounded-lg">
         <p className="mb-1 text-xs text-muted">Descarte de Portas</p>
         {topDoor ? <CardView id={topDoor} size="sm" /> : <p className="text-xs text-muted">vazio</p>}
       </div>
-      <div>
+      <div data-drop="discard" className="drop-zone rounded-lg">
         <p className="mb-1 text-xs text-muted">Descarte de Tesouros</p>
         {topTreasure ? <CardView id={topTreasure} size="sm" /> : <p className="text-xs text-muted">vazio</p>}
         {view.lastItemDiscard && me.passives.includes("catador") && view.lastItemDiscard.by !== me.id && (
@@ -229,6 +232,26 @@ function TableArea({ view, me, act }: { view: GameView; me: GameView["players"][
       )}
     </section>
   );
+}
+
+/** Recebe as cartas soltas por arraste e decide a jogada. */
+function DropBridge({ onInspect }: { onInspect: (id: string) => void }) {
+  const api = useGame();
+  const picker = usePicker();
+  const ref = useRef({ api, picker, onInspect });
+  useEffect(() => {
+    ref.current = { api, picker, onInspect };
+  });
+  useEffect(() => {
+    setDropHandler((cardId, target) => {
+      const { api: a, picker: p, onInspect: open } = ref.current;
+      void dropCard(a, p, cardId, target).then((r) => {
+        if (r === "inspect") open(cardId);
+      });
+    });
+    return () => setDropHandler(null);
+  }, []);
+  return null;
 }
 
 /** Pilha de cartas viradas (baralho) com contador. */

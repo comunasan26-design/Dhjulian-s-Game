@@ -29,7 +29,7 @@ export function MyArea() {
   });
 
   return (
-    <section className="rounded-xl border border-gold/40 bg-panel p-3">
+    <section data-drop="table" className="drop-zone rounded-xl border border-gold/40 bg-panel p-3">
       <div className="flex flex-wrap items-center gap-3">
         <LevelBadge level={me.level} />
         <div>
@@ -124,11 +124,11 @@ export function MyArea() {
 
       <div className="mt-3">
         <p className="mb-1 text-xs uppercase tracking-wide text-muted">
-          Sua mão ({hand.length}) — clique numa carta para ver as ações
+          Sua mão ({hand.length}) — clique para ver as ações ou arraste para jogar
         </p>
-        <div className="scroll-thin flex gap-2 overflow-x-auto pb-2" data-zone="hand">
+        <div className="scroll-thin -mx-1 flex gap-2 overflow-x-auto px-2 pb-3 pt-4" data-zone="hand" data-drop="none">
           {hand.map((id) => (
-            <CardView key={id} id={id} />
+            <CardView key={id} id={id} draggable />
           ))}
           {hand.length === 0 && <p className="text-sm text-muted">Sem cartas na mão.</p>}
         </div>
@@ -144,10 +144,10 @@ export function MobileHand() {
   if (hand.length === 0) return null;
   return (
     <section className="rounded-xl border border-edge bg-panel p-2 lg:hidden">
-      <p className="mb-1 text-[11px] uppercase tracking-wide text-muted">Sua mão ({hand.length}) — toque para usar</p>
-      <div className="scroll-thin flex gap-1.5 overflow-x-auto pb-1">
+      <p className="mb-1 text-[11px] uppercase tracking-wide text-muted">Sua mão ({hand.length}) — toque para usar ou arraste para cima para jogar</p>
+      <div className="scroll-thin -mx-1 flex gap-1.5 overflow-x-auto px-2 pb-2 pt-4" data-drop="none">
         {hand.map((id) => (
-          <CardView key={id} id={id} size="sm" />
+          <CardView key={id} id={id} size="sm" draggable />
         ))}
       </div>
     </section>

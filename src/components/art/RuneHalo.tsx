@@ -1,9 +1,12 @@
-/**
- * Letras rúnicas (futhark antigo) girando ao redor de uma carta encantada.
- * As runas são desenhadas em SVG (não dependem de fonte) e andam pelo contorno com <animateMotion>.
- */
+"use client";
 
-// Glifos em traço, numa caixa de -5..5 x -7..7 ("para cima" = -y)
+/**
+ * Encantamento rúnico: anéis de letras rúnicas (futhark antigo, desenhadas em SVG) orbitando a carta em
+ * diagonal. Cada anel é desenhado em duas camadas sincronizadas — uma atrás da carta (metade de trás da
+ * órbita, mais apagada) e outra na frente (metade da frente) — para dar a ilusão de atravessar a carta em 3D.
+ */
+import { useId } from "react";
+
 const GLYPHS = [
   "M-3 7V-7M-3-3L3-7M-3 1L3-3", // ᚠ
   "M-3 7V-7L3-3V7", // ᚢ
@@ -31,39 +34,66 @@ const GLYPHS = [
   "M-4 7L3-1L0-7L-3-1L4 7", // ᛟ
 ];
 
-// Contorno (viewBox da carta: 250x350; o halo tem margem de 22), sentido horário a partir do topo
-const X = -11;
-const Y = -11;
-const W = 272;
-const H = 372;
-const R = 26;
-const LOOP = `M${X + R} ${Y} H${X + W - R} A${R} ${R} 0 0 1 ${X + W} ${Y + R} V${Y + H - R} A${R} ${R} 0 0 1 ${X + W - R} ${Y + H} H${X + R} A${R} ${R} 0 0 1 ${X} ${Y + H - R} V${Y + R} A${R} ${R} 0 0 1 ${X + R} ${Y} Z`;
+const RX = 182;
+const RY = 46;
+const N = 22;
 
-/** `count` = quantidade de runas encaixadas (mais runas, mais rápido). */
-export function RuneHalo({ count = 1 }: { count?: number }) {
-  const n = 26;
-  const dur = Math.max(9, 20 - count * 4);
+// Anéis: inclinação (graus), sentido e velocidade. Mais runas encaixadas = mais anéis.
+const RINGS = [
+  { tilt: -33, reverse: false, dur: 11 },
+  { tilt: 33, reverse: true, dur: 13 },
+  { tilt: -72, reverse: false, dur: 15 },
+];
+
+function orbit(reverse: boolean) {
+  // metade de baixo (frente) primeiro; o sentido define para onde as runas andam
+  const s = reverse ? 1 : 0;
+  return `M${-RX} 0 A${RX} ${RY} 0 1 ${s} ${RX} 0 A${RX} ${RY} 0 1 ${s} ${-RX} 0 Z`;
+}
+
+/** `layer="back"` vai antes da arte da carta (fica atrás); `layer="front"` vai depois (fica na frente). */
+export function RuneHalo({ count = 1, layer }: { count?: number; layer: "back" | "front" }) {
+  const uid = useId().replace(/[^a-zA-Z0-9_-]/g, "");
+  const rings = RINGS.slice(0, Math.max(1, Math.min(3, count)));
+  const front = layer === "front";
   return (
     <svg
-      viewBox="-22 -22 294 394"
-      className="rune-halo pointer-events-none absolute z-10"
-      style={{ left: "-8.8%", top: "-6.3%", width: "117.6%", height: "112.6%" }}
+      viewBox="-60 -20 370 390"
+      className={`rune-halo pointer-events-none absolute ${front ? "z-10" : "z-0"}`}
+      style={{ left: "-24%", top: "-5.714%", width: "148%", height: "111.43%", opacity: front ? 1 : 0.5 }}
       aria-hidden
     >
-      <path d={LOOP} fill="none" stroke="#ff8a6a" strokeWidth="1.2" strokeDasharray="2 9" opacity="0.55" />
-      {Array.from({ length: n }, (_, i) => (
-        <g key={i}>
-          <path
-            d={GLYPHS[(i * 7 + count) % GLYPHS.length]}
-            fill="none"
-            stroke={i % 3 === 0 ? "#ffd27a" : "#ff6a5a"}
-            strokeWidth="1.9"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-          <animateMotion dur={`${dur}s`} begin={`${(-i * dur) / n}s`} repeatCount="indefinite" rotate="auto" path={LOOP} />
-        </g>
-      ))}
+      <defs>
+        <clipPath id={`rh-${uid}-${layer}`} clipPathUnits="userSpaceOnUse">
+          <rect x={-400} y={front ? 0 : -400} width={800} height={400} />
+        </clipPath>
+      </defs>
+      {rings.map((r, ri) => {
+        const path = orbit(r.reverse);
+        return (
+          <g key={ri} transform={`translate(125 175) rotate(${r.tilt})`}>
+            <g clipPath={`url(#rh-${uid}-${layer})`}>
+              <ellipse rx={RX} ry={RY} fill="none" stroke="#ff7a5a" strokeWidth={front ? 1.6 : 1} strokeDasharray="2 7" opacity={0.6} />
+              <ellipse rx={RX} ry={RY} fill="none" stroke="#ffb36b" strokeWidth={front ? 6 : 4} opacity={0.12} />
+              {Array.from({ length: N }, (_, i) => (
+                <g key={i}>
+                  <g transform={`scale(${front ? 1.15 : 0.85})`}>
+                    <path
+                      d={GLYPHS[(i * 7 + ri * 5 + count) % GLYPHS.length]}
+                      fill="none"
+                      stroke={i % 3 === 0 ? "#ffd27a" : "#ff6a5a"}
+                      strokeWidth="1.9"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </g>
+                  <animateMotion dur={`${r.dur}s`} begin={`${(-i * r.dur) / N}s`} repeatCount="indefinite" path={path} />
+                </g>
+              ))}
+            </g>
+          </g>
+        );
+      })}
     </svg>
   );
 }

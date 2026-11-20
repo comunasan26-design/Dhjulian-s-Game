@@ -137,6 +137,36 @@ function canFlip(state: GameState, who: string, ctx: Ctx): boolean {
   return !!plan(state, who, (s) => (s.combat ? hinderCandidates(s, P(s, who)) : []), (s) => !s.combat || !winning(s), ctx, 4);
 }
 
+/**
+ * Vale a pena pagar uma ameaça? Só se quem ameaça consegue mesmo virar o combate (ou tem mão para isso)
+ * e se o preço for menor que a perda esperada. Pedidos exagerados são recusados.
+ */
+export function shouldPayThreat(state: GameState, me: PlayerState, threatenerId: string, count: number, ctx: Ctx): boolean {
+  const c = state.combat;
+  if (!c || c.fighterId !== me.id) return false;
+  const free = freeTreasures(state, c);
+  if (count < 1 || count > free) return false;
+  const calc = computeCombat(state);
+  if (!calc?.winning) return false; // perdendo de qualquer jeito: pagar não protege nada
+  const threatener = P(state, threatenerId);
+  if (!threatener) return false;
+  const stake = monsterStake(state);
+  const winsGame = me.level + stake.levels >= RULES.nivelMaximo;
+  // chance de a ameaça ser real
+  let p = canFlip(state, threatenerId, ctx) ? 0.85 : threatener.hand.length >= 5 ? 0.15 : 0.03;
+  // se outros também podem virar o combate, pagar um só não garante a vitória
+  const others = state.players.filter((o) => o.id !== me.id && o.id !== threatenerId && !calc.side.includes(o.id));
+  if (others.some((o) => canFlip(state, o.id, ctx))) p *= 0.5;
+  const treasureValue = 45;
+  const lossIfHindered = stake.levels * 100 + free * treasureValue + 80 + (winsGame ? 5000 : 0);
+  // ceder a chantagem tem um "preço de orgulho": pagar custa um pouco mais que o valor das cartas
+  const cost = count * treasureValue * 1.3;
+  if (p * lossIfHindered <= cost) return false;
+  // nunca entrega quase tudo, a não ser que a vitória do jogo dependa disso ou a ameaça seja certa e o prêmio alto
+  const reasonable = count <= Math.max(1, Math.floor(free * 0.6));
+  return reasonable || winsGame || (p >= 0.85 && stake.levels >= 2);
+}
+
 function handValue(state: GameState, p: PlayerState): number {
   return p.hand.reduce((a, id) => a + cardValue(state, id), 0);
 }
@@ -433,17 +463,7 @@ function answerFor(state: GameState, me: PlayerState, pr: Prompt, ctx: Ctx): Act
       return answer({ accept });
     }
     case "threat": {
-      // Pago se quem ameaça conseguiria mesmo virar o combate
-      const threatener = String(data.threatenerId);
-      const count = Number(data.count);
-      const stake = monsterStake(state);
-      const calc = computeCombat(state);
-      const winningNow = !!calc?.winning;
-      const free = state.combat ? freeTreasures(state, state.combat) : 0;
-      if (count > free) return answer({ accept: false });
-      const real = canFlip(state, threatener, ctx) || P(state, threatener).hand.length >= 4;
-      const worth = stake.levels * 100 + (stake.treasures - count) * 25 > 0 && count < stake.treasures + 1;
-      return answer({ accept: real && worth && (winningNow || count <= Math.ceil(stake.treasures / 2)) });
+      return answer({ accept: shouldPayThreat(state, me, String(data.threatenerId), Number(data.count), ctx) });
     }
     case "helpOffer": {
       const helper = P(state, String(data.helperId));

@@ -1,6 +1,7 @@
 /**
  * Gemas desenhadas em SVG (facetas em polígonos chapados, sem filtros: leves para renderizar dezenas de cartas).
- * Cada gema é desenhada centrada em (0,0) com "raio" R.
+ * Cada gema tem um contorno poligonal (gemOutline) que ela preenche por inteiro; o engaste de metal da carta
+ * segue esse mesmo contorno. Tudo centrado em (0,0), cabendo numa caixa de lado 2R.
  */
 import type { CardDef } from "@/game/catalog";
 
@@ -58,6 +59,7 @@ export function gemOf(kind: CardDef["kind"] | undefined): GemKind {
   }
 }
 
+type Pt = [number, number];
 /** [mais escuro, escuro, médio, claro, brilho] */
 type Pal = [string, string, string, string, string];
 
@@ -72,41 +74,129 @@ const PAL: Record<Exclude<GemKind, "bismuto" | "obsidiana" | "obsidianaRachada">
   diamante: ["#8ea2b7", "#c5d3e1", "#e6eef6", "#ffffff", "#ffffff"],
 };
 
-const pt = (a: number, r: number, sx = 1, sy = 1) => [Math.sin(a) * r * sx, -Math.cos(a) * r * sy] as const;
-const poly = (pts: readonly (readonly [number, number])[]) => pts.map(([x, y]) => `${x.toFixed(2)},${y.toFixed(2)}`).join(" ");
+const r2 = (n: number) => Math.round(n * 100) / 100;
+const pt = (a: number, r: number, sx = 1, sy = 1): Pt => [r2(Math.sin(a) * r * sx), r2(-Math.cos(a) * r * sy)];
+export const poly = (pts: readonly Pt[]) => pts.map(([x, y]) => `${x},${y}`).join(" ");
+const lerp = (a: Pt, b: Pt, t: number): Pt => [r2(a[0] + (b[0] - a[0]) * t), r2(a[1] + (b[1] - a[1]) * t)];
 
-/** Lapidação brilhante (redonda/oval): mesa octogonal + coroa em triângulos alternados. */
-function Brilliant({ R, pal, sx = 1, sy = 1, fire = false }: { R: number; pal: Pal; sx?: number; sy?: number; fire?: boolean }) {
-  const n = 8;
-  const outer = Array.from({ length: n }, (_, i) => pt((i / n) * Math.PI * 2 + Math.PI / n, R, sx, sy));
-  const mid = Array.from({ length: n }, (_, i) => pt((i / n) * Math.PI * 2, R * 0.78, sx, sy));
-  const table = Array.from({ length: n }, (_, i) => pt((i / n) * Math.PI * 2 + Math.PI / n, R * 0.45, sx, sy));
-  // luz vindo de cima-esquerda: facetas mais claras nesse lado
-  const shade = (i: number) => {
-    const a = ((i + 0.5) / n) * 360;
-    if (a > 260 || a < 20) return pal[3];
-    if (a < 100) return pal[2];
-    if (a < 200) return pal[0];
-    return pal[1];
-  };
+function ngon(n: number, R: number, sx = 1, sy = 1, phase = Math.PI / n): Pt[] {
+  return Array.from({ length: n }, (_, i) => pt((i / n) * Math.PI * 2 + phase, R, sx, sy));
+}
+function cutRect(W: number, H: number, cut: number): Pt[] {
+  return [
+    [-W + cut, -H],
+    [W - cut, -H],
+    [W, -H + cut],
+    [W, H - cut],
+    [W - cut, H],
+    [-W + cut, H],
+    [-W, H - cut],
+    [-W, -H + cut],
+  ];
+}
+const OBSIDIAN: Pt[] = [
+  [-0.35, -0.95],
+  [0.45, -0.88],
+  [0.95, -0.25],
+  [0.82, 0.55],
+  [0.2, 0.95],
+  [-0.62, 0.78],
+  [-0.97, 0.05],
+];
+
+/** Contorno de cada gema (o engaste segue este polígono). */
+export function gemOutline(kind: GemKind, R: number): Pt[] {
+  switch (kind) {
+    case "quartzoBranco":
+    case "quartzoMarrom":
+    case "bismuto": {
+      const s = r2(R * 0.84);
+      return [
+        [-s, -s],
+        [s, -s],
+        [s, s],
+        [-s, s],
+      ];
+    }
+    case "esmeralda":
+      return cutRect(R * 0.98, R * 0.74, R * 0.26);
+    case "turmalina":
+      return cutRect(R * 0.58, R, R * 0.2);
+    case "topazio":
+      return ngon(8, R, 0.76, 1);
+    case "obsidiana":
+    case "obsidianaRachada":
+      return OBSIDIAN.map(([x, y]) => [r2(x * R), r2(y * R)]);
+    default:
+      return ngon(8, R);
+  }
+}
+
+/** Polígono convexo deslocado para fora (d > 0) ou para dentro (d < 0). */
+export function offsetPoly(pts: Pt[], d: number): Pt[] {
+  const n = pts.length;
+  const cx = pts.reduce((a, p) => a + p[0], 0) / n;
+  const cy = pts.reduce((a, p) => a + p[1], 0) / n;
+  const lines = pts.map((p, i) => {
+    const q = pts[(i + 1) % n];
+    let nx = q[1] - p[1];
+    let ny = -(q[0] - p[0]);
+    const len = Math.hypot(nx, ny) || 1;
+    nx /= len;
+    ny /= len;
+    const mx = (p[0] + q[0]) / 2 - cx;
+    const my = (p[1] + q[1]) / 2 - cy;
+    if (nx * mx + ny * my < 0) {
+      nx = -nx;
+      ny = -ny;
+    }
+    return { p: [p[0] + nx * d, p[1] + ny * d] as Pt, dir: [q[0] - p[0], q[1] - p[1]] as Pt };
+  });
+  return lines.map((l2, i) => {
+    const l1 = lines[(i - 1 + n) % n];
+    const det = l1.dir[0] * l2.dir[1] - l1.dir[1] * l2.dir[0];
+    if (Math.abs(det) < 1e-9) return [r2(l2.p[0]), r2(l2.p[1])] as Pt;
+    const t = ((l2.p[0] - l1.p[0]) * l2.dir[1] - (l2.p[1] - l1.p[1]) * l2.dir[0]) / det;
+    return [r2(l1.p[0] + l1.dir[0] * t), r2(l1.p[1] + l1.dir[1] * t)] as Pt;
+  });
+}
+
+/** Sombra por direção: luz vindo de cima-esquerda. */
+function shadeFor(mid: Pt, pal: Pal): string {
+  const a = (Math.atan2(mid[1], mid[0]) * 180) / Math.PI; // -180..180, 0 = direita, -90 = cima
+  if (a < -100 && a > -170) return pal[3];
+  if (a <= -170 || a > 150) return pal[2];
+  if (a >= -100 && a < -20) return pal[2];
+  if (a >= -20 && a < 70) return pal[0];
+  return pal[1];
+}
+
+/** Lapidação brilhante (contorno octogonal, redondo ou oval). */
+function Brilliant({ outline, pal, fire = false }: { outline: Pt[]; pal: Pal; fire?: boolean }) {
+  const n = outline.length;
+  const table = outline.map((p) => lerp([0, 0], p, 0.48));
+  const girdleMid = outline.map((p, i) => lerp(lerp(p, outline[(i + 1) % n], 0.5), [0, 0], 0.18));
+  const ext = Math.max(...outline.map((p) => Math.abs(p[0])));
   return (
     <g>
-      <polygon points={poly(outer)} fill={pal[1]} stroke={pal[0]} strokeWidth={R * 0.06} />
-      {outer.map((o, i) => {
-        const o2 = outer[(i + 1) % n];
-        const m = mid[(i + 1) % n];
+      <polygon points={poly(outline)} fill={pal[1]} />
+      {outline.map((o, i) => {
+        const o2 = outline[(i + 1) % n];
+        const m = girdleMid[i];
         const t1 = table[i];
         const t2 = table[(i + 1) % n];
+        const mid = lerp(o, o2, 0.5);
         return (
           <g key={i}>
-            <polygon points={poly([o, m, t1])} fill={shade(i)} />
-            <polygon points={poly([m, o2, t2])} fill={shade(i + 1)} opacity={0.9} />
-            <polygon points={poly([t1, m, t2])} fill={shade(i + 4)} opacity={0.85} />
+            <polygon points={poly([o, m, t1])} fill={shadeFor(lerp(o, t1, 0.5), pal)} />
+            <polygon points={poly([m, o2, t2])} fill={shadeFor(lerp(o2, t2, 0.5), pal)} opacity={0.92} />
+            <polygon points={poly([o, o2, m])} fill={shadeFor(mid, pal)} opacity={0.75} />
+            <polygon points={poly([t1, m, t2])} fill={shadeFor([-mid[0], -mid[1]], pal)} opacity={0.85} />
           </g>
         );
       })}
       <polygon points={poly(table)} fill={pal[2]} />
-      <polygon points={poly(table.slice(5).concat(table.slice(0, 2)))} fill={pal[3]} opacity={0.55} />
+      <polygon points={poly([table[n - 2], table[n - 1], table[0], [0, 0]])} fill={pal[3]} opacity={0.6} />
       {fire && (
         <g opacity={0.75}>
           <polygon points={poly([table[0], table[1], [0, 0]])} fill="#9fd8ff" />
@@ -114,161 +204,133 @@ function Brilliant({ R, pal, sx = 1, sy = 1, fire = false }: { R: number; pal: P
           <polygon points={poly([table[5], table[6], [0, 0]])} fill="#fff2a0" />
         </g>
       )}
-      <ellipse cx={-R * 0.32 * sx} cy={-R * 0.38 * sy} rx={R * 0.2} ry={R * 0.1} fill={pal[4]} opacity={0.9} transform={`rotate(-35 ${-R * 0.32 * sx} ${-R * 0.38 * sy})`} />
-      <circle cx={R * 0.3 * sx} cy={R * 0.1 * sy} r={R * 0.06} fill={pal[4]} opacity={0.7} />
+      <polygon points={poly(outline)} fill="none" stroke={pal[0]} strokeWidth={ext * 0.05} />
+      <ellipse cx={r2(-ext * 0.3)} cy={r2(-ext * 0.36)} rx={r2(ext * 0.2)} ry={r2(ext * 0.09)} fill={pal[4]} opacity={0.9} transform={`rotate(-35 ${r2(-ext * 0.3)} ${r2(-ext * 0.36)})`} />
     </g>
   );
 }
 
-/** Lapidação em degraus (esmeralda / turmalina): retângulo de cantos cortados com degraus concêntricos. */
-function Step({ R, pal, w = 0.82, h = 1 }: { R: number; pal: Pal; w?: number; h?: number }) {
-  const rect = (k: number) => {
-    const W = R * w * k;
-    const H = R * h * k;
-    const c = Math.min(W, H) * 0.32;
-    return [
-      [-W + c, -H],
-      [W - c, -H],
-      [W, -H + c],
-      [W, H - c],
-      [W - c, H],
-      [-W + c, H],
-      [-W, H - c],
-      [-W, -H + c],
-    ] as [number, number][];
-  };
-  const steps = [1, 0.78, 0.56];
+/** Lapidação em degraus (esmeralda / turmalina): o contorno e dois degraus internos. */
+function Step({ outline, pal }: { outline: Pt[]; pal: Pal }) {
+  const xs = outline.map((p) => p[0]);
+  const ys = outline.map((p) => p[1]);
+  const W = Math.max(...xs);
+  const H = Math.max(...ys);
+  const steps = [outline, offsetPoly(outline, -Math.min(W, H) * 0.24), offsetPoly(outline, -Math.min(W, H) * 0.48)];
   const fills = [pal[1], pal[2], pal[3]];
   return (
     <g>
-      {steps.map((k, i) => {
-        const r = rect(k);
-        return (
-          <g key={k}>
-            <polygon points={poly(r)} fill={fills[i]} stroke={pal[0]} strokeWidth={R * 0.04} />
-            {/* metade inferior-direita mais escura (sombra) */}
-            <polygon points={poly([r[2], r[3], r[4], r[5]])} fill={pal[0]} opacity={0.35} />
-            <polygon points={poly([r[7], r[0], r[1]])} fill={pal[4]} opacity={0.25} />
-          </g>
-        );
-      })}
-      <rect x={-R * w * 0.3} y={-R * h * 0.36} width={R * w * 0.6} height={R * h * 0.72} fill={pal[2]} opacity={0.9} />
-      <line x1={-R * w * 0.62} y1={-R * h * 0.75} x2={-R * w * 0.2} y2={-R * h * 0.75} stroke={pal[4]} strokeWidth={R * 0.08} strokeLinecap="round" opacity={0.85} />
+      {steps.map((r, i) => (
+        <g key={i}>
+          <polygon points={poly(r)} fill={fills[i]} stroke={pal[0]} strokeWidth={Math.min(W, H) * 0.05} />
+          <polygon points={poly([r[2], r[3], r[4], r[5]])} fill={pal[0]} opacity={0.35} />
+          <polygon points={poly([r[7], r[0], r[1]])} fill={pal[4]} opacity={0.3} />
+        </g>
+      ))}
+      <line x1={r2(-W * 0.55)} y1={r2(-H * 0.7)} x2={r2(-W * 0.1)} y2={r2(-H * 0.7)} stroke={pal[4]} strokeWidth={Math.min(W, H) * 0.09} strokeLinecap="round" opacity={0.85} />
     </g>
   );
 }
 
-/** Cristal de quartzo: prisma hexagonal com ponta. */
-function Crystal({ R, pal }: { R: number; pal: Pal }) {
-  const W = R * 0.62;
-  const top: [number, number] = [0, -R];
-  const sh = -R * 0.45;
-  const bot = R * 0.95;
-  const left = [[-W, sh], top, [-W * 0.25, sh + R * 0.12], [-W * 0.25, bot], [-W, bot - R * 0.12]] as [number, number][];
-  const mid = [top, [W * 0.35, sh + R * 0.08], [W * 0.35, bot], [-W * 0.25, bot], [-W * 0.25, sh + R * 0.12]] as [number, number][];
-  const right = [top, [W, sh], [W, bot - R * 0.12], [W * 0.35, bot], [W * 0.35, sh + R * 0.08]] as [number, number][];
+/** Quartzo visto de cima: quadrado com a ponta piramidal (4 facetas) e uma terminação central. */
+function QuartzTop({ outline, pal }: { outline: Pt[]; pal: Pal }) {
+  const s = outline[1][0];
+  const inner = offsetPoly(outline, -s * 0.62);
+  const tip: Pt = [r2(-s * 0.08), r2(-s * 0.1)];
+  const faces = [
+    { pts: [outline[0], outline[1], inner[1], inner[0]], c: pal[3] },
+    { pts: [outline[1], outline[2], inner[2], inner[1]], c: pal[1] },
+    { pts: [outline[2], outline[3], inner[3], inner[2]], c: pal[0] },
+    { pts: [outline[3], outline[0], inner[0], inner[3]], c: pal[2] },
+  ];
   return (
     <g>
-      {/* cristais menores ao lado */}
-      <polygon points={poly([[-W * 1.45, R * 0.95], [-W * 1.15, R * 0.05], [-W * 0.85, R * 0.95]])} fill={pal[1]} stroke={pal[0]} strokeWidth={R * 0.04} />
-      <polygon points={poly([[W * 0.85, R * 0.95], [W * 1.2, R * 0.2], [W * 1.5, R * 0.95]])} fill={pal[2]} stroke={pal[0]} strokeWidth={R * 0.04} />
-      <polygon points={poly(left)} fill={pal[3]} stroke={pal[0]} strokeWidth={R * 0.05} />
-      <polygon points={poly(mid)} fill={pal[2]} stroke={pal[0]} strokeWidth={R * 0.05} />
-      <polygon points={poly(right)} fill={pal[1]} stroke={pal[0]} strokeWidth={R * 0.05} />
-      <polygon points={poly([[-W, sh], top, [-W * 0.25, sh + R * 0.12]])} fill={pal[4]} opacity={0.8} />
-      <line x1={-W * 0.62} y1={sh + R * 0.3} x2={-W * 0.62} y2={bot - R * 0.3} stroke={pal[4]} strokeWidth={R * 0.07} opacity={0.6} strokeLinecap="round" />
+      {faces.map((f, i) => (
+        <polygon key={i} points={poly(f.pts)} fill={f.c} stroke={pal[0]} strokeWidth={s * 0.04} />
+      ))}
+      <polygon points={poly([inner[0], inner[1], tip])} fill={pal[4]} />
+      <polygon points={poly([inner[1], inner[2], tip])} fill={pal[2]} />
+      <polygon points={poly([inner[2], inner[3], tip])} fill={pal[1]} />
+      <polygon points={poly([inner[3], inner[0], tip])} fill={pal[3]} />
+      <line x1={r2(-s * 0.7)} y1={r2(-s * 0.84)} x2={r2(s * 0.1)} y2={r2(-s * 0.84)} stroke={pal[4]} strokeWidth={s * 0.08} strokeLinecap="round" opacity={0.7} />
+      <polygon points={poly(outline)} fill="none" stroke={pal[0]} strokeWidth={s * 0.06} />
     </g>
   );
 }
 
 /** Bismuto: cristal em degraus quadrados, iridescente. */
-function Bismuth({ R }: { R: number }) {
+function Bismuth({ outline }: { outline: Pt[] }) {
   const cols = ["#5b2a86", "#d4357f", "#f0b429", "#2fb6a6", "#3f6fd8", "#9be15d"];
+  const s = outline[1][0];
   const rings = 5;
   return (
-    <g transform="rotate(8)">
+    <g>
       {Array.from({ length: rings }, (_, i) => {
-        const s = R * (1 - i * 0.18);
-        const off = i * R * 0.04;
+        const k = s * (1 - i * 0.19);
+        const off = r2(i * s * 0.05);
+        const sq: Pt[] = [
+          [r2(-k + off), r2(-k - off)],
+          [r2(k + off), r2(-k - off)],
+          [r2(k + off), r2(k - off)],
+          [r2(-k + off), r2(k - off)],
+        ];
+        const bevel = s * 0.13;
         return (
           <g key={i}>
-            <rect x={-s + off} y={-s - off} width={s * 2} height={s * 2} fill={cols[i % cols.length]} stroke="#1d1030" strokeWidth={R * 0.05} />
-            <polygon
-              points={poly([
-                [-s + off, -s - off],
-                [s + off, -s - off],
-                [s + off - R * 0.12, -s - off + R * 0.12],
-                [-s + off + R * 0.12, -s - off + R * 0.12],
-              ])}
-              fill="#ffffff"
-              opacity={0.28}
-            />
-            <polygon
-              points={poly([
-                [s + off, -s - off],
-                [s + off, s - off],
-                [s + off - R * 0.12, s - off - R * 0.12],
-                [s + off - R * 0.12, -s - off + R * 0.12],
-              ])}
-              fill="#000"
-              opacity={0.25}
-            />
+            <polygon points={poly(i === 0 ? outline : sq)} fill={cols[i % cols.length]} stroke="#1d1030" strokeWidth={s * 0.05} />
+            <polygon points={poly([sq[0], sq[1], [sq[1][0] - bevel, sq[1][1] + bevel], [sq[0][0] + bevel, sq[0][1] + bevel]])} fill="#ffffff" opacity={0.3} />
+            <polygon points={poly([sq[1], sq[2], [sq[2][0] - bevel, sq[2][1] - bevel], [sq[1][0] - bevel, sq[1][1] + bevel]])} fill="#000" opacity={0.25} />
           </g>
         );
       })}
-      <rect x={-R * 0.12} y={-R * 0.34} width={R * 0.24} height={R * 0.24} fill="#1d1030" />
+      <rect x={r2(-s * 0.12)} y={r2(-s * 0.32)} width={r2(s * 0.24)} height={r2(s * 0.24)} fill="#1d1030" />
     </g>
   );
 }
 
-/** Obsidiana: cabochão vítreo negro, opcionalmente rachado. */
-function Obsidian({ R, cracked }: { R: number; cracked?: boolean }) {
+/** Obsidiana lascada: facetas conchoidais vítreas, opcionalmente rachada. */
+function Obsidian({ outline, R, cracked }: { outline: Pt[]; R: number; cracked?: boolean }) {
+  const n = outline.length;
+  const center: Pt = [r2(R * 0.05), r2(R * 0.05)];
+  const tones = ["#1d1924", "#0b090e", "#15121a", "#050407", "#221d2b", "#0e0c12", "#18141e"];
+  const crack = `M ${r2(-R * 0.15)} ${r2(-R * 0.9)} L ${r2(R * 0.05)} ${r2(-R * 0.35)} L ${r2(-R * 0.18)} ${r2(-R * 0.05)} L ${r2(R * 0.12)} ${r2(R * 0.3)} L ${r2(R * 0.02)} ${r2(R * 0.9)} M ${r2(R * 0.05)} ${r2(-R * 0.35)} L ${r2(R * 0.6)} ${r2(-R * 0.25)} M ${r2(-R * 0.18)} ${r2(-R * 0.05)} L ${r2(-R * 0.75)} ${r2(R * 0.2)}`;
   return (
     <g>
-      <ellipse rx={R * 0.95} ry={R * 0.82} fill="#060508" stroke="#000" strokeWidth={R * 0.06} />
-      <ellipse rx={R * 0.8} ry={R * 0.68} fill="#151219" />
-      <ellipse cy={R * 0.12} rx={R * 0.68} ry={R * 0.5} fill="#0a080d" />
-      <path d={`M ${-R * 0.6} ${-R * 0.25} Q ${-R * 0.35} ${-R * 0.62} ${R * 0.15} ${-R * 0.6}`} stroke="#d9d4f0" strokeWidth={R * 0.1} fill="none" strokeLinecap="round" opacity={0.75} />
-      <circle cx={R * 0.42} cy={R * 0.32} r={R * 0.07} fill="#8e86ad" opacity={0.6} />
+      {outline.map((p, i) => (
+        <polygon key={i} points={poly([p, outline[(i + 1) % n], center])} fill={tones[i % tones.length]} stroke="#000" strokeWidth={R * 0.03} />
+      ))}
+      <path d={`M ${r2(-R * 0.62)} ${r2(-R * 0.3)} Q ${r2(-R * 0.4)} ${r2(-R * 0.7)} ${r2(R * 0.18)} ${r2(-R * 0.66)}`} stroke="#d9d4f0" strokeWidth={R * 0.09} fill="none" strokeLinecap="round" opacity={0.7} />
+      <circle cx={r2(R * 0.45)} cy={r2(R * 0.35)} r={r2(R * 0.06)} fill="#8e86ad" opacity={0.6} />
+      <polygon points={poly(outline)} fill="none" stroke="#000" strokeWidth={R * 0.06} />
       {cracked && (
         <g strokeLinecap="round" strokeLinejoin="round" fill="none">
-          <path
-            d={`M ${-R * 0.1} ${-R * 0.8} L ${R * 0.05} ${-R * 0.35} L ${-R * 0.18} ${-R * 0.05} L ${R * 0.12} ${R * 0.3} L ${-R * 0.02} ${R * 0.78} M ${R * 0.05} ${-R * 0.35} L ${R * 0.5} ${-R * 0.25} M ${-R * 0.18} ${-R * 0.05} L ${-R * 0.62} ${R * 0.18}`}
-            stroke="#ff5a2a"
-            strokeWidth={R * 0.13}
-            opacity={0.45}
-          />
-          <path
-            d={`M ${-R * 0.1} ${-R * 0.8} L ${R * 0.05} ${-R * 0.35} L ${-R * 0.18} ${-R * 0.05} L ${R * 0.12} ${R * 0.3} L ${-R * 0.02} ${R * 0.78} M ${R * 0.05} ${-R * 0.35} L ${R * 0.5} ${-R * 0.25} M ${-R * 0.18} ${-R * 0.05} L ${-R * 0.62} ${R * 0.18}`}
-            stroke="#ffd2a8"
-            strokeWidth={R * 0.04}
-          />
+          <path d={crack} stroke="#ff5a2a" strokeWidth={R * 0.14} opacity={0.45} />
+          <path d={crack} stroke="#ffd2a8" strokeWidth={R * 0.045} />
         </g>
       )}
     </g>
   );
 }
 
+/** Desenha a gema preenchendo todo o seu contorno (gemOutline). */
 export function Gem({ kind, R }: { kind: GemKind; R: number }) {
+  const outline = gemOutline(kind, R);
   switch (kind) {
     case "bismuto":
-      return <Bismuth R={R * 0.86} />;
+      return <Bismuth outline={outline} />;
     case "obsidiana":
-      return <Obsidian R={R} />;
+      return <Obsidian outline={outline} R={R} />;
     case "obsidianaRachada":
-      return <Obsidian R={R} cracked />;
+      return <Obsidian outline={outline} R={R} cracked />;
     case "quartzoBranco":
     case "quartzoMarrom":
-      return <Crystal R={R} pal={PAL[kind]} />;
+      return <QuartzTop outline={outline} pal={PAL[kind]} />;
     case "esmeralda":
-      return <Step R={R} pal={PAL.esmeralda} w={0.95} h={0.78} />;
     case "turmalina":
-      return <Step R={R} pal={PAL.turmalina} w={0.6} h={1} />;
-    case "topazio":
-      return <Brilliant R={R} pal={PAL.topazio} sx={0.82} sy={1} />;
+      return <Step outline={outline} pal={PAL[kind]} />;
     case "diamante":
-      return <Brilliant R={R} pal={PAL.diamante} fire />;
+      return <Brilliant outline={outline} pal={PAL.diamante} fire />;
     default:
-      return <Brilliant R={R} pal={PAL[kind]} />;
+      return <Brilliant outline={outline} pal={PAL[kind]} />;
   }
 }

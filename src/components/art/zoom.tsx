@@ -63,9 +63,10 @@ export function useHold(onHold: (() => void) | null, ms = 420) {
     setHolding(false);
   }, []);
   useEffect(() => clear, [clear]);
-  if (!onHold) return { holding: false, handlers: {}, consumed: () => false };
+  if (!onHold) return { holding: false, handlers: {}, consumed: () => false, cancel: clear };
   return {
     holding,
+    cancel: clear,
     consumed: () => {
       if (!fired.current) return false;
       fired.current = false;
@@ -143,8 +144,9 @@ export function FlipCard({
       >
         <div className={`card-flipper aspect-[5/7] w-full ${flipped ? "flipped" : ""}`}>
           <div className={`card-side rounded-[6.4%/4.6%] shadow-[0_14px_34px_rgba(0,0,0,0.65)] ${metal === "negro" ? "ring-1 ring-red-900/60" : ""}`}>
+            {(inst?.runes?.length ?? 0) > 0 && <RuneHalo count={inst!.runes!.length} layer="back" />}
             <CardFront d={d} inst={inst} size="lg" />
-            {(inst?.runes?.length ?? 0) > 0 && <RuneHalo count={inst!.runes!.length} />}
+            {(inst?.runes?.length ?? 0) > 0 && <RuneHalo count={inst!.runes!.length} layer="front" />}
           </div>
           <div className="card-side back rounded-[6.4%/4.6%] shadow-[0_14px_34px_rgba(0,0,0,0.65)]">
             <CardBackText d={d} lines={[...fullText(d), ...extra]} />

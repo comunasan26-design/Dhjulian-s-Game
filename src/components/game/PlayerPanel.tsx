@@ -19,7 +19,8 @@ export function PlayerPanel({ p }: { p: PlayerView }) {
   const inCombat = view.combat && (view.combat.fighterId === p.id || view.combat.helperId === p.id);
   return (
     <div
-      className={`w-full shrink-0 rounded-xl lg:w-[17rem] border bg-panel p-2 ${current ? "border-gold pulse-ring" : "border-edge"} ${
+      data-drop={`player:${p.id}`}
+      className={`drop-zone w-full shrink-0 rounded-xl lg:w-[17rem] border bg-panel p-2 ${current ? "border-gold pulse-ring" : "border-edge"} ${
         inCombat ? "ring-1 ring-red-700" : ""
       }`}
     >
@@ -60,7 +61,7 @@ export function PlayerPanel({ p }: { p: PlayerView }) {
         {view.phase === "SETUP" && <span className="rounded bg-stone-700 px-1.5 text-[10px]">{p.ready ? "✅ pronto" : "⏳ preparando"}</span>}
       </div>
       {(p.equipped.length > 0 || p.carried.length > 0) && (
-        <div className="scroll-thin mt-2 flex max-h-40 gap-1 overflow-x-auto lg:flex-wrap lg:overflow-y-auto lg:overflow-x-hidden">
+        <div className="scroll-thin -mx-1 mt-1 flex max-h-52 gap-1.5 overflow-x-auto px-1.5 pb-2 pt-3 lg:flex-wrap lg:overflow-y-auto lg:overflow-x-hidden">
           {p.equipped.map((id) => (
             <CardView key={id} id={id} size="sm" />
           ))}
