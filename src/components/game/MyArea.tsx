@@ -126,7 +126,7 @@ export function MyArea() {
         <p className="mb-1 text-xs uppercase tracking-wide text-muted">
           Sua mão ({hand.length}) — clique numa carta para ver as ações
         </p>
-        <div className="scroll-thin flex gap-2 overflow-x-auto pb-2">
+        <div className="scroll-thin flex gap-2 overflow-x-auto pb-2" data-zone="hand">
           {hand.map((id) => (
             <CardView key={id} id={id} />
           ))}
