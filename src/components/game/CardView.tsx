@@ -3,6 +3,7 @@
 import { CardBackside, CardFront } from "../art/CardArt";
 import { RuneHalo } from "../art/RuneHalo";
 import { METAL_OF, rarityOf } from "../art/metals";
+import { useDraggable } from "../art/drag";
 import { instLines, openZoom, useHold } from "../art/zoom";
 import { cardDef } from "@/game/display";
 import { useGameOptional } from "./GameContext";
@@ -25,6 +26,7 @@ export function CardView({
   badge,
   dim,
   deck,
+  draggable = false,
 }: {
   id?: string;
   defId?: string;
@@ -35,6 +37,8 @@ export function CardView({
   dim?: boolean;
   /** Para cartas ocultas: de qual baralho é o verso. */
   deck?: "door" | "treasure";
+  /** Pode ser arrastada para ser jogada (cartas da sua mão). */
+  draggable?: boolean;
 }) {
   const game = useGameOptional();
   const inst = id ? game?.view.cards[id] : undefined;
@@ -50,25 +54,36 @@ export function CardView({
           })
       : null,
   );
+  const instInfo = inst ? { reforged: inst.reforged, runes: inst.runes, charges: inst.charges, tamed: inst.tamed, artificeSecond: inst.artificeSecond } : undefined;
+  const dragger = useDraggable(id, d?.id, instInfo, draggable && !!d, hold.cancel);
+  // combina segurar + arrastar nos mesmos eventos de ponteiro
+  const handlers: Record<string, (e: never) => void> = {};
+  for (const src of [hold.handlers, dragger.handlers] as Record<string, (e: never) => void>[]) {
+    for (const [k, fn] of Object.entries(src)) {
+      const prev = handlers[k];
+      handlers[k] = prev ? (e: never) => (prev(e), fn(e)) : fn;
+    }
+  }
   const runes = inst?.runes?.length ?? 0;
   const metal = METAL_OF[rarityOf(d)];
 
   return (
     <button
       type="button"
-      {...hold.handlers}
+      {...handlers}
       onClick={() => {
-        if (hold.consumed()) return;
+        if (dragger.consumed() || hold.consumed()) return;
         click?.();
       }}
       title={d ? `${d.name} — segure para ver de perto` : "Carta oculta"}
       aria-label={d ? d.name : "Carta oculta"}
       className={`game-card relative block aspect-[5/7] shrink-0 rounded-[7%/5%] text-left ${WIDTH[size]} ${click ? "interactive cursor-pointer" : "cursor-default"} ${
         d ? `metal-${metal}` : ""
-      } ${hold.holding ? "holding" : ""} ${selected ? "ring-[3px] ring-gold-2 ring-offset-2 ring-offset-bg" : ""} ${dim ? "opacity-50 grayscale" : ""}`}
+      } ${hold.holding ? "holding" : ""} ${draggable && d ? "draggable-card" : ""} ${selected ? "ring-[3px] ring-gold-2 ring-offset-2 ring-offset-bg" : ""} ${dim ? "opacity-50 grayscale" : ""}`}
     >
+      {runes > 0 && <RuneHalo count={runes} layer="back" />}
       {d ? <CardFront d={d} inst={inst} size={size} /> : <CardBackside deck={deck} />}
-      {runes > 0 && <RuneHalo count={runes} />}
+      {runes > 0 && <RuneHalo count={runes} layer="front" />}
       {inst?.artificeSecond && (
         <span className="absolute -left-1 -top-1 z-20 rounded-full border border-sky-900 bg-sky-400 px-1.5 text-[10px] font-bold text-black">½</span>
       )}

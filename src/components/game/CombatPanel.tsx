@@ -29,7 +29,7 @@ export function CombatPanel() {
   });
 
   return (
-    <section className="rounded-xl border-2 border-red-900/70 bg-gradient-to-b from-red-950/40 to-panel p-3">
+    <section data-drop="table" className="drop-zone rounded-xl border-2 border-red-900/70 bg-gradient-to-b from-red-950/40 to-panel p-3">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <h2 className="font-display text-lg text-red-200 sm:text-xl">
           ⚔️ Combate de {fighter.name}
@@ -104,7 +104,7 @@ export function CombatPanel() {
               }
             : undefined;
           return (
-            <div key={m.cardId} className="flex flex-col items-center gap-1">
+            <div key={m.cardId} data-drop={`monster:${m.cardId}`} className="drop-zone flex flex-col items-center gap-1 rounded-lg">
               <CardView id={m.cardId} badge={m.defeated ? "morto" : total !== undefined ? `força ${total}` : undefined} dim={m.defeated} />
               <div className="flex flex-wrap justify-center gap-1 text-[10px]">
                 {m.wandering && <span className="rounded bg-rose-900 px-1">errante</span>}

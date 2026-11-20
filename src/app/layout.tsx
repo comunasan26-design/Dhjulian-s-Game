@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { CardArtDefs } from "@/components/art/CardArt";
+import { DragGhost } from "@/components/art/drag";
 import { CardZoomHost } from "@/components/art/zoom";
 import "./globals.css";
 
@@ -21,6 +22,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <CardArtDefs />
         {children}
         <CardZoomHost />
+        <DragGhost />
       </body>
     </html>
   );

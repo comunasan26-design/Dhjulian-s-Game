@@ -6,7 +6,7 @@ import type { CSSProperties, ReactNode } from "react";
 import { type CardDef, RARITY_LABEL } from "@/game/catalog";
 import { KIND_LABEL, shortInfo } from "@/game/display";
 import { Emblem } from "./emblems";
-import { GEM_LABEL, Gem, gemOf } from "./gems";
+import { GEM_LABEL, Gem, type GemKind, gemOf, gemOutline, offsetPoly, poly } from "./gems";
 import { METAL, METAL_LABEL, METAL_OF, type Metal, rarityOf } from "./metals";
 
 export type CardSize = "sm" | "md" | "lg";
@@ -106,22 +106,44 @@ export function MetalFrame({ metal, gem, children }: { metal: Metal; gem?: Retur
           <circle cx={x - 1.3} cy={y - 1.4} r="1.1" fill={M.shine} opacity="0.85" />
         </g>
       ))}
-      {gem && (
-        <g transform="translate(125 30)">
-          {/* engaste com abas laterais */}
-          <path d="M-56 -8 L-28 -20 L-28 12 Z M56 -8 L28 -20 L28 12 Z" fill={`url(#mgv-${metal})`} stroke={M.edge} strokeWidth="1.5" strokeLinejoin="round" />
-          <circle r="29" fill={`url(#mg-${metal})`} stroke={M.edge} strokeWidth="2" />
-          <circle r="29" fill="url(#metal-grain)" />
-          {Array.from({ length: 10 }, (_, i) => {
-            const a = (i / 10) * Math.PI * 2;
-            return <circle key={i} cx={(Math.cos(a) * 25.5).toFixed(2)} cy={(Math.sin(a) * 25.5).toFixed(2)} r="1.7" fill={M.shine} opacity="0.7" />;
-          })}
-          <circle r="22" fill="#120b07" stroke={M.deep} strokeWidth="1.5" />
-          <Gem kind={gem} R={18.5} />
-        </g>
-      )}
+      {gem && <GemSetting gem={gem} metal={metal} />}
       {children}
     </svg>
+  );
+}
+
+const GEM_R = 20;
+
+/** Engaste de metal no formato da própria gema, com garras nos vértices e abas laterais. */
+function GemSetting({ gem, metal }: { gem: GemKind; metal: Metal }) {
+  const M = METAL[metal];
+  const outline = gemOutline(gem, GEM_R);
+  const bezel = offsetPoly(outline, 5.5);
+  const seat = offsetPoly(outline, 1.2);
+  const top = Math.min(...bezel.map((p) => p[1]));
+  const cy = 30 + Math.max(0, 4 - (30 + top)); // não deixa o engaste sair da carta
+  const wingY = Math.min(12, Math.max(...bezel.map((p) => p[1])) - 2);
+  const wingX = Math.max(...bezel.map((p) => p[0])) - 2;
+  return (
+    <g transform={`translate(125 ${cy})`}>
+      <path
+        d={`M${-wingX - 28} -8 L${-wingX} -18 L${-wingX} ${wingY} Z M${wingX + 28} -8 L${wingX} -18 L${wingX} ${wingY} Z`}
+        fill={`url(#mgv-${metal})`}
+        stroke={M.edge}
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+      />
+      <polygon points={poly(bezel)} fill={`url(#mg-${metal})`} stroke={M.edge} strokeWidth="2" strokeLinejoin="round" />
+      <polygon points={poly(bezel)} fill="url(#metal-grain)" />
+      <polygon points={poly(offsetPoly(outline, 3.6))} fill="none" stroke={M.shine} strokeWidth="0.8" opacity="0.5" strokeDasharray="1.5 2.5" />
+      <polygon points={poly(seat)} fill="#120b07" stroke={M.deep} strokeWidth="1.2" strokeLinejoin="round" />
+      <Gem kind={gem} R={GEM_R} />
+      {bezel.length <= 8 &&
+        bezel.map((b, i) => {
+          const o = outline[i];
+          return <circle key={i} cx={((b[0] + o[0]) / 2).toFixed(2)} cy={((b[1] + o[1]) / 2).toFixed(2)} r="1.9" fill={`url(#rv-${metal})`} stroke={M.edge} strokeWidth="0.6" />;
+        })}
+    </g>
   );
 }
 

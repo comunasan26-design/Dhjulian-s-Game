@@ -4,6 +4,7 @@ import { type CardDef, findFx } from "@/game/catalog";
 import type { AbilityInfo, Action, GameView } from "@/game/engine";
 import type { GameApi } from "./GameContext";
 import type { PickOption, usePicker } from "./Picker";
+import type { DropTarget } from "../art/drag";
 
 type Picker = ReturnType<typeof usePicker>;
 
@@ -584,4 +585,34 @@ async function sellOne(api: GameApi, picker: Picker, cardId: string) {
   const d = api.def(cardId) as CardDef & { price?: number };
   const ok = await picker.confirm(`Vender ${d.name} por ${d.price ?? 0} de ouro?`, "Sozinho, só vira nível se somar 1.000 de ouro. Use “Vender itens” para juntar vários.");
   if (ok) return api.act({ type: "SELL", cardIds: [cardId] });
+}
+
+/**
+ * Carta solta por arraste. Mesa → ação principal; jogador → maldição nele; monstro → bônus nele;
+ * descarte → descarta. Devolve "inspect" quando não dá para decidir sozinho (abre as ações da carta).
+ */
+export async function dropCard(api: GameApi, picker: Picker, cardId: string, target: DropTarget): Promise<"done" | "inspect"> {
+  const d = api.def(cardId);
+  if (!d || !api.me.hand?.includes(cardId)) return "inspect";
+  if (target.kind === "discard") {
+    await api.act({ type: "DISCARD", cardId });
+    return "done";
+  }
+  if (target.kind === "player" && d.kind === "curse") {
+    await api.act({ type: "PLAY_CURSE", cardId, targetId: target.id });
+    return "done";
+  }
+  if (target.kind === "monster") {
+    if (d.kind === "monsterBonus") {
+      await api.act({ type: "PLAY_MONSTER_BONUS", cardId, monsterId: target.id });
+      return "done";
+    }
+  }
+  const actions = cardActions(api, picker, cardId).filter((a) => a.label !== "Descartar");
+  const primary = actions.find((a) => a.primary);
+  if (primary) {
+    await primary.run();
+    return "done";
+  }
+  return "inspect";
 }
