@@ -1,0 +1,688 @@
+// Valores derivados: limites, slots, força de combate e Fugir.
+import { def, type ItemCard, type MonsterCard, type Slot, type Tag } from "../catalog";
+import type { CombatMonster, CombatState, GameState, PlayerState } from "./state";
+import {
+  classesOf,
+  defOf,
+  equippedRuneCount,
+  hasClass,
+  hasRace,
+  inst,
+  itemDef,
+  lostLevelThisRound,
+  player,
+  raceOf,
+  tryPlayer,
+} from "./util";
+
+export interface CalcLine {
+  label: string;
+  value: number;
+}
+
+const ARMOR_SLOTS: Slot[] = ["head", "chest", "legs", "feet"];
+
+export function tier11(p: PlayerState): boolean {
+  return p.level >= 11;
+}
+
+export function hasCurse(p: PlayerState, defId: string): boolean {
+  return p.curses.some((c) => c.defId === defId);
+}
+
+// ----------------------------------------------------------------------------
+// Limites
+// ----------------------------------------------------------------------------
+
+export function handLimit(state: GameState, p: PlayerState): number {
+  let n = 5;
+  if (hasRace(state, p, "anao")) n = p.level >= 11 ? 7 : 6;
+  if (hasRace(state, p, "humano")) n += 1;
+  for (const id of p.carried) if (state.cards[id]?.defId === "misc.bolsa") n += 2;
+  return n;
+}
+
+export function isLegendaryItem(state: GameState, cardId: string): boolean {
+  const d = itemDef(state, cardId);
+  if (!d) return false;
+  if (d.rarity === "lendario") return true;
+  return (inst(state, cardId).runes ?? []).some((r) => state.cards[r]?.defId === "rune.rei");
+}
+
+export function bigLimit(state: GameState, p: PlayerState): number {
+  if (hasRace(state, p, "anao") || hasRace(state, p, "fada")) return 0;
+  let n = hasRace(state, p, "gigante") ? 2 : 1;
+  if (hasRace(state, p, "gigante") && p.equipped.some((id) => state.cards[id]?.defId === "item.saiote-tita")) n += 1;
+  if (p.equipped.some((id) => state.cards[id]?.defId === "item.ponei")) n += 1;
+  return n;
+}
+
+export function legendaryLimit(state: GameState, p: PlayerState): number {
+  return hasCurse(p, "curse.coroa-espinhos") ? 0 : 1;
+}
+
+export function slotBaseCapacity(state: GameState, p: PlayerState, slot: Slot): number {
+  switch (slot) {
+    case "chest":
+      return hasRace(state, p, "torkle") ? 0 : 1;
+    case "feet":
+      return hasRace(state, p, "centauro") ? 2 : 1;
+    case "mount":
+      return hasRace(state, p, "centauro") ? 0 : 1;
+    case "ring":
+      return 10;
+    case "hand":
+      return 2;
+    default:
+      return 1;
+  }
+}
+
+export function artificeSlotLimit(state: GameState, p: PlayerState): number {
+  if (!hasClass(state, p, "artifice")) return 0;
+  return p.level >= 11 ? 2 : 1;
+}
+
+export function handsUsed(state: GameState, p: PlayerState, except?: string): number {
+  let n = 0;
+  for (const id of p.equipped) {
+    if (id === except) continue;
+    const d = itemDef(state, id);
+    if (d && d.slot === "hand") n += d.hands ?? 1;
+  }
+  if (hasCurse(p, "curse.espada")) n += 1;
+  return n;
+}
+
+export function meetsRestrictions(state: GameState, p: PlayerState, d: ItemCard): string | null {
+  const race = raceOf(state, p);
+  const classes = classesOf(state, p);
+  if (d.requires) {
+    const ok =
+      (race && d.requires.races?.includes(race)) || classes.some((c) => d.requires?.classes?.includes(c));
+    if (!ok) return `${d.name}: restrito a outra raça/classe.`;
+  }
+  if (d.forbids) {
+    const bad =
+      (race && d.forbids.races?.includes(race)) || classes.some((c) => d.forbids?.classes?.includes(c));
+    if (bad) return `${d.name}: sua raça/classe não pode usar.`;
+  }
+  return null;
+}
+
+/**
+ * Verifica se o item pode ser equipado agora. Retorna erro ou null.
+ * `asSecond` indica que vai para o slot extra do Artífice.
+ */
+export function equipCheck(state: GameState, p: PlayerState, cardId: string): { error: string | null; asSecond: boolean } {
+  const d = itemDef(state, cardId);
+  const c = inst(state, cardId);
+  if (!d && !c.tamed) return { error: "Essa carta não é um item equipável.", asSecond: false };
+  const slot: Slot = d ? d.slot : "mount";
+  const restr = d ? meetsRestrictions(state, p, d) : null;
+  if (restr) return { error: restr, asSecond: false };
+  if (d?.big) {
+    const bigs = p.equipped.filter((id) => itemDef(state, id)?.big).length;
+    if (bigs + 1 > bigLimit(state, p)) return { error: "Você não pode equipar mais itens Grandes.", asSecond: false };
+  }
+  if (d && isLegendaryItem(state, cardId)) {
+    const legs = p.equipped.filter((id) => isLegendaryItem(state, id)).length;
+    if (legs + 1 > legendaryLimit(state, p)) return { error: "Só 1 item Lendário equipado por vez.", asSecond: false };
+  }
+  if (slot === "hand") {
+    if (handsUsed(state, p) + (d?.hands ?? 1) > 2) return { error: "Suas mãos estão ocupadas.", asSecond: false };
+    return { error: null, asSecond: false };
+  }
+  const inSlot = p.equipped.filter((id) => slotOf(state, id) === slot);
+  const base = slotBaseCapacity(state, p, slot);
+  if (base === 0) return { error: "Sua raça não pode usar esse tipo de item.", asSecond: false };
+  if (inSlot.length < base) return { error: null, asSecond: false };
+  // Slot extra do Artífice
+  const artSlots: Slot[] = ["head", "chest", "legs", "feet", "neck"];
+  if (artSlots.includes(slot) && artificeSlotLimit(state, p) > 0) {
+    const hasSecond = inSlot.some((id) => state.cards[id]?.artificeSecond);
+    const chosen = p.artificeSlots.includes(slot) || p.artificeSlots.length < artificeSlotLimit(state, p);
+    if (!hasSecond && chosen && inSlot.length < base + 1) return { error: null, asSecond: true };
+  }
+  return { error: "Esse slot já está ocupado. Desequipe o item atual primeiro.", asSecond: false };
+}
+
+export function slotOf(state: GameState, cardId: string): Slot | null {
+  const c = state.cards[cardId];
+  if (!c) return null;
+  if (c.tamed) return "mount";
+  const d = def(c.defId);
+  return d.kind === "item" ? d.slot : null;
+}
+
+/** Número de encaixes de runa de um item para o jogador. */
+export function runeSockets(state: GameState, p: PlayerState, cardId: string): number {
+  const d = itemDef(state, cardId);
+  if (!d) return 0;
+  let n = d.rarity === "raro" || d.rarity === "epico" || d.rarity === "lendario" ? 2 : 1;
+  if (hasRace(state, p, "elemental")) n += 1;
+  return n;
+}
+
+// ----------------------------------------------------------------------------
+// Combate
+// ----------------------------------------------------------------------------
+
+export function monsterDef(state: GameState, cm: CombatMonster): MonsterCard {
+  return defOf(state, cm.cardId) as MonsterCard;
+}
+
+export function activeMonsters(combat: CombatState): CombatMonster[] {
+  return combat.monsters.filter((m) => !m.defeated);
+}
+
+/** Monstros cujo texto Especial está valendo. */
+export function specialIds(state: GameState, combat: CombatState | null): Set<string> {
+  const s = new Set<string>();
+  if (!combat) return s;
+  for (const m of activeMonsters(combat)) if (!m.ignoreSpecial) s.add(inst(state, m.cardId).defId);
+  return s;
+}
+
+export function combatTags(state: GameState, combat: CombatState | null): Set<Tag> {
+  const s = new Set<Tag>();
+  if (!combat) return s;
+  for (const m of activeMonsters(combat)) for (const t of monsterDef(state, m).tags) s.add(t);
+  return s;
+}
+
+export function hasLegendary(state: GameState, combat: CombatState): boolean {
+  return activeMonsters(combat).some((m) => monsterDef(state, m).legendary);
+}
+
+/** Jogador escravizado pelo Aboleth (mais cartas na mão, fora o lutador). */
+export function abolethThrall(state: GameState, combat: CombatState): string | null {
+  if (!specialIds(state, combat).has("monster.aboleth")) return null;
+  const candidates = state.players.filter((p) => p.id !== combat.fighterId);
+  if (candidates.length === 0) return null;
+  candidates.sort((a, b) => b.hand.length - a.hand.length || b.level - a.level || a.seat - b.seat);
+  if (candidates[0].hand.length === 0) return null;
+  return candidates[0].id;
+}
+
+export function helperIsTraitor(state: GameState, combat: CombatState): boolean {
+  if (!combat.helperId) return false;
+  if (combat.helperTraitor) return true;
+  if (specialIds(state, combat).has("monster.naga")) return true;
+  return false;
+}
+
+export function playerSide(state: GameState, combat: CombatState): string[] {
+  const ids = [combat.fighterId];
+  const thrall = abolethThrall(state, combat);
+  if (combat.helperId && !helperIsTraitor(state, combat) && combat.helperId !== thrall) ids.push(combat.helperId);
+  return ids;
+}
+
+export function monsterSidePlayers(state: GameState, combat: CombatState): string[] {
+  const ids: string[] = [];
+  const thrall = abolethThrall(state, combat);
+  if (combat.helperId && (helperIsTraitor(state, combat) || combat.helperId === thrall)) ids.push(combat.helperId);
+  if (thrall && !ids.includes(thrall)) ids.push(thrall);
+  return ids;
+}
+
+/** O ajudante está do lado do jogador? */
+export function effectiveHelper(state: GameState, combat: CombatState): string | null {
+  const side = playerSide(state, combat);
+  return combat.helperId && side.includes(combat.helperId) ? combat.helperId : null;
+}
+
+interface ItemEntry {
+  cardId: string;
+  ownerId: string;
+  label: string;
+  value: number;
+}
+
+function itemUsable(state: GameState, p: PlayerState, d: ItemCard | null, slot: Slot): boolean {
+  if (hasCurse(p, "curse.sapo") && slot === "hand") return false;
+  if (hasCurse(p, "curse.licantropia") && (ARMOR_SLOTS.includes(slot) || slot === "hand")) return false;
+  void d;
+  return true;
+}
+
+/** Bônus de um item específico de um jogador (sem considerar Marilith). */
+function itemValue(
+  state: GameState,
+  p: PlayerState,
+  cardId: string,
+  combat: CombatState | null,
+  specials: Set<string>,
+  tags: Set<Tag>,
+): number | null {
+  const c = inst(state, cardId);
+  const d = def(c.defId);
+  let slot: Slot;
+  let base: number;
+  let isBig = false;
+  if (c.tamed && d.kind === "monster") {
+    slot = "mount";
+    base = d.treasures;
+  } else if (d.kind === "item") {
+    slot = d.slot;
+    base = d.bonus;
+    isBig = !!d.big;
+  } else return null;
+  const item = d.kind === "item" ? d : null;
+  if (!itemUsable(state, p, item, slot)) return 0;
+
+  let v = base;
+  if (c.reforged) v += 1;
+  const runes = (c.runes ?? []).map((r) => state.cards[r]?.defId);
+  for (const r of runes) {
+    if (r === "rune.fogo") v += 1;
+    if (r === "rune.sangue") v += 3;
+  }
+  // Bônus extras por raça/classe
+  const id = c.defId;
+  if (id === "item.elmo-chifres" && (hasRace(state, p, "orc") || hasClass(state, p, "berserker"))) v += 2;
+  if (id === "item.adaga" && hasClass(state, p, "ladino")) v += 2;
+  if (id === "item.martelo-anao" && hasRace(state, p, "anao")) v += 2;
+  if (id === "item.saiote-tita" && hasRace(state, p, "gigante")) v += 2;
+  if (id === "item.machado-carrasco" && (hasClass(state, p, "berserker") || hasClass(state, p, "barbaro"))) v += 2;
+  if (id === "item.cavalo-guerra" && hasClass(state, p, "paladino")) v += 2;
+  if (id === "item.dragao-bebe" && hasRace(state, p, "draconato")) v += 2;
+  if (id === "item.colar-lobo" && hasClass(state, p, "druida")) v += 1;
+  if (id === "item.talisma" && (hasRace(state, p, "divino") || hasClass(state, p, "paladino"))) v += 3;
+  if (combat) {
+    if (id === "item.amuleto-alho" && tags.has("morto-vivo")) v += 3;
+    if (id === "item.martelo-trovao" && activeMonsters(combat).some((m) => monsterDef(state, m).giant)) v += 3;
+  }
+  if (runes.includes("rune.rei")) v *= 2;
+  if (c.artificeSecond) v = Math.floor(v / 2);
+  if (combat && combat.infusions.includes(cardId)) v *= 2;
+
+  if (combat) {
+    if (slot === "hand" && (specials.has("monster.gosma") || specials.has("monster.fantasma"))) return 0;
+    if (slot === "hand" && specials.has("monster.gargula")) v = Math.floor(v / 2);
+    if (isBig && specials.has("monster.cubo")) return 0;
+    if (
+      slot === "mount" &&
+      (specials.has("monster.ankheg") || specials.has("monster.gigante-tempestades") || specials.has("monster.kraken"))
+    )
+      return 0;
+    if (slot === "chest" && specials.has("monster.dragao-negro")) return 0;
+    if (slot === "ring" && specials.has("monster.dragao-azul")) return 0;
+  }
+  return v;
+}
+
+function collectItems(
+  state: GameState,
+  p: PlayerState,
+  combat: CombatState | null,
+  specials: Set<string>,
+  tags: Set<Tag>,
+): ItemEntry[] {
+  const out: ItemEntry[] = [];
+  const ids = [...p.equipped];
+  if (combat) for (const a of combat.adaptations) if (a.playerId === p.id && !ids.includes(a.cardId)) ids.push(a.cardId);
+  for (const id of ids) {
+    const v = itemValue(state, p, id, combat, specials, tags);
+    if (v === null) continue;
+    out.push({ cardId: id, ownerId: p.id, label: defOf(state, id).name, value: v });
+  }
+  if (hasRace(state, p, "torkle")) {
+    let v = p.level >= 11 ? 7 : 5;
+    if (combat && specials.has("monster.dragao-negro")) v = 0;
+    out.push({ cardId: "", ownerId: p.id, label: "Casco (Torkle)", value: v });
+  }
+  return out;
+}
+
+function hasHandItems(state: GameState, p: PlayerState): boolean {
+  return p.equipped.some((id) => slotOf(state, id) === "hand") || hasCurse(p, "curse.espada");
+}
+
+export function emptyArmorSlots(state: GameState, p: PlayerState): number {
+  let n = 0;
+  for (const s of ARMOR_SLOTS) {
+    if (s === "chest" && hasRace(state, p, "torkle")) continue; // o casco conta como peitoral
+    if (!p.equipped.some((id) => slotOf(state, id) === s)) n++;
+  }
+  return n;
+}
+
+export function hasArmor(state: GameState, p: PlayerState): boolean {
+  return hasRace(state, p, "torkle") || p.equipped.some((id) => ARMOR_SLOTS.includes(slotOf(state, id) as Slot));
+}
+
+/** Força "pessoal" de um jogador (nível + itens + passivas + maldições). */
+function personLines(
+  state: GameState,
+  p: PlayerState,
+  combat: CombatState | null,
+  opts: { isHelper: boolean; marilithItems?: Set<string> },
+): CalcLine[] {
+  const specials = specialIds(state, combat);
+  const tags = combatTags(state, combat);
+  const lines: CalcLine[] = [];
+  const lvl = combat && opts.isHelper && combat.elfDouble.includes(p.id) ? p.level * 2 : p.level;
+  lines.push({ label: combat && opts.isHelper && combat.elfDouble.includes(p.id) ? "Nível x2 (Disparo Duplo)" : "Nível", value: lvl });
+
+  const items = collectItems(state, p, combat, specials, tags);
+  for (const it of items) {
+    if (opts.marilithItems?.has(`${it.ownerId}:${it.cardId}:${it.label}`)) {
+      lines.push({ label: `${it.label} (anulado pela Marilith)`, value: 0 });
+    } else if (it.value !== 0) {
+      lines.push({ label: it.label, value: it.value });
+    }
+  }
+  // Mago: +1 por anel
+  if (hasClass(state, p, "mago")) {
+    const rings = p.equipped.filter((id) => slotOf(state, id) === "ring").length;
+    if (rings > 0 && !(combat && specials.has("monster.dragao-azul"))) lines.push({ label: "Foco Arcano (anéis)", value: rings });
+  }
+  // Druida: +2 com montaria
+  if (hasClass(state, p, "druida")) {
+    const mounts = p.equipped.filter((id) => slotOf(state, id) === "mount").length;
+    const nulled =
+      combat &&
+      (specials.has("monster.ankheg") || specials.has("monster.gigante-tempestades") || specials.has("monster.kraken"));
+    if (mounts > 0 && !nulled) lines.push({ label: "Laço Animal (montaria)", value: 2 * mounts });
+  }
+  // Elemental: +1 por runa equipada (máx. +4)
+  if (hasRace(state, p, "elemental")) {
+    let runes = 0;
+    for (const id of p.equipped) runes += (state.cards[id]?.runes ?? []).length;
+    if (runes > 0) lines.push({ label: "Afinidade Rúnica", value: Math.min(4, runes) });
+  }
+  // Raças
+  if (hasRace(state, p, "draconato")) lines.push({ label: "Escamas Dracônicas", value: tier11(p) ? 2 : 1 });
+  if (hasRace(state, p, "gigante")) lines.push({ label: "Colosso", value: tier11(p) ? 3 : 2 });
+  if (hasRace(state, p, "fada")) lines.push({ label: "Asas Leves", value: -1 });
+  if (combat && hasRace(state, p, "tritao") && tags.has("aquatico")) lines.push({ label: "Filho das Marés (Aquático)", value: 3 });
+  // Classes
+  if (combat && hasClass(state, p, "clerigo") && (tags.has("morto-vivo") || tags.has("demonio")))
+    lines.push({ label: "Fé (Morto-vivo/Demônio)", value: 3 });
+  if (hasClass(state, p, "barbaro")) {
+    const per = p.level >= 11 ? 3 : p.level >= 5 ? 2 : 1;
+    const e = emptyArmorSlots(state, p);
+    if (e > 0) lines.push({ label: `Pele Nua (${e} slot(s) vazio(s))`, value: e * per });
+  }
+  if (hasClass(state, p, "monge") && !hasHandItems(state, p)) lines.push({ label: "Corpo Treinado", value: tier11(p) ? 4 : 2 });
+  if (hasClass(state, p, "berserker") && p.streak > 0) {
+    let v = p.streak * (p.level >= 16 ? 2 : 1);
+    if (combat?.berserkDouble.includes(p.id)) v *= 2;
+    lines.push({ label: `Fúria Crescente (${p.streak} vitória(s))`, value: v });
+  }
+  // Maldições
+  for (const cu of p.curses) {
+    if (cu.defId === "curse.podridao") lines.push({ label: "Podridão Antiga", value: -2 });
+    if (cu.defId === "curse.sapo") lines.push({ label: "Maldição do Sapo", value: -3 });
+    if (cu.defId === "curse.licantropia") lines.push({ label: "Licantropia", value: 2 });
+    if (cu.defId === "curse.espada") lines.push({ label: "Espada Amaldiçoada", value: -3 });
+    if (cu.defId === "special.sombria") lines.push({ label: "Maldição Sombria", value: -(cu.value ?? 3) });
+    if (cu.defId === "special.mumia") lines.push({ label: "Podridão de Múmia", value: -2 });
+  }
+  if (combat) {
+    // Especiais de monstros que afetam jogadores
+    if (specials.has("monster.estirge") && hasRace(state, p, "vampirico")) lines.push({ label: "Concorrência (Estirge)", value: 3 });
+    if (specials.has("monster.harpia") && (hasRace(state, p, "tritao") || hasClass(state, p, "bardo")))
+      lines.push({ label: "Canta melhor (Harpia)", value: 3 });
+    if (specials.has("monster.esqueleto")) {
+      const impact =
+        hasClass(state, p, "monge") ||
+        hasClass(state, p, "barbaro") ||
+        p.equipped.some((id) => itemDef(state, id)?.impact);
+      if (impact) lines.push({ label: "Impacto (Esqueleto)", value: 3 });
+    }
+    if (specials.has("monster.manticora")) {
+      if (hasRace(state, p, "elfo") || hasClass(state, p, "patrulheiro")) lines.push({ label: "Ataque à distância (Mantícora)", value: 3 });
+      if (opts.isHelper) lines.push({ label: "Espinhos (ajudante)", value: -2 });
+    }
+    if (specials.has("monster.vampiro") && (hasRace(state, p, "divino") || hasClass(state, p, "paladino")))
+      lines.push({ label: "Luz contra o Vampiro", value: 4 });
+    if (specials.has("monster.gigante-fogo") && hasRace(state, p, "anao")) lines.push({ label: "Rivalidade de forja", value: 3 });
+    if (specials.has("monster.elemental-fogo") && hasRace(state, p, "tritao")) lines.push({ label: "Água contra fogo", value: 4 });
+    if (specials.has("monster.kraken") && hasRace(state, p, "tritao")) lines.push({ label: "Em casa (Kraken)", value: 6 });
+    if (specials.has("monster.solar") && (hasRace(state, p, "vampirico") || hasClass(state, p, "bruxo")))
+      lines.push({ label: "Julgado pelo Solar", value: -5 });
+    if (specials.has("monster.diabo") && opts.isHelper && !hasClass(state, p, "paladino"))
+      lines.push({ label: "Aura de medo (ajudante)", value: -2 });
+    if (p.id === combat.fighterId && combat.monsters.some((m) => m.petrified && !m.defeated && !m.ignoreSpecial))
+      lines.push({ label: "Meio petrificado (Basilisco)", value: -5 });
+    if (p.id === combat.fighterId && combat.desafio) lines.push({ label: "Desafio", value: -5 });
+    for (const mod of combat.playerMods) if (mod.target === p.id) lines.push({ label: mod.label, value: mod.value });
+  }
+  return lines;
+}
+
+function sum(lines: CalcLine[]): number {
+  return lines.reduce((a, l) => a + l.value, 0);
+}
+
+export function playerPower(state: GameState, p: PlayerState): number {
+  return sum(personLines(state, p, null, { isHelper: false }));
+}
+
+/** Há dano de fogo do lado dos jogadores? */
+export function sideHasFire(state: GameState, combat: CombatState): boolean {
+  if (combat.playerMods.some((m) => m.fire)) return true;
+  for (const id of playerSide(state, combat)) {
+    const p = player(state, id);
+    for (const cid of p.equipped) {
+      const d = itemDef(state, cid);
+      if (d?.fire) return true;
+      if ((state.cards[cid]?.runes ?? []).some((r) => state.cards[r]?.defId === "rune.fogo")) return true;
+    }
+  }
+  return false;
+}
+
+export function monsterBaseTotal(state: GameState, cm: CombatMonster, combat: CombatState): number {
+  const d = monsterDef(state, cm);
+  let v = d.level + cm.mods.reduce((a, m) => a + m.value, 0);
+  if (cm.wandering) {
+    const fighter = player(state, combat.fighterId);
+    if (fighter.equipped.some((id) => state.cards[id]?.defId === "item.elmo-olho") && cm.addedBy !== combat.fighterId)
+      v = Math.floor(v / 2);
+  }
+  return v;
+}
+
+export interface CombatCalc {
+  playerTotal: number;
+  monsterTotal: number;
+  playerLines: CalcLine[];
+  monsterLines: CalcLine[];
+  monsters: { cardId: string; total: number }[];
+  winning: boolean;
+  fire: boolean;
+  side: string[];
+  monsterSide: string[];
+}
+
+export function computeCombat(state: GameState): CombatCalc | null {
+  const combat = state.combat;
+  if (!combat) return null;
+  const specials = specialIds(state, combat);
+  const tags = combatTags(state, combat);
+  const side = playerSide(state, combat);
+  const mSide = monsterSidePlayers(state, combat);
+  const fighter = player(state, combat.fighterId);
+  const fire = sideHasFire(state, combat);
+
+  // Marilith: anula os 2 maiores bônus de item do lado dos jogadores
+  let marilith: Set<string> | undefined;
+  if (specials.has("monster.marilith")) {
+    const all: ItemEntry[] = [];
+    for (const id of side) all.push(...collectItems(state, player(state, id), combat, specials, tags));
+    all.sort((a, b) => b.value - a.value);
+    marilith = new Set(all.slice(0, 2).filter((e) => e.value > 0).map((e) => `${e.ownerId}:${e.cardId}:${e.label}`));
+  }
+
+  const playerLines: CalcLine[] = [];
+  for (const id of side) {
+    const p = player(state, id);
+    const lines = personLines(state, p, combat, { isHelper: id !== combat.fighterId, marilithItems: marilith });
+    for (const l of lines) playerLines.push({ label: side.length > 1 ? `${p.name}: ${l.label}` : l.label, value: l.value });
+  }
+  // Aura de Coragem (Paladino)
+  const paladins = side.map((id) => player(state, id)).filter((p) => hasClass(state, p, "paladino"));
+  if (paladins.length > 0) {
+    const per = paladins.some((p) => tier11(p)) ? 3 : 2;
+    playerLines.push({ label: `Aura de Coragem (${side.length} jogador(es))`, value: per * side.length });
+  }
+  for (const mod of combat.playerMods) if (!mod.target) playerLines.push({ label: mod.label, value: mod.value });
+  for (const a of combat.allies) {
+    const d = defOf(state, a.cardId) as MonsterCard;
+    playerLines.push({ label: `Duplicata: ${d.name}`, value: Math.ceil(d.level / 2) });
+  }
+  if (fire) {
+    for (const key of ["monster.mumia", "monster.gigante-gelo", "monster.senhor-mumias"])
+      if (specials.has(key)) playerLines.push({ label: `Fogo contra ${def(key).name}`, value: 4 });
+  }
+
+  const monsterLines: CalcLine[] = [];
+  const monsters: { cardId: string; total: number }[] = [];
+  const helperOnSide = side.length > 1;
+  const sidePlayers = side.map((id) => player(state, id));
+  for (const cm of activeMonsters(combat)) {
+    const d = monsterDef(state, cm);
+    let t = monsterBaseTotal(state, cm, combat);
+    monsterLines.push({ label: `${d.name} (nível ${d.level})`, value: d.level });
+    for (const mod of cm.mods) monsterLines.push({ label: `  ${mod.label}`, value: mod.value });
+    if (cm.wandering && t !== d.level + cm.mods.reduce((a, m) => a + m.value, 0))
+      monsterLines.push({ label: "  Elmo do Olho Vigilante (metade)", value: t - (d.level + cm.mods.reduce((a, m) => a + m.value, 0)) });
+    const add = (label: string, v: number) => {
+      t += v;
+      monsterLines.push({ label: `  ${label}`, value: v });
+    };
+    if (!cm.ignoreSpecial) {
+      const id = d.id;
+      if (id === "monster.troll" && !fire) add("Regenera (sem fogo)", 6);
+      if (id === "monster.ogro" && sidePlayers.some((p) => ["gnomo", "fada", "goblin"].includes(raceOf(state, p) ?? "")))
+        add("Petisco à vista", 3);
+      if (id === "monster.urso-coruja" && sidePlayers.some((p) => hasRace(state, p, "owlin"))) add("Assunto de família", 4);
+      if (id === "monster.gnoll" && sidePlayers.some((p) => lostLevelThisRound(state, p))) add("Faro de sangue", 3);
+      if (id === "monster.hidra" && helperOnSide) add("Cabeças crescem (ajudante)", 3);
+      if (id === "monster.serpe" && sidePlayers.some((p) => p.equipped.some((c) => slotOf(state, c) === "mount")))
+        add("Ataca quem está montado", 3);
+      if (id === "monster.dragao-vermelho-adulto" && sidePlayers.some((p) => p.equipped.length >= 8)) add("Ganancioso", 5);
+      if (id === "monster.empireo" && fighter.level > 15) add("Fúria titânica", 2 * (fighter.level - 15));
+      if (id === "monster.dragao-dourado" && fighter.hand.length > 0) add("Julga a ganância (cartas na mão)", fighter.hand.length);
+      if (id === "monster.ferrugem" && sidePlayers.some((p) => p.equipped.some((c) => state.cards[c]?.defId === "item.cota-enferrujada")))
+        add("Cota de Malha Enferrujada", 3);
+      if (id === "monster.ettin" && cm.ettinFight) add("Briga consigo mesmo", -6);
+      if (id === "monster.glabrezu" && combat.glabrezuAccepted) add("Desejo concedido", 10);
+    }
+    if (hasCurse(fighter, "curse.marca")) add("Marca do Caçador", 2);
+    monsters.push({ cardId: cm.cardId, total: t });
+  }
+  for (const mod of combat.monsterSideMods) monsterLines.push({ label: mod.label, value: mod.value });
+  for (const id of mSide) {
+    const p = player(state, id);
+    const v = sum(personLines(state, p, combat, { isHelper: false }));
+    monsterLines.push({ label: `${p.name} (lutando pelo monstro)`, value: v });
+  }
+
+  const playerTotal = sum(playerLines);
+  const monsterTotal = monsters.reduce((a, m) => a + m.total, 0) + sum(combat.monsterSideMods) + mSide.reduce(
+    (a, id) => a + sum(personLines(state, player(state, id), combat, { isHelper: false })),
+    0,
+  );
+  const warrior = side.some((id) => hasClass(state, player(state, id), "guerreiro"));
+  const winning = monsters.length > 0 && (playerTotal > monsterTotal || (warrior && playerTotal === monsterTotal));
+  return { playerTotal, monsterTotal, playerLines, monsterLines, monsters, winning, fire, side, monsterSide: mSide };
+}
+
+// ----------------------------------------------------------------------------
+// Fugir
+// ----------------------------------------------------------------------------
+
+export interface FleeInfo {
+  bonus: number;
+  lines: CalcLine[];
+  auto: string | null;
+  impossible: string | null;
+}
+
+export function notPursued(state: GameState, p: PlayerState, d: MonsterCard, specialOn: boolean): string | null {
+  if (d.tier === 3 && p.level <= 4) return "não persegue jogadores de nível 4 ou menos";
+  if (d.tier === 4 && p.level <= 8) return "Lendários não perseguem jogadores de nível 8 ou menos";
+  if (d.goblinoid && p.equipped.some((id) => state.cards[id]?.defId === "item.coroa-goblin"))
+    return "Coroa do Rei Goblin";
+  if (!specialOn) return null;
+  if (d.id === "monster.kobold" && p.level >= 5) return "não persegue jogadores de nível 5 ou mais";
+  if (d.id === "monster.ferrugem" && !hasArmor(state, p)) return "não persegue quem não tem armadura";
+  if (d.id === "monster.dragao-dourado" && (hasRace(state, p, "divino") || hasClass(state, p, "paladino")))
+    return "não persegue Divinos nem Paladinos";
+  return null;
+}
+
+export function fleeInfo(state: GameState, p: PlayerState, cm: CombatMonster): FleeInfo {
+  const combat = state.combat!;
+  const d = monsterDef(state, cm);
+  const specialOn = !cm.ignoreSpecial;
+  const lines: CalcLine[] = [];
+  const res = (auto: string | null, impossible: string | null): FleeInfo => ({
+    bonus: lines.reduce((a, l) => a + l.value, 0),
+    lines,
+    auto,
+    impossible,
+  });
+  if (combat.desafio && p.id === combat.fighterId) return res(null, "Desafio: não dá para fugir");
+  if (combat.autoFlee.includes(`${p.id}|all`)) return res("Pergaminho de Teletransporte", null);
+  const np = notPursued(state, p, d, specialOn);
+  if (np) return res(`${d.name} ${np}`, null);
+  if (hasClass(state, p, "berserker")) return res(null, "Berserker não pode fugir");
+  if (combat.cantFlee.includes(p.id)) return res(null, "Pés de Chumbo");
+  const botas = p.equipped.some((id) => state.cards[id]?.defId === "item.botas-sete-leguas");
+  if (d.cantFlee && specialOn && !botas) return res(null, `${d.name}: não dá para fugir`);
+  if (combat.autoFlee.includes(`${p.id}|nonleg`) && !d.legendary) return res("Poção de Invisibilidade", null);
+  if (hasRace(state, p, "tritao") && d.tags.includes("aquatico")) return res("Filho das Marés (Aquático)", null);
+
+  // Bônus
+  const race = raceOf(state, p);
+  const raceFlee: Partial<Record<string, number>> = { elfo: 1, gnomo: 1, gigante: -1, centauro: 1, torkle: -2, tritao: 2, fada: 2 };
+  if (race && raceFlee[race]) lines.push({ label: def(`race.${race}`).name, value: raceFlee[race]! });
+  if (hasClass(state, p, "ladino")) lines.push({ label: "Mãos Leves", value: 1 });
+  if (hasClass(state, p, "patrulheiro")) lines.push({ label: "Rastreador", value: 1 });
+  if (hasClass(state, p, "druida") && d.tags.includes("animal")) lines.push({ label: "Laço Animal (Animal)", value: 2 });
+  if (hasClass(state, p, "monge") && !hasHandItems(state, p)) lines.push({ label: "Corpo Treinado", value: tier11(p) ? 2 : 1 });
+  let ringFlee = 0;
+  for (const id of p.equipped) {
+    const c = inst(state, id);
+    const idf = itemDef(state, id);
+    const slot = slotOf(state, id)!;
+    if (!itemUsable(state, p, idf, slot)) continue;
+    let f = idf?.flee ?? 0;
+    const wind = (c.runes ?? []).filter((r) => state.cards[r]?.defId === "rune.vento").length;
+    if (slot === "ring") {
+      ringFlee += f + wind;
+      continue;
+    }
+    if (slot === "mount" && (specialIds(state, combat).has("monster.kraken") || specialIds(state, combat).has("monster.ankheg"))) f = 0;
+    f += wind;
+    if (f !== 0) lines.push({ label: defOf(state, id).name, value: f });
+  }
+  if (ringFlee !== 0) lines.push({ label: "Anéis (máx. +2)", value: Math.min(2, ringFlee) });
+  if (specialOn && d.fleeMod) {
+    if (!(d.id === "monster.diabo" && hasClass(state, p, "paladino"))) lines.push({ label: d.name, value: d.fleeMod });
+  }
+  for (const mod of combat.fleeMods) {
+    if (mod.target === p.id) lines.push({ label: mod.label, value: mod.value });
+  }
+  return res(null, null);
+}
+
+export function fleeModsOnly(lines: CalcLine[]): number {
+  return lines.reduce((a, l) => a + l.value, 0);
+}
+
+export function equippedCount(p: PlayerState): number {
+  return p.equipped.length;
+}
+
+export function tryHelperName(state: GameState, combat: CombatState): string | null {
+  return tryPlayer(state, combat.helperId)?.name ?? null;
+}
+
+export { equippedRuneCount };

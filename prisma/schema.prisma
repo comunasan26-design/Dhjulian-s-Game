@@ -1,0 +1,68 @@
+// Esquema do banco de dados (PostgreSQL via Prisma 7 + @prisma/adapter-pg)
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id           String       @id @default(cuid())
+  username     String       @unique
+  passwordHash String
+  createdAt    DateTime     @default(now())
+  sessions     Session[]
+  rooms        RoomPlayer[]
+  hostedRooms  Room[]       @relation("RoomHost")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+
+  @@index([userId])
+}
+
+enum RoomStatus {
+  LOBBY
+  PLAYING
+  FINISHED
+}
+
+model Room {
+  id         String       @id @default(cuid())
+  code       String       @unique
+  name       String
+  hostId     String
+  host       User         @relation("RoomHost", fields: [hostId], references: [id], onDelete: Cascade)
+  status     RoomStatus   @default(LOBBY)
+  maxPlayers Int          @default(6)
+  version    Int          @default(0)
+  // Estado completo do jogo (JSON). Só é enviado aos clientes depois de filtrado por jogador.
+  state      Json?
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+  players    RoomPlayer[]
+
+  @@index([status, updatedAt])
+}
+
+model RoomPlayer {
+  roomId     String
+  userId     String
+  room       Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  seat       Int
+  joinedAt   DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+
+  @@id([roomId, userId])
+  @@index([userId])
+}

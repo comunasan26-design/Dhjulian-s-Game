@@ -1,0 +1,1078 @@
+// Despachante de ações dos jogadores + processamento de prazos.
+import { type CurseCard } from "../catalog";
+import { type AbilityKey, type Params, activateAbility } from "./abilities";
+import {
+  addMonster,
+  applyAllBadStuff,
+  badStuffVictims,
+  castCurse,
+  createPrompt,
+  hasBlockingPrompts,
+  maybeApplyBadStuff,
+  onCombatChanged,
+  removeCurse,
+  removeMonster,
+  requestEndTurn,
+  resolveVictory,
+  revalidateEquipment,
+  startCombat,
+  startFlee,
+  startPlaying,
+  joinHelper,
+} from "./core";
+import { answerPrompt, type PromptAnswer, timeoutPrompt } from "./prompts";
+import { type Ctx, type GameState, type HelpDeal, type PlayerState, TIMERS, fail } from "./state";
+import {
+  combatTags,
+  computeCombat,
+  equipCheck,
+  hasCurse,
+  playerSide,
+  runeSockets,
+  slotOf,
+  specialIds,
+  tier11,
+} from "./stats";
+import {
+  classesOf,
+  currentPlayer,
+  defOf,
+  discardCard,
+  discardFromPlayer,
+  drawCard,
+  gainLevels,
+  hasClass,
+  hasRace,
+  isCurrent,
+  itemDef,
+  log,
+  maxClasses,
+  nameOf,
+  player,
+  removeFromPlayer,
+  rollD6,
+  uid,
+} from "./util";
+
+export type Action =
+  | { type: "READY" }
+  | { type: "START_NOW" }
+  | { type: "KICK_DOOR" }
+  | { type: "LOOK_FOR_TROUBLE"; cardId: string }
+  | { type: "LOOT_ROOM" }
+  | { type: "END_TURN" }
+  | { type: "SKIP_AFK" }
+  | { type: "EQUIP"; cardId: string }
+  | { type: "UNEQUIP"; cardId: string }
+  | { type: "PLACE"; cardId: string }
+  | { type: "DISCARD"; cardId: string }
+  | { type: "SELL"; cardIds: string[] }
+  | { type: "PLAY_RACE"; cardId: string }
+  | { type: "PLAY_CLASS"; cardId: string; replaceId?: string }
+  | { type: "DISCARD_RACE" }
+  | { type: "DISCARD_CLASS"; cardId: string }
+  | { type: "SOCKET_RUNE"; runeId: string; itemId: string }
+  | { type: "PLAY_CURSE"; cardId: string; targetId: string }
+  | { type: "PLAY_LEVELUP"; cardId: string }
+  | { type: "PLAY_MONSTER_BONUS"; cardId: string; monsterId: string }
+  | { type: "PLAY_WANDERING"; cardId: string; monsterCardId: string }
+  | { type: "USE_CARD"; cardId: string; side?: "player" | "monster"; targetId?: string; monsterId?: string; index?: number }
+  | { type: "TRADE"; toId: string; give: string[]; take: string[] }
+  | { type: "KISS"; targetId: string; cardId: string }
+  | { type: "ACCEPT_WISH" }
+  | { type: "DISPENSE"; monsterId: string; discardId?: string }
+  | { type: "SCREAMER_ADD"; monsterCardId: string }
+  | { type: "CATADOR" }
+  | { type: "OWL_PEEK" }
+  | { type: "OWL_DECIDE"; bottom: boolean }
+  | { type: "MEDALHAO"; targetId: string }
+  | { type: "DISMISS_NOTICE"; id: string }
+  | { type: "CHAT"; text: string }
+  | { type: "ASK_HELP"; targetId: string; count: number; mode: HelpDeal["mode"] }
+  | { type: "OFFER_HELP"; count: number; mode: HelpDeal["mode"] }
+  | { type: "RESOLVE" }
+  | { type: "PASS" }
+  | { type: "FLEE" }
+  | { type: "ACCEPT_BAD_STUFF" }
+  | { type: "REROLL"; index: number; source: "dado" | "cajado"; cardId?: string }
+  | { type: "WISH_RING" }
+  | { type: "ARCO" }
+  | { type: "SOPRO" }
+  | { type: "ABILITY"; key: AbilityKey; discard: string[]; params: Params }
+  | { type: "ANSWER"; promptId: string; answer: PromptAnswer }
+  | { type: "TICK" };
+
+// ============================================================================
+// Prazos
+// ============================================================================
+
+export function tick(state: GameState, ctx: Ctx): boolean {
+  let changed = false;
+  for (let guard = 0; guard < 60; guard++) {
+    const expired = state.prompts.find((p) => p.deadline <= ctx.now);
+    if (!expired) break;
+    timeoutPrompt(state, ctx, expired);
+    changed = true;
+  }
+  const c = state.combat;
+  if (c && c.stage === "resolving" && c.resolveDeadline !== null && c.resolveDeadline <= ctx.now) {
+    const calc = computeCombat(state);
+    if (calc?.winning) resolveVictory(state, ctx);
+    else {
+      c.stage = "fight";
+      c.resolveDeadline = null;
+    }
+    changed = true;
+  }
+  const c2 = state.combat;
+  if (c2 && c2.stage === "badstuff" && c2.flee && c2.flee.deadline <= ctx.now) {
+    applyAllBadStuff(state, ctx);
+    changed = true;
+  }
+  return changed;
+}
+
+export function nextDeadline(state: GameState): number | null {
+  const ds: number[] = state.prompts.map((p) => p.deadline);
+  if (state.combat?.stage === "resolving" && state.combat.resolveDeadline) ds.push(state.combat.resolveDeadline);
+  if (state.combat?.flee) ds.push(state.combat.flee.deadline);
+  return ds.length ? Math.min(...ds) : null;
+}
+
+// ============================================================================
+// Auxiliares de validação
+// ============================================================================
+
+function ownTurn(state: GameState, p: PlayerState) {
+  if (state.phase !== "PLAYING") fail("A partida não está em andamento.");
+  if (!isCurrent(state, p.id)) fail("Não é o seu turno.");
+  if (state.turn.ending) fail("Seu turno está terminando: escolha as cartas da Caridade.");
+}
+
+/** No seu turno e fora de combate (ou na preparação). */
+function manageWindow(state: GameState, p: PlayerState) {
+  if (state.phase === "SETUP") return;
+  ownTurn(state, p);
+  if (state.combat) fail("Não dá para fazer isso durante um combate.");
+}
+
+function combatFor(state: GameState) {
+  if (!state.combat) fail("Não há combate em andamento.");
+  return state.combat;
+}
+
+/** Pode jogar cartas que afetam o combate atual? */
+function canInterfere(state: GameState, p: PlayerState) {
+  const combat = combatFor(state);
+  if (combat.stage === "badstuff") fail("O combate já foi decidido.");
+  if (combat.desafio && combat.fighterId !== p.id) fail("Desafio: ninguém mais pode jogar cartas neste combate.");
+  const side = playerSide(state, combat);
+  if (!side.includes(p.id) && specialIds(state, combat).has("monster.planetar") && p.curseCastRound === state.round)
+    fail("Planetar: quem lançou maldição nesta rodada não pode ajudar nem atrapalhar.");
+  return combat;
+}
+
+function inHand(p: PlayerState, cardId: string) {
+  if (!p.hand.includes(cardId)) fail("Essa carta não está na sua mão.");
+}
+
+function handOrTable(p: PlayerState, cardId: string) {
+  if (!p.hand.includes(cardId) && !p.carried.includes(cardId)) fail("Essa carta não está com você.");
+}
+
+function multiplier(state: GameState, p: PlayerState): number {
+  return hasClass(state, p, "alquimista") ? 2 : 1;
+}
+
+function allPassed(state: GameState, ctx: Ctx): boolean {
+  const combat = state.combat!;
+  const side = new Set(playerSide(state, combat));
+  return state.players
+    .filter((p) => !side.has(p.id) && !ctx.offline?.has(p.id))
+    .every((p) => combat.passed.includes(p.id));
+}
+
+function canBeHelper(state: GameState, target: PlayerState): string | null {
+  const combat = state.combat!;
+  if (combat.helperId) return "Já existe um ajudante.";
+  if (combat.isolated.includes(combat.fighterId)) return "Ninguém pode ajudar neste combate.";
+  if (combat.desafio) return "Desafio: ninguém pode lutar junto.";
+  if (target.id === combat.fighterId) return "Você não pode ajudar a si mesmo.";
+  if (specialIds(state, combat).has("monster.planetar") && target.curseCastRound === state.round)
+    return "Planetar: quem lançou maldição nesta rodada não pode ajudar.";
+  return null;
+}
+
+function parseDeal(count: unknown, mode: unknown): HelpDeal {
+  return {
+    count: Math.max(0, Math.min(20, Math.floor(Number(count) || 0))),
+    mode: mode === "fighter" || mode === "helper" ? mode : "random",
+  };
+}
+
+// ============================================================================
+// Despachante
+// ============================================================================
+
+export function applyAction(state: GameState, actorId: string, action: Action, ctx: Ctx) {
+  tick(state, ctx);
+  const p = player(state, actorId);
+  if (state.phase === "FINISHED" && action.type !== "CHAT" && action.type !== "DISMISS_NOTICE" && action.type !== "TICK")
+    fail("A partida terminou.");
+  dispatch(state, p, action, ctx);
+  if (action.type !== "TICK" && action.type !== "CHAT") state.lastActionAt = ctx.now;
+}
+
+function dispatch(state: GameState, p: PlayerState, a: Action, ctx: Ctx) {
+  switch (a.type) {
+    case "TICK":
+      return;
+    case "CHAT": {
+      const text = String(a.text ?? "").trim().slice(0, 300);
+      if (!text) return;
+      log(state, ctx, `${p.name}: ${text}`, "chat", p.id);
+      return;
+    }
+    case "DISMISS_NOTICE":
+      state.notices = state.notices.filter((n) => !(n.id === a.id && n.playerId === p.id));
+      return;
+    case "ANSWER":
+      answerPrompt(state, ctx, p.id, a.promptId, a.answer ?? {});
+      return;
+
+    // ----------------------------------------------------------------- Preparação
+    case "READY": {
+      if (state.phase !== "SETUP") fail("A partida já começou.");
+      p.ready = true;
+      log(state, ctx, `${p.name} está pronto.`, "system");
+      if (state.players.every((x) => x.ready)) startPlaying(state, ctx);
+      return;
+    }
+    case "START_NOW": {
+      if (state.phase !== "SETUP") fail("A partida já começou.");
+      if (p.id !== state.hostId) fail("Só o anfitrião pode começar.");
+      startPlaying(state, ctx);
+      return;
+    }
+
+    // ----------------------------------------------------------------- Turno
+    case "KICK_DOOR": {
+      ownTurn(state, p);
+      if (state.turnPhase !== "KICK") fail("Você já chutou a porta neste turno.");
+      if (hasBlockingPrompts(state)) fail("Resolva as escolhas pendentes primeiro.");
+      state.turn.owlStartDone = true;
+      clearOwl(state, p);
+      if (p.ambush.length > 0) {
+        const m = p.ambush.shift()!;
+        log(state, ctx, `🪞 Emboscada! ${p.name} encontra ${nameOf(state, m)} atrás da porta.`, "combat");
+        startCombat(state, ctx, p.id, m);
+        return;
+      }
+      const card = drawCard(state, "door", ctx);
+      if (!card) fail("Não há mais cartas de Porta.");
+      state.turn.revealed = card;
+      const d = defOf(state, card);
+      log(state, ctx, `🚪 ${p.name} chutou a porta: ${d.name}!`, "info", p.id);
+      if (d.kind === "monster") {
+        startCombat(state, ctx, p.id, card);
+      } else if (d.kind === "curse") {
+        state.turnPhase = "AFTER_DOOR";
+        castCurse(state, ctx, card, null, p);
+      } else {
+        p.hand.push(card);
+        state.turnPhase = "AFTER_DOOR";
+      }
+      return;
+    }
+    case "LOOK_FOR_TROUBLE": {
+      ownTurn(state, p);
+      if (state.turnPhase !== "AFTER_DOOR") fail("Agora não dá para procurar encrenca.");
+      if (hasBlockingPrompts(state)) fail("Resolva as escolhas pendentes primeiro.");
+      inHand(p, a.cardId);
+      if (defOf(state, a.cardId).kind !== "monster") fail("Escolha um monstro da mão.");
+      removeFromPlayer(p, a.cardId);
+      log(state, ctx, `😤 ${p.name} foi procurar encrenca.`, "combat");
+      startCombat(state, ctx, p.id, a.cardId);
+      return;
+    }
+    case "LOOT_ROOM": {
+      ownTurn(state, p);
+      if (state.turnPhase !== "AFTER_DOOR") fail("Agora não dá para saquear.");
+      lootRoom(state, ctx, p);
+      return;
+    }
+    case "END_TURN": {
+      ownTurn(state, p);
+      if (state.combat) fail("Termine o combate primeiro.");
+      if (state.reward) fail("Aguarde a divisão dos tesouros.");
+      if (state.turnPhase === "KICK") fail("Chute a porta primeiro.");
+      if (hasBlockingPrompts(state)) fail("Há escolhas pendentes; aguarde.");
+      if (state.turn.ending) fail("Escolha as cartas da Caridade.");
+      if (state.turnPhase === "AFTER_DOOR") lootRoom(state, ctx, p);
+      clearOwl(state, p);
+      requestEndTurn(state, ctx, p);
+      return;
+    }
+    case "SKIP_AFK": {
+      if (state.phase !== "PLAYING") fail("A partida não está em andamento.");
+      const cur = currentPlayer(state);
+      if (cur.id === p.id) fail("É o seu turno.");
+      if (!ctx.offline?.has(cur.id)) fail(`${cur.name} está conectado.`);
+      if (ctx.now - state.lastActionAt < TIMERS.afkSkip) fail("Aguarde um pouco antes de pular o jogador.");
+      skipAfk(state, ctx, cur);
+      return;
+    }
+
+    // ----------------------------------------------------------------- Itens
+    case "EQUIP": {
+      manageWindow(state, p);
+      handOrTable(p, a.cardId);
+      const res = equipCheck(state, p, a.cardId);
+      if (res.error) fail(res.error);
+      removeFromPlayer(p, a.cardId);
+      p.equipped.push(a.cardId);
+      if (res.asSecond) {
+        state.cards[a.cardId].artificeSecond = true;
+        const slot = slotOf(state, a.cardId);
+        if (slot && !p.artificeSlots.includes(slot)) p.artificeSlots.push(slot);
+      }
+      log(state, ctx, `${p.name} equipou ${nameOf(state, a.cardId)}.`, "info", p.id);
+      return;
+    }
+    case "UNEQUIP": {
+      manageWindow(state, p);
+      if (!p.equipped.includes(a.cardId)) fail("Esse item não está equipado.");
+      removeFromPlayer(p, a.cardId);
+      delete state.cards[a.cardId].artificeSecond;
+      p.carried.push(a.cardId);
+      return;
+    }
+    case "PLACE": {
+      inHand(p, a.cardId);
+      const d = defOf(state, a.cardId);
+      if (!("price" in d) && !state.cards[a.cardId].tamed) fail("Só cartas de valor podem ir para a mesa.");
+      removeFromPlayer(p, a.cardId);
+      p.carried.push(a.cardId);
+      return;
+    }
+    case "DISCARD": {
+      handOrTable(p, a.cardId);
+      discardFromPlayer(state, p, a.cardId);
+      log(state, ctx, `${p.name} descartou ${nameOf(state, a.cardId)}.`, "info", p.id);
+      return;
+    }
+    case "SELL": {
+      ownTurn(state, p);
+      if (state.combat) fail("Não dá para vender durante um combate.");
+      if (hasCurse(p, "curse.ganancia")) fail("Ganância Dracônica: você não pode vender itens.");
+      const ids = [...new Set(a.cardIds ?? [])];
+      if (ids.length === 0) fail("Escolha itens para vender.");
+      let gold = 0;
+      for (const id of ids) {
+        if (!p.hand.includes(id) && !p.carried.includes(id) && !p.equipped.includes(id)) fail("Item inválido.");
+        const d = defOf(state, id);
+        if (!("price" in d)) fail(`${d.name} não pode ser vendido.`);
+        gold += d.price;
+        for (const r of state.cards[id].runes ?? []) {
+          const rd = defOf(state, r);
+          if ("price" in rd) gold += rd.price;
+        }
+      }
+      if ([...p.carried, ...p.equipped].some((id) => state.cards[id]?.defId === "misc.carta-rei")) gold = Math.floor(gold * 1.5);
+      const levels = Math.floor(gold / 1000);
+      for (const id of ids) discardFromPlayer(state, p, id);
+      log(state, ctx, `💰 ${p.name} vendeu ${ids.length} item(ns) por ${gold} de ouro.`, "info", p.id);
+      if (levels > 0) gainLevels(state, p, levels, ctx, false, "venda de itens");
+      return;
+    }
+    case "PLAY_RACE": {
+      manageWindow(state, p);
+      inHand(p, a.cardId);
+      if (defOf(state, a.cardId).kind !== "race") fail("Isso não é uma carta de raça.");
+      removeFromPlayer(p, a.cardId);
+      if (p.race) discardCard(state, p.race);
+      p.race = a.cardId;
+      revalidateEquipment(state, ctx, p);
+      log(state, ctx, `${p.name} agora é ${nameOf(state, a.cardId)}.`, "info", p.id);
+      return;
+    }
+    case "PLAY_CLASS": {
+      manageWindow(state, p);
+      inHand(p, a.cardId);
+      const d = defOf(state, a.cardId);
+      if (d.kind !== "class") fail("Isso não é uma carta de classe.");
+      if (classesOf(state, p).includes(d.cls)) fail("Você já tem essa classe.");
+      removeFromPlayer(p, a.cardId);
+      if (p.classes.length >= maxClasses(state, p)) {
+        const replace = a.replaceId && p.classes.includes(a.replaceId) ? a.replaceId : p.classes[0];
+        p.classes = p.classes.filter((c) => c !== replace);
+        discardCard(state, replace);
+      }
+      p.classes.push(a.cardId);
+      revalidateEquipment(state, ctx, p);
+      log(state, ctx, `${p.name} agora é ${d.name}.`, "info", p.id);
+      return;
+    }
+    case "DISCARD_RACE": {
+      if (!p.race) fail("Você não tem raça.");
+      discardCard(state, p.race);
+      p.race = null;
+      revalidateEquipment(state, ctx, p);
+      log(state, ctx, `${p.name} descartou a própria raça.`, "info", p.id);
+      return;
+    }
+    case "DISCARD_CLASS": {
+      if (!p.classes.includes(a.cardId)) fail("Classe inválida.");
+      p.classes = p.classes.filter((c) => c !== a.cardId);
+      discardCard(state, a.cardId);
+      revalidateEquipment(state, ctx, p);
+      log(state, ctx, `${p.name} descartou a classe ${nameOf(state, a.cardId)}.`, "info", p.id);
+      return;
+    }
+    case "SOCKET_RUNE": {
+      manageWindow(state, p);
+      handOrTable(p, a.runeId);
+      if (defOf(state, a.runeId).kind !== "rune") fail("Isso não é uma runa.");
+      if (!p.equipped.includes(a.itemId) || !itemDef(state, a.itemId)) fail("A runa precisa ir num item equipado.");
+      const c = state.cards[a.itemId];
+      const used = (c.runes ?? []).length;
+      if (used >= runeSockets(state, p, a.itemId)) fail("Esse item não tem encaixe livre.");
+      removeFromPlayer(p, a.runeId);
+      c.runes = [...(c.runes ?? []), a.runeId];
+      log(state, ctx, `${p.name} engastou ${nameOf(state, a.runeId)} em ${nameOf(state, a.itemId)}.`, "info", p.id);
+      return;
+    }
+
+    // ----------------------------------------------------------------- Cartas a qualquer momento
+    case "PLAY_CURSE": {
+      if (state.phase !== "PLAYING") fail("A partida não está em andamento.");
+      inHand(p, a.cardId);
+      const d = defOf(state, a.cardId);
+      if (d.kind !== "curse") fail("Isso não é uma maldição.");
+      const target = player(state, a.targetId);
+      const combat = state.combat;
+      if (combat && combat.desafio && p.id !== combat.fighterId && (target.id === combat.fighterId || (d as CurseCard).curseType === "combat"))
+        fail("Desafio: ninguém mais pode jogar cartas neste combate.");
+      if (combat && (target.id === combat.fighterId || target.id === combat.helperId)) {
+        const side = playerSide(state, combat);
+        if (!side.includes(p.id) && specialIds(state, combat).has("monster.planetar") && p.curseCastRound === state.round)
+          fail("Planetar: quem lançou maldição nesta rodada não pode atrapalhar.");
+      }
+      removeFromPlayer(p, a.cardId);
+      castCurse(state, ctx, a.cardId, p, target);
+      return;
+    }
+    case "PLAY_LEVELUP": {
+      if (state.phase !== "PLAYING") fail("A partida não está em andamento.");
+      inHand(p, a.cardId);
+      if (defOf(state, a.cardId).kind !== "levelup") fail("Isso não é uma carta de subir nível.");
+      if (p.level >= 19) fail("Cartas de subir nível nunca levam ao nível 20.");
+      discardFromPlayer(state, p, a.cardId);
+      gainLevels(state, p, 1, ctx, false, nameOf(state, a.cardId));
+      return;
+    }
+    case "PLAY_MONSTER_BONUS": {
+      const combat = canInterfere(state, p);
+      inHand(p, a.cardId);
+      const d = defOf(state, a.cardId);
+      if (d.kind !== "monsterBonus") fail("Isso não é um bônus de monstro.");
+      const cm = combat.monsters.find((m) => m.cardId === a.monsterId && !m.defeated);
+      if (!cm) fail("Monstro inválido.");
+      let value = d.value;
+      if (
+        value > 0 &&
+        !combat.oniDoubled &&
+        !cm.ignoreSpecial &&
+        state.cards[cm.cardId].defId === "monster.oni"
+      ) {
+        combat.oniDoubled = true;
+        value *= 2;
+        log(state, ctx, "O Oni dobra o primeiro bônus jogado a favor dele!", "combat");
+      }
+      cm.mods.push({ id: uid(state, "m"), value, by: p.id, label: d.name });
+      discardFromPlayer(state, p, a.cardId);
+      log(state, ctx, `${p.name} jogou ${d.name} (${value > 0 ? "+" : ""}${value}) em ${nameOf(state, cm.cardId)}.`, "combat", p.id);
+      onCombatChanged(state, ctx);
+      return;
+    }
+    case "PLAY_WANDERING": {
+      const combat = canInterfere(state, p);
+      inHand(p, a.cardId);
+      inHand(p, a.monsterCardId);
+      if (defOf(state, a.cardId).kind !== "wandering") fail("Use uma carta de Monstro Errante.");
+      if (defOf(state, a.monsterCardId).kind !== "monster") fail("Escolha um monstro da mão.");
+      const fighter = player(state, combat.fighterId);
+      if (fighter.equipped.some((id) => state.cards[id]?.defId === "item.anel-invisibilidade"))
+        fail("Anel da Invisibilidade: ninguém pode jogar Monstros Errantes neste combate.");
+      discardFromPlayer(state, p, a.cardId);
+      removeFromPlayer(p, a.monsterCardId);
+      addMonster(state, ctx, a.monsterCardId, { wandering: true, addedBy: p.id });
+      return;
+    }
+    case "SCREAMER_ADD": {
+      const combat = combatFor(state);
+      if (combat.screamerFor !== p.id) fail("O grito não é para você.");
+      inHand(p, a.monsterCardId);
+      if (defOf(state, a.monsterCardId).kind !== "monster") fail("Escolha um monstro da mão.");
+      combat.screamerFor = null;
+      removeFromPlayer(p, a.monsterCardId);
+      addMonster(state, ctx, a.monsterCardId, { wandering: true, addedBy: p.id });
+      return;
+    }
+    case "USE_CARD":
+      playConsumable(state, ctx, p, a);
+      return;
+    case "KISS": {
+      if (state.phase !== "PLAYING") fail("A partida não está em andamento.");
+      const target = player(state, a.targetId);
+      if (target.id === p.id) fail("Você não pode se beijar.");
+      const sapo = target.curses.find((c) => c.defId === "curse.sapo");
+      if (!sapo) fail(`${target.name} não é um sapo.`);
+      inHand(p, a.cardId);
+      discardFromPlayer(state, p, a.cardId);
+      removeCurse(state, target, sapo.id);
+      log(state, ctx, `💋 ${p.name} beijou ${target.name}, que voltou ao normal!`, "curse");
+      return;
+    }
+    case "TRADE": {
+      if (state.combat) fail("Não dá para trocar durante um combate.");
+      const to = player(state, a.toId);
+      if (to.id === p.id) fail("Escolha outro jogador.");
+      if (hasCurse(p, "curse.ganancia") || hasCurse(to, "curse.ganancia")) fail("Ganância Dracônica impede trocas.");
+      const give = [...new Set(a.give ?? [])];
+      const take = [...new Set(a.take ?? [])];
+      if (give.length + take.length === 0) fail("Escolha itens para a troca.");
+      for (const id of give) if (!p.equipped.includes(id) && !p.carried.includes(id)) fail("Só itens na mesa podem ser trocados.");
+      for (const id of take) if (!to.equipped.includes(id) && !to.carried.includes(id)) fail("Item inválido do outro jogador.");
+      for (const id of [...give, ...take])
+        if ((state.cards[id].runes ?? []).some((r) => state.cards[r]?.defId === "rune.vinculo"))
+          fail(`${nameOf(state, id)} tem Runa do Vínculo e não pode ser trocado.`);
+      createPrompt(state, ctx, "trade", to.id, { fromId: p.id, give, take }, { blocking: false });
+      log(state, ctx, `${p.name} propôs uma troca para ${to.name}.`);
+      return;
+    }
+
+    // ----------------------------------------------------------------- Combate
+    case "ASK_HELP": {
+      const combat = combatFor(state);
+      if (combat.fighterId !== p.id) fail("Só quem luta pode pedir ajuda.");
+      if (combat.stage === "badstuff") fail("O combate já foi decidido.");
+      if (specialIds(state, combat).has("monster.bugbear")) fail("Bugbear: você não pode pedir ajuda (mas outros podem se oferecer).");
+      const target = player(state, a.targetId);
+      const err = canBeHelper(state, target);
+      if (err) fail(err);
+      if (state.prompts.some((x) => x.kind === "helpRequest" && x.playerId === target.id)) fail("Já existe um pedido para esse jogador.");
+      const deal = parseDeal(a.count, a.mode);
+      createPrompt(state, ctx, "helpRequest", target.id, { fighterId: p.id, deal, threat: false, combatId: combat.id });
+      log(state, ctx, `🙏 ${p.name} pediu ajuda a ${target.name}.`, "combat");
+      return;
+    }
+    case "OFFER_HELP": {
+      const combat = combatFor(state);
+      if (combat.stage === "badstuff") fail("O combate já foi decidido.");
+      const err = canBeHelper(state, p);
+      if (err) fail(err);
+      if (state.prompts.some((x) => x.kind === "helpOffer" && x.data.helperId === p.id)) fail("Você já ofereceu ajuda.");
+      const deal = parseDeal(a.count, a.mode);
+      createPrompt(state, ctx, "helpOffer", combat.fighterId, { helperId: p.id, deal, combatId: combat.id });
+      log(state, ctx, `🤚 ${p.name} ofereceu ajuda.`, "combat");
+      return;
+    }
+    case "RESOLVE": {
+      const combat = combatFor(state);
+      if (combat.fighterId !== p.id) fail("Só quem luta pode atacar.");
+      if (combat.stage !== "fight") fail("O combate já está sendo resolvido.");
+      const calc = computeCombat(state)!;
+      if (!calc.winning) fail("Você ainda não está vencendo.");
+      combat.stage = "resolving";
+      combat.resolveDeadline = ctx.now + TIMERS.resolve;
+      combat.passed = [];
+      log(state, ctx, `⚔️ ${p.name} vai atacar! Últimos segundos para jogar cartas.`, "combat");
+      if (allPassed(state, ctx)) resolveVictory(state, ctx);
+      return;
+    }
+    case "PASS": {
+      const combat = combatFor(state);
+      if (combat.stage !== "resolving") fail("Nada para passar agora.");
+      if (playerSide(state, combat).includes(p.id)) fail("Você está no combate.");
+      if (!combat.passed.includes(p.id)) combat.passed.push(p.id);
+      if (allPassed(state, ctx)) resolveVictory(state, ctx);
+      return;
+    }
+    case "FLEE": {
+      const combat = combatFor(state);
+      if (combat.fighterId !== p.id) fail("Só quem luta decide fugir.");
+      if (combat.stage === "badstuff") fail("A fuga já foi rolada.");
+      startFlee(state, ctx);
+      return;
+    }
+    case "ACCEPT_BAD_STUFF": {
+      const combat = combatFor(state);
+      if (!combat.flee) fail("Nada para aceitar.");
+      if (!badStuffVictims(state).includes(p.id)) fail("Você não vai sofrer Coisas Ruins.");
+      if (!combat.flee.confirmed.includes(p.id)) combat.flee.confirmed.push(p.id);
+      maybeApplyBadStuff(state, ctx);
+      return;
+    }
+    case "REROLL": {
+      const combat = combatFor(state);
+      const flee = combat.flee;
+      if (!flee) fail("Nada para rerrolar.");
+      const r = flee.results[a.index];
+      if (!r || r.playerId !== p.id) fail("Escolha uma rolagem sua.");
+      if (r.success || r.roll === 0) fail("Essa rolagem não pode ser refeita.");
+      if (a.source === "cajado") {
+        if (!p.equipped.some((id) => state.cards[id]?.defId === "item.cajado-arquimago")) fail("Você não tem o Cajado do Arquimago equipado.");
+        if (combat.rerolled.includes(`${p.id}:cajado`)) fail("O Cajado já foi usado neste combate.");
+        combat.rerolled.push(`${p.id}:cajado`);
+      } else {
+        const card = a.cardId ?? [...p.hand, ...p.carried].find((id) => state.cards[id]?.defId === "misc.dado-viciado");
+        if (!card || !(p.hand.includes(card) || p.carried.includes(card)) || state.cards[card].defId !== "misc.dado-viciado")
+          fail("Você não tem um Dado Viciado.");
+        discardFromPlayer(state, p, card);
+      }
+      const roll = rollD6(state, p, ctx, `nova rolagem para fugir de ${nameOf(state, r.monsterCardId)}`);
+      r.roll = roll.total;
+      r.success = roll.total + r.bonus >= 5;
+      r.note = r.success ? "rerrolado" : "rerrolado, falhou de novo";
+      log(state, ctx, r.success ? `🏃 ${p.name} conseguiu fugir na nova rolagem!` : `❌ Falhou de novo.`, "combat");
+      maybeApplyBadStuff(state, ctx);
+      return;
+    }
+    case "WISH_RING": {
+      const combat = combatFor(state);
+      if (!combat.flee) fail("Use quando for sofrer Coisas Ruins.");
+      const ring = p.equipped.find((id) => state.cards[id]?.defId === "item.anel-desejos");
+      if (!ring) fail("Você não tem o Anel dos Três Desejos equipado.");
+      const mine = combat.flee.results.filter((r) => r.playerId === p.id && !r.success);
+      if (mine.length === 0) fail("Você não vai sofrer Coisas Ruins.");
+      const c = state.cards[ring];
+      c.charges = (c.charges ?? 3) - 1;
+      for (const r of mine) {
+        r.success = true;
+        r.note = "Anel dos Três Desejos";
+      }
+      log(state, ctx, `💍 ${p.name} gastou um desejo e anulou as Coisas Ruins! (${c.charges} carga(s) restante(s))`, "combat");
+      if (c.charges <= 0) {
+        c.defId = "item.anel-lata";
+        delete c.charges;
+        log(state, ctx, "O Anel dos Três Desejos virou um Anel de Lata.");
+      }
+      maybeApplyBadStuff(state, ctx);
+      return;
+    }
+    case "ARCO": {
+      const combat = canInterfere(state, p);
+      if (!hasRace(state, p, "elfo")) fail("Só um Elfo pode ajudar de fora com o Arco Élfico.");
+      const bow = p.equipped.find((id) => state.cards[id]?.defId === "item.arco-elfico");
+      if (!bow) fail("Você não tem o Arco Élfico equipado.");
+      if (playerSide(state, combat).includes(p.id)) fail("Você já está no combate.");
+      if (combat.bowUsedBy.includes(p.id)) fail("Você já atirou neste combate.");
+      combat.bowUsedBy.push(p.id);
+      combat.playerMods.push({ id: uid(state, "m"), value: itemDef(state, bow)!.bonus, by: p.id, label: `Arco Élfico (${p.name})` });
+      log(state, ctx, `🏹 ${p.name} atirou de longe com o Arco Élfico!`, "combat");
+      onCombatChanged(state, ctx);
+      return;
+    }
+    case "SOPRO": {
+      const combat = combatFor(state);
+      if (combat.stage === "badstuff") fail("O combate já foi decidido.");
+      if (!playerSide(state, combat).includes(p.id)) fail("Você precisa estar no combate.");
+      if (!p.equipped.some((id) => state.cards[id]?.defId === "item.dragao-bebe")) fail("Você não tem o Dragão Bebê.");
+      if (combat.breathUsedBy.includes(p.id)) fail("O Dragão Bebê já soprou neste combate.");
+      combat.breathUsedBy.push(p.id);
+      combat.playerMods.push({ id: uid(state, "m"), value: 3, by: p.id, label: `Sopro do Dragão Bebê (${p.name})`, fire: true });
+      log(state, ctx, "🐲 O Dragão Bebê Rabugento soprou fogo!", "combat");
+      onCombatChanged(state, ctx);
+      return;
+    }
+    case "ACCEPT_WISH": {
+      const combat = combatFor(state);
+      if (combat.fighterId !== p.id) fail("Só quem luta pode aceitar o desejo.");
+      if (!specialIds(state, combat).has("monster.glabrezu")) fail("Não há Glabrezu oferecendo desejos.");
+      if (combat.glabrezuAccepted) fail("Você já aceitou o desejo.");
+      if (combat.stage !== "fight") fail("Tarde demais para desejos.");
+      combat.glabrezuAccepted = true;
+      gainLevels(state, p, 1, ctx, false, "desejo do Glabrezu");
+      log(state, ctx, "😈 O Glabrezu sorri e ganha +10.", "combat");
+      onCombatChanged(state, ctx);
+      return;
+    }
+    case "DISPENSE":
+      dispense(state, ctx, p, a.monsterId, a.discardId);
+      return;
+    case "CATADOR": {
+      if (!hasRace(state, p, "goblin")) fail("Só Goblins catam itens.");
+      const li = state.lastItemDiscard;
+      if (!li || !state.decks.treasureDiscard.includes(li.cardId)) fail("Não há item para catar.");
+      if (li.by === p.id) fail("O item foi descartado por você.");
+      if (li.tried.includes(p.id)) fail("Você já tentou catar esse item.");
+      if (p.usage["catador"] === state.round) fail("Catador: 1x por rodada.");
+      p.usage["catador"] = state.round;
+      li.tried.push(p.id);
+      const r = rollD6(state, p, ctx, `Catador (${nameOf(state, li.cardId)})`);
+      if (r.total >= (tier11(p) ? 4 : 5)) {
+        state.decks.treasureDiscard.splice(state.decks.treasureDiscard.indexOf(li.cardId), 1);
+        p.carried.push(li.cardId);
+        log(state, ctx, `👺 ${p.name} catou ${nameOf(state, li.cardId)}!`);
+        state.lastItemDiscard = null;
+      }
+      return;
+    }
+    case "OWL_PEEK": {
+      ownTurn(state, p);
+      if (!hasRace(state, p, "owlin")) fail("Só Owlins têm Olhos da Noite.");
+      const start = state.turnPhase === "KICK" && !state.turn.owlStartDone && !state.turn.revealed;
+      const end = state.turnPhase === "END" && !state.turn.owlEndDone && !state.combat;
+      if (!start && !end) fail("Olhos da Noite: só no início e no fim do seu turno.");
+      if (start) state.turn.owlStartDone = true;
+      else state.turn.owlEndDone = true;
+      const top = state.decks.door[0];
+      if (!top) fail("O baralho de Portas está vazio.");
+      p.owlPeek = top;
+      state.notices.push({ id: uid(state, "n"), playerId: p.id, text: "Olhos da Noite: carta do topo de Portas.", cards: [top], kind: "owl" });
+      return;
+    }
+    case "OWL_DECIDE": {
+      if (!p.owlPeek) fail("Nada para decidir.");
+      if (a.bottom && state.decks.door[0] === p.owlPeek) {
+        state.decks.door.push(state.decks.door.shift()!);
+        log(state, ctx, `🦉 ${p.name} mandou a carta do topo de Portas para o fundo.`);
+      }
+      clearOwl(state, p);
+      return;
+    }
+    case "MEDALHAO": {
+      if (!p.equipped.some((id) => state.cards[id]?.defId === "item.medalhao")) fail("Você não tem o Medalhão equipado.");
+      if (p.usage["medalhao"] === state.round) fail("Medalhão: 1x por rodada.");
+      const target = player(state, a.targetId);
+      if (target.id === p.id) fail("Escolha outro jogador.");
+      p.usage["medalhao"] = state.round;
+      state.notices.push({ id: uid(state, "n"), playerId: p.id, text: `Mão de ${target.name}:`, cards: [...target.hand] });
+      log(state, ctx, `🔮 ${p.name} leu os pensamentos de ${target.name}.`);
+      return;
+    }
+    case "ABILITY":
+      activateAbility(state, ctx, p, a.key, Array.isArray(a.discard) ? a.discard : [], a.params ?? {});
+      return;
+    default:
+      fail("Ação desconhecida.");
+  }
+}
+
+function clearOwl(state: GameState, p: PlayerState) {
+  p.owlPeek = null;
+  state.notices = state.notices.filter((n) => !(n.playerId === p.id && n.kind === "owl"));
+}
+
+function lootRoom(state: GameState, ctx: Ctx, p: PlayerState) {
+  if (!state.turn.fought) {
+    const c = drawCard(state, "door", ctx);
+    if (c) p.hand.push(c);
+    log(state, ctx, `${p.name} saqueou a sala (comprou 1 Porta).`, "info", p.id);
+  }
+  state.turnPhase = "END";
+}
+
+function skipAfk(state: GameState, ctx: Ctx, cur: PlayerState) {
+  log(state, ctx, `⏭️ ${cur.name} está ausente: o turno será encerrado.`, "system");
+  if (state.combat) {
+    if (state.combat.stage !== "badstuff") startFlee(state, ctx);
+    if (state.combat?.stage === "badstuff") applyAllBadStuff(state, ctx);
+  }
+  for (const pr of [...state.prompts]) {
+    if (pr.playerId === cur.id || pr.blocking) timeoutPrompt(state, ctx, pr);
+  }
+  if (state.phase !== "PLAYING" || state.order[state.currentIdx] !== cur.id) return;
+  if (state.turn.ending) return;
+  state.turnPhase = "END";
+  requestEndTurn(state, ctx, cur, true);
+}
+
+function dispense(state: GameState, ctx: Ctx, p: PlayerState, monsterId: string, discardId?: string) {
+  const combat = combatFor(state);
+  if (combat.fighterId !== p.id) fail("Só quem luta pode dispensar.");
+  if (combat.stage === "badstuff") fail("O combate já foi decidido.");
+  const cm = combat.monsters.find((m) => m.cardId === monsterId && !m.defeated);
+  if (!cm) fail("Monstro inválido.");
+  if (cm.ignoreSpecial) fail("O texto Especial desse monstro está sendo ignorado.");
+  const id = state.cards[cm.cardId].defId;
+  const needDiscard = () => {
+    if (!discardId) fail("Escolha 1 carta para descartar.");
+    inHand(p, discardId);
+    discardFromPlayer(state, p, discardId);
+  };
+  switch (id) {
+    case "monster.goblin":
+      if (!hasRace(state, p, "goblin")) fail("Só Goblins podem dispensá-lo.");
+      removeMonster(state, ctx, cm.cardId);
+      log(state, ctx, `👺 ${p.name} dispensou o primo Goblin e ganhou 1 tesouro.`, "combat");
+      drawTreasuresTo(state, ctx, p, 1);
+      return;
+    case "monster.urso-coruja":
+      if (!hasClass(state, p, "druida")) fail("Só Druidas podem dispensá-lo.");
+      needDiscard();
+      break;
+    case "monster.gigante-colinas":
+      if (!hasRace(state, p, "gigante")) fail("Só Gigantes podem dispensá-lo.");
+      needDiscard();
+      break;
+    case "monster.elemental-fogo":
+      if (!hasRace(state, p, "elemental")) fail("Só Elementais podem dispensá-lo.");
+      needDiscard();
+      break;
+    case "monster.vampiro":
+      if (!hasRace(state, p, "vampirico")) fail("Só Vampíricos podem dispensá-lo.");
+      removeMonster(state, ctx, cm.cardId);
+      log(state, ctx, `🧛 ${p.name} dispensou o Vampiro Ancestral e ganhou 2 tesouros.`, "combat");
+      drawTreasuresTo(state, ctx, p, 2);
+      return;
+    case "monster.solar":
+      if (!hasRace(state, p, "divino") && !hasClass(state, p, "paladino")) fail("Só Divinos e Paladinos podem dispensá-lo.");
+      removeMonster(state, ctx, cm.cardId);
+      log(state, ctx, `☀️ O Solar abençoa ${p.name} e vai embora.`, "combat");
+      gainLevels(state, p, 1, ctx, false, "bênção do Solar");
+      return;
+    default:
+      fail("Esse monstro não pode ser dispensado por você.");
+  }
+  log(state, ctx, `${p.name} dispensou ${nameOf(state, cm.cardId)}.`, "combat");
+  removeMonster(state, ctx, cm.cardId);
+}
+
+function drawTreasuresTo(state: GameState, ctx: Ctx, p: PlayerState, n: number) {
+  for (let i = 0; i < n; i++) {
+    const c = drawCard(state, "treasure", ctx);
+    if (c) p.hand.push(c);
+  }
+}
+
+// ============================================================================
+// Poções e itens de uso único
+// ============================================================================
+
+function playConsumable(state: GameState, ctx: Ctx, p: PlayerState, a: Extract<Action, { type: "USE_CARD" }>) {
+  if (state.phase !== "PLAYING") fail("A partida não está em andamento.");
+  handOrTable(p, a.cardId);
+  const d = defOf(state, a.cardId);
+  const mult = multiplier(state, p);
+  const combat = state.combat;
+  const label = (txt: string) => `${d.name}${mult > 1 ? " x2" : ""} (${txt})`;
+
+  const finishPotion = () => {
+    if (hasRace(state, p, "gnomo")) {
+      const r = rollD6(state, p, ctx, "Gambiarra");
+      if (r.total >= 6) {
+        log(state, ctx, `🔧 Gambiarra: ${p.name} guardou a poção.`);
+        return;
+      }
+    }
+    discardFromPlayer(state, p, a.cardId);
+  };
+  const potionCombat = () => {
+    const c = canInterfere(state, p);
+    if (specialIds(state, c).has("monster.dragao-branco")) fail("Dragão Branco: ninguém pode usar poções neste combate.");
+    return c;
+  };
+  const sideTarget = (c: NonNullable<GameState["combat"]>): PlayerState => {
+    const side = playerSide(state, c);
+    const t = a.targetId ? player(state, a.targetId) : side.includes(p.id) ? p : player(state, c.fighterId);
+    if (!side.includes(t.id)) fail("Escolha um jogador que esteja lutando.");
+    return t;
+  };
+
+  if (d.kind === "potion") {
+    switch (d.id) {
+      case "potion.forca-menor":
+      case "potion.fogo-grego":
+      case "potion.elixir-gigante": {
+        const c = potionCombat();
+        const base = d.id === "potion.forca-menor" ? 2 : d.id === "potion.fogo-grego" ? 3 : 5;
+        const value = base * mult;
+        const fire = d.id === "potion.fogo-grego";
+        if (a.side === "monster") {
+          c.monsterSideMods.push({ id: uid(state, "m"), value, by: p.id, label: label(p.name) });
+        } else {
+          c.playerMods.push({ id: uid(state, "m"), value, by: p.id, label: label(p.name), fire });
+          if (d.id === "potion.elixir-gigante") {
+            const drinker = sideTarget(c);
+            c.fleeMods.push({ id: uid(state, "m"), value: -1, by: p.id, label: "Elixir de Gigante", target: drinker.id });
+          }
+        }
+        log(state, ctx, `🧪 ${p.name} usou ${d.name} (${value > 0 ? "+" : ""}${value} para ${a.side === "monster" ? "o monstro" : "os jogadores"}).`, "combat", p.id);
+        finishPotion();
+        onCombatChanged(state, ctx);
+        return;
+      }
+      case "potion.acido": {
+        const c = potionCombat();
+        const value = -3 * mult;
+        if (a.monsterId) {
+          const cm = c.monsters.find((m) => m.cardId === a.monsterId && !m.defeated);
+          if (!cm) fail("Monstro inválido.");
+          cm.mods.push({ id: uid(state, "m"), value, by: p.id, label: label(p.name) });
+          log(state, ctx, `🧪 ${p.name} jogou ácido em ${nameOf(state, cm.cardId)} (${value}).`, "combat", p.id);
+        } else {
+          const t = player(state, a.targetId ?? "");
+          const inside = playerSide(state, c).includes(t.id);
+          if (!inside) fail("Escolha o monstro ou um jogador que esteja lutando.");
+          c.playerMods.push({ id: uid(state, "m"), value, by: p.id, label: label(`em ${t.name}`), target: t.id });
+          log(state, ctx, `🧪 ${p.name} jogou ácido em ${t.name} (${value}).`, "combat", p.id);
+        }
+        finishPotion();
+        onCombatChanged(state, ctx);
+        return;
+      }
+      case "potion.fuga-rapida": {
+        const c = potionCombat();
+        const t = sideTarget(c);
+        c.fleeMods.push({ id: uid(state, "m"), value: 2 * mult, by: p.id, label: label(t.name), target: t.id });
+        log(state, ctx, `🧪 ${t.name} ganhou +${2 * mult} em Fugir.`, "combat", p.id);
+        finishPotion();
+        return;
+      }
+      case "potion.agua-benta": {
+        const t = a.targetId ? player(state, a.targetId) : p;
+        const rot = t.curses.find((c) => c.defId === "curse.podridao");
+        if (combat && combat.stage !== "badstuff" && (combatTags(state, combat).has("morto-vivo") || combatTags(state, combat).has("demonio"))) {
+          const c = potionCombat();
+          c.playerMods.push({ id: uid(state, "m"), value: 4 * mult, by: p.id, label: label(p.name) });
+          log(state, ctx, `💧 ${p.name} jogou Água Benta (+${4 * mult}).`, "combat", p.id);
+          if (rot) removeCurse(state, t, rot.id);
+          finishPotion();
+          onCombatChanged(state, ctx);
+          return;
+        }
+        if (!rot) fail("Use contra Mortos-vivos/Demônios, ou para remover a Podridão Antiga.");
+        removeCurse(state, t, rot.id);
+        log(state, ctx, `💧 A Água Benta removeu a Podridão Antiga de ${t.name}.`, "curse");
+        finishPotion();
+        return;
+      }
+      case "potion.cura": {
+        const t = a.targetId ? player(state, a.targetId) : p;
+        const lost = combat ? (combat.levelsLost[t.id] ?? 0) : (state.turn.lastCombatLost[t.id] ?? 0);
+        if (lost <= 0) fail(`${t.name} não perdeu níveis neste combate.`);
+        const back = Math.min(lost, mult);
+        if (combat) combat.levelsLost[t.id] = lost - back;
+        else state.turn.lastCombatLost[t.id] = lost - back;
+        gainLevels(state, t, back, ctx, false, d.name);
+        finishPotion();
+        return;
+      }
+      case "potion.amizade": {
+        const c = potionCombat();
+        if (c.fighterId !== p.id) fail("Use no seu próprio combate.");
+        const t = player(state, a.targetId ?? "");
+        const err = canBeHelper(state, t);
+        if (err) fail(err);
+        finishPotion();
+        log(state, ctx, `🧪 A Amizade Duvidosa obriga ${t.name} a ajudar.`, "combat");
+        joinHelper(state, ctx, t.id, null, true);
+        return;
+      }
+      case "potion.invisibilidade": {
+        if (!combat) fail("Só durante um combate.");
+        const t = a.targetId ? player(state, a.targetId) : p;
+        if (!playerSide(state, combat).includes(t.id)) fail("Escolha alguém que esteja lutando.");
+        if (combat.flee) {
+          for (const r of combat.flee.results) {
+            if (r.playerId === t.id && !r.success && !defOfMonster(state, r.monsterCardId).legendary) {
+              r.success = true;
+              r.note = "Poção de Invisibilidade";
+            }
+          }
+          finishPotion();
+          log(state, ctx, `👻 ${t.name} ficou invisível!`, "combat");
+          maybeApplyBadStuff(state, ctx);
+          return;
+        }
+        if (specialIds(state, combat).has("monster.dragao-branco")) fail("Dragão Branco: ninguém pode usar poções neste combate.");
+        combat.autoFlee.push(`${t.id}|nonleg`);
+        finishPotion();
+        log(state, ctx, `👻 ${t.name} ficou invisível e vai fugir automaticamente de monstros não Lendários.`, "combat");
+        return;
+      }
+      case "potion.ascensao": {
+        if (p.level >= 19) fail("O Elixir nunca leva ao nível 20.");
+        finishPotion();
+        gainLevels(state, p, mult, ctx, false, d.name);
+        return;
+      }
+    }
+    fail("Poção desconhecida.");
+  }
+  if (d.kind === "misc") {
+    switch (d.id) {
+      case "misc.isca": {
+        const c = canInterfere(state, p);
+        if (playerSide(state, c).includes(p.id)) fail("Use no combate de outro jogador.");
+        const cm = c.monsters.find((m) => m.cardId === a.monsterId && !m.defeated);
+        if (!cm) fail("Escolha um monstro.");
+        cm.mods.push({ id: uid(state, "m"), value: 5, by: p.id, label: d.name });
+        discardFromPlayer(state, p, a.cardId);
+        log(state, ctx, `🍖 ${p.name} jogou uma Isca de Monstro (+5).`, "combat", p.id);
+        onCombatChanged(state, ctx);
+        return;
+      }
+      case "misc.dado-viciado":
+        dispatch(state, p, { type: "REROLL", index: a.index ?? -1, source: "dado", cardId: a.cardId }, ctx);
+        return;
+      case "misc.espelho-prata": {
+        const c = combatFor(state);
+        if (c.fighterId !== p.id) fail("Use no seu combate.");
+        const cm = c.monsters.find((m) => m.cardId === a.monsterId && m.wandering && !m.defeated);
+        if (!cm) fail("Escolha um Monstro Errante.");
+        const t = player(state, a.targetId ?? "");
+        if (t.id === p.id) fail("Escolha outro jogador.");
+        discardFromPlayer(state, p, a.cardId);
+        removeMonster(state, ctx, cm.cardId, false);
+        t.ambush.push(cm.cardId);
+        log(state, ctx, `🪞 ${p.name} refletiu ${nameOf(state, cm.cardId)} para ${t.name}, que vai enfrentá-lo no próximo turno!`, "combat");
+        return;
+      }
+      case "misc.mapa": {
+        const c = combatFor(state);
+        if (c.fighterId !== p.id) fail("Use no seu combate.");
+        if (c.mapa) fail("Já há um Mapa do Tesouro neste combate.");
+        c.mapa = true;
+        discardFromPlayer(state, p, a.cardId);
+        log(state, ctx, `🗺️ ${p.name} abriu um Mapa do Tesouro: +2 tesouros se vencer.`, "combat");
+        return;
+      }
+      case "misc.pergaminho": {
+        const c = combatFor(state);
+        if (!playerSide(state, c).includes(p.id)) fail("Você precisa estar no combate.");
+        discardFromPlayer(state, p, a.cardId);
+        if (c.flee) {
+          for (const r of c.flee.results) {
+            if (r.playerId === p.id && !r.success) {
+              r.success = true;
+              r.note = "Pergaminho de Teletransporte";
+            }
+          }
+          log(state, ctx, `📜 ${p.name} se teletransportou para longe!`, "combat");
+          maybeApplyBadStuff(state, ctx);
+          return;
+        }
+        c.autoFlee.push(`${p.id}|all`);
+        log(state, ctx, `📜 ${p.name} preparou o Pergaminho de Teletransporte: vai fugir automaticamente.`, "combat");
+        return;
+      }
+      case "misc.kit-ladrao":
+        fail("Use o Kit de Ladrão pela habilidade Roubo.");
+        break;
+      default:
+        fail("Essa carta é permanente: coloque-a na mesa.");
+    }
+  }
+  fail("Essa carta não pode ser usada assim.");
+}
+
+function defOfMonster(state: GameState, cardId: string) {
+  const d = defOf(state, cardId);
+  if (d.kind !== "monster") fail("Não é um monstro.");
+  return d;
+}
+
+export { discardCard };
