@@ -1,0 +1,99 @@
+[
+  {
+    "id": "pedra",
+    "nome": "Runa da Pedra",
+    "raridade": "comum",
+    "preco": 100,
+    "texto": "O item não pode ser perdido por ácido nem ferrugem.",
+    "efeitos": [
+      {
+        "tipo": "protegeAcido"
+      }
+    ]
+  },
+  {
+    "id": "vento",
+    "nome": "Runa do Vento",
+    "raridade": "incomum",
+    "preco": 300,
+    "texto": "+1 em Fugir (conta no limite de +2 dos anéis se estiver num anel).",
+    "efeitos": [
+      {
+        "tipo": "fugir",
+        "valor": 1
+      }
+    ]
+  },
+  {
+    "id": "fogo",
+    "nome": "Runa do Fogo",
+    "raridade": "incomum",
+    "preco": 400,
+    "texto": "+1 no item; o dano dele conta como fogo.",
+    "efeitos": [
+      {
+        "tipo": "bonusItem",
+        "valor": 1
+      },
+      {
+        "tipo": "fogo"
+      }
+    ]
+  },
+  {
+    "id": "vinculo",
+    "nome": "Runa do Vínculo",
+    "raridade": "raro",
+    "preco": 500,
+    "texto": "O item não pode ser roubado nem trocado (Ladino, Fada, Goblin).",
+    "efeitos": [
+      {
+        "tipo": "naoRoubavel"
+      }
+    ]
+  },
+  {
+    "id": "sorte",
+    "nome": "Runa da Sorte",
+    "raridade": "raro",
+    "preco": 600,
+    "texto": "1x por rodada, refaça um resultado 1 no dado (automático).",
+    "efeitos": [
+      {
+        "tipo": "rerrolaUm"
+      }
+    ]
+  },
+  {
+    "id": "sangue",
+    "nome": "Runa do Sangue",
+    "raridade": "epico",
+    "preco": 700,
+    "texto": "+3 no item, mas se você perder um combate, perca 1 nível a mais.",
+    "efeitos": [
+      {
+        "tipo": "bonusItem",
+        "valor": 3
+      },
+      {
+        "tipo": "perdeNivelAoPerder",
+        "quantidade": 1
+      }
+    ]
+  },
+  {
+    "id": "rei",
+    "nome": "Runa do Rei",
+    "raridade": "lendario",
+    "preco": 1000,
+    "texto": "Dobra o bônus do item. O item passa a contar como Lendário.",
+    "efeitos": [
+      {
+        "tipo": "dobraItem"
+      },
+      {
+        "tipo": "contaComoLendario"
+      }
+    ]
+  }
+]

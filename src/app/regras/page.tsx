@@ -17,6 +17,8 @@ const RULES: [string, string][] = [
   ["Morte", "Você perde todos os itens e a mão, mas mantém nível, raça e classe. Do maior nível para o menor, cada jogador pega 1 item seu. No seu próximo turno, receba 4 Portas e 4 Tesouros."],
   ["Itens", "Equipar só no seu turno e fora de combate. Itens na mesa não equipados não dão bônus. Só 1 item Grande (Gigante 2; Anão e Fada nenhum) e 1 Lendário equipado. Vender: 1.000 de ouro = 1 nível, só no seu turno e fora de combate."],
   ["A qualquer momento", "Maldições, poções, cartas de subir nível e bônus de monstro podem ser jogados a qualquer momento, até no turno dos outros. Trocas de itens: a qualquer momento, menos durante um combate."],
+  ["Ameaçar atrapalhar", "Fora do combate, você pode pedir tesouros a quem está lutando para não atrapalhar. Se ele aceitar, você recebe os tesouros quando ele vencer e não pode atrapalhá-lo pelo resto da rodada."],
+  ["Desistir", "Conta como morte (os outros saqueiam seus itens) e você sai da partida. Se só sobrarem bots, a sala fecha; se sobrar um jogador, ele vence."],
   ["Bots", "Na sala de espera o anfitrião pode adicionar bots. Eles jogam para vencer: equipam o melhor que têm, montam combos, atrapalham humanos e quem está na liderança, preferem se aliar a outros bots e negociam itens exclusivos da sua raça/classe. No modo local você joga só contra bots, sem conta e sem servidor."],
   ["Reconexão", "Caiu a internet ou fechou a aba? Entre de novo pelo lobby (Suas salas): o jogo continua exatamente de onde parou. Se o jogador da vez sumir por mais de 45s, qualquer um pode pular o turno dele."],
 ];

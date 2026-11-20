@@ -1,0 +1,409 @@
+[
+  {
+    "id": "azar",
+    "nome": "Azar do Aventureiro",
+    "tipo": "instantanea",
+    "texto": "Perca 1 nível.",
+    "efeitos": [
+      {
+        "tipo": "perderNiveis",
+        "quantidade": 1
+      }
+    ]
+  },
+  {
+    "id": "lich",
+    "nome": "Maldição do Lich",
+    "tipo": "instantanea",
+    "texto": "Perca 2 níveis (3 se você for nível 15 ou mais).",
+    "efeitos": [
+      {
+        "tipo": "perderNiveis",
+        "quantidade": 2,
+        "nivelMinimoParaExtra": 15,
+        "extra": 1
+      }
+    ]
+  },
+  {
+    "id": "vento",
+    "nome": "Vento Traiçoeiro",
+    "tipo": "instantanea",
+    "texto": "Perca o capacete.",
+    "efeitos": [
+      {
+        "tipo": "perderSlot",
+        "slot": "capacete"
+      }
+    ]
+  },
+  {
+    "id": "ferrugem",
+    "nome": "Ferrugem Súbita",
+    "tipo": "instantanea",
+    "texto": "Perca o peitoral.",
+    "efeitos": [
+      {
+        "tipo": "perderSlot",
+        "slot": "peitoral"
+      }
+    ]
+  },
+  {
+    "id": "calcas",
+    "nome": "Calças no Joelho",
+    "tipo": "instantanea",
+    "texto": "Perca as calças.",
+    "efeitos": [
+      {
+        "tipo": "perderSlot",
+        "slot": "calcas"
+      }
+    ]
+  },
+  {
+    "id": "botas",
+    "nome": "Ladrão de Botas",
+    "tipo": "instantanea",
+    "texto": "Perca as botas.",
+    "efeitos": [
+      {
+        "tipo": "perderSlot",
+        "slot": "botas"
+      }
+    ]
+  },
+  {
+    "id": "dedos",
+    "nome": "Dedos Escorregadios",
+    "tipo": "instantanea",
+    "texto": "Perca 2 anéis, à escolha de quem lançou a maldição.",
+    "efeitos": [
+      {
+        "tipo": "perderAneis",
+        "quantidade": 2
+      }
+    ]
+  },
+  {
+    "id": "montaria",
+    "nome": "Montaria Fujona",
+    "tipo": "instantanea",
+    "texto": "Perca a montaria.",
+    "efeitos": [
+      {
+        "tipo": "perderSlot",
+        "slot": "montaria"
+      }
+    ]
+  },
+  {
+    "id": "mimico",
+    "nome": "Mímico de Bolso",
+    "tipo": "instantanea",
+    "texto": "Perca o item equipado de maior bônus.",
+    "efeitos": [
+      {
+        "tipo": "perderMelhorItem"
+      }
+    ]
+  },
+  {
+    "id": "mao-furada",
+    "nome": "Mão Furada",
+    "tipo": "instantanea",
+    "texto": "Descarte 2 cartas aleatórias da mão.",
+    "efeitos": [
+      {
+        "tipo": "descartarCartas",
+        "quantidade": 2
+      }
+    ]
+  },
+  {
+    "id": "impostos",
+    "nome": "Coleta de Impostos",
+    "tipo": "instantanea",
+    "texto": "Dê 1 carta aleatória da mão a cada jogador de nível menor que o seu.",
+    "efeitos": [
+      {
+        "tipo": "impostos"
+      }
+    ]
+  },
+  {
+    "id": "troca",
+    "nome": "Troca Feérica",
+    "tipo": "instantanea",
+    "texto": "Troque 1 item equipado com o jogador à sua esquerda (mesmo slot, escolha dele).",
+    "efeitos": [
+      {
+        "tipo": "trocaFeerica"
+      }
+    ]
+  },
+  {
+    "id": "amnesia",
+    "nome": "Amnésia Profissional",
+    "tipo": "instantanea",
+    "texto": "Descarte sua classe.",
+    "efeitos": [
+      {
+        "tipo": "perderClasse"
+      }
+    ]
+  },
+  {
+    "id": "identidade",
+    "nome": "Crise de Identidade",
+    "tipo": "instantanea",
+    "texto": "Descarte sua raça; você vira Humano.",
+    "efeitos": [
+      {
+        "tipo": "virarRaca",
+        "raca": "humano"
+      }
+    ]
+  },
+  {
+    "id": "fraqueza",
+    "nome": "Fraqueza Súbita",
+    "tipo": "combate",
+    "texto": "-3 em combate (-5 se o alvo for nível 11 ou mais).",
+    "efeitos": [
+      {
+        "tipo": "forcaNoCombate",
+        "valor": -3,
+        "valorNivel11": -5
+      }
+    ]
+  },
+  {
+    "id": "chumbo",
+    "nome": "Pés de Chumbo",
+    "tipo": "combate",
+    "texto": "O alvo não pode fugir.",
+    "efeitos": [
+      {
+        "tipo": "naoPodeFugir"
+      }
+    ]
+  },
+  {
+    "id": "escuro",
+    "nome": "Medo do Escuro",
+    "tipo": "combate",
+    "texto": "O monstro ganha +5.",
+    "efeitos": [
+      {
+        "tipo": "monstroGanha",
+        "valor": 5
+      }
+    ]
+  },
+  {
+    "id": "isolamento",
+    "nome": "Isolamento",
+    "tipo": "combate",
+    "texto": "Ninguém pode ajudar o alvo.",
+    "efeitos": [
+      {
+        "tipo": "ninguemAjuda"
+      }
+    ]
+  },
+  {
+    "id": "silencio",
+    "nome": "Silêncio Arcano",
+    "tipo": "combate",
+    "texto": "O alvo não pode usar habilidades ativas.",
+    "efeitos": [
+      {
+        "tipo": "semAtivas"
+      }
+    ]
+  },
+  {
+    "id": "horda",
+    "nome": "Chamado da Horda",
+    "tipo": "combate",
+    "texto": "Compre cartas de Porta até achar um monstro: ele entra no combate como Monstro Errante.",
+    "efeitos": [
+      {
+        "tipo": "chamadoDaHorda"
+      }
+    ]
+  },
+  {
+    "id": "ilusao-traidora",
+    "nome": "Ilusão Traidora",
+    "tipo": "combate",
+    "texto": "O ajudante de maior nível do alvo passa para o lado do monstro.",
+    "efeitos": [
+      {
+        "tipo": "ajudanteTraidor"
+      }
+    ]
+  },
+  {
+    "id": "corvo",
+    "nome": "Corvo Agourento no Ombro",
+    "tipo": "duracao",
+    "duracao": 3,
+    "texto": "-1 em todas as suas rolagens de dado.",
+    "efeitos": [
+      {
+        "tipo": "menosNoDado",
+        "valor": 1
+      }
+    ]
+  },
+  {
+    "id": "sapo",
+    "nome": "Maldição do Sapo",
+    "tipo": "duracao",
+    "duracao": 2,
+    "texto": "-3 em combate e não pode usar itens de mão. Acaba antes se outro jogador descartar 1 carta para dar um beijo em você.",
+    "efeitos": [
+      {
+        "tipo": "forca",
+        "valor": -3
+      },
+      {
+        "tipo": "semItensDeMao"
+      },
+      {
+        "tipo": "acabaComBeijo"
+      }
+    ]
+  },
+  {
+    "id": "licantropia",
+    "nome": "Licantropia",
+    "tipo": "duracao",
+    "duracao": 3,
+    "texto": "+2 em combate, mas não pode usar armadura nem armas; conta como Animal.",
+    "efeitos": [
+      {
+        "tipo": "forca",
+        "valor": 2
+      },
+      {
+        "tipo": "semArmaduraEArmas"
+      }
+    ]
+  },
+  {
+    "id": "ganancia",
+    "nome": "Ganância Dracônica",
+    "tipo": "duracao",
+    "duracao": 3,
+    "texto": "Você não pode vender, trocar nem dar itens.",
+    "efeitos": [
+      {
+        "tipo": "naoPodeNegociar"
+      }
+    ]
+  },
+  {
+    "id": "riqueza",
+    "nome": "Ilusão de Riqueza",
+    "tipo": "duracao",
+    "duracao": 2,
+    "texto": "Você compra metade dos tesouros ao vencer (arredondado para baixo).",
+    "efeitos": [
+      {
+        "tipo": "metadeTesouros"
+      }
+    ]
+  },
+  {
+    "id": "sono",
+    "nome": "Sono Encantado",
+    "tipo": "duracao",
+    "duracao": 1,
+    "texto": "Você pula o seu próximo turno.",
+    "efeitos": [
+      {
+        "tipo": "pulaTurno"
+      }
+    ]
+  },
+  {
+    "id": "podridao",
+    "nome": "Podridão Antiga",
+    "tipo": "persistente",
+    "texto": "-2 em combate. Água Benta também remove.",
+    "efeitos": [
+      {
+        "tipo": "forca",
+        "valor": -2
+      },
+      {
+        "tipo": "removidaPorAguaBenta"
+      }
+    ]
+  },
+  {
+    "id": "sombra",
+    "nome": "Sombra Seguidora",
+    "tipo": "persistente",
+    "texto": "Sempre que vencer um combate, você compra 1 tesouro a menos.",
+    "efeitos": [
+      {
+        "tipo": "menosTesouros",
+        "quantidade": 1
+      }
+    ]
+  },
+  {
+    "id": "divida",
+    "nome": "Dívida com o Diabo",
+    "tipo": "persistente",
+    "texto": "No início de cada turno seu, descarte 1 carta da mão.",
+    "efeitos": [
+      {
+        "tipo": "descartaNoInicioDoTurno"
+      }
+    ]
+  },
+  {
+    "id": "espada",
+    "nome": "Espada Amaldiçoada",
+    "tipo": "persistente",
+    "texto": "Ocupa 1 slot de mão e dá -3 em combate; não pode ser desequipada nem vendida.",
+    "efeitos": [
+      {
+        "tipo": "forca",
+        "valor": -3
+      },
+      {
+        "tipo": "ocupaUmaMao"
+      }
+    ]
+  },
+  {
+    "id": "coroa-espinhos",
+    "nome": "Coroa de Espinhos",
+    "tipo": "persistente",
+    "texto": "Você não pode ter item Lendário equipado; se tiver, ele vai para a mão.",
+    "efeitos": [
+      {
+        "tipo": "semLendarios"
+      }
+    ]
+  },
+  {
+    "id": "marca",
+    "nome": "Marca do Caçador",
+    "tipo": "persistente",
+    "texto": "Todo monstro que você enfrentar ganha +2. Se você derrotar um monstro de nível 20 ou mais, a marca some.",
+    "efeitos": [
+      {
+        "tipo": "monstrosGanham",
+        "valor": 2,
+        "someAoDerrotarNivel": 20
+      }
+    ]
+  }
+]

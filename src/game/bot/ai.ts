@@ -1,11 +1,12 @@
 // IA dos bots. Os bots decidem simulando ações no motor (que é puro) e escolhendo a que mais melhora
 // a situação deles: ganhar níveis e poder, vencer monstros, atrapalhar jogadores humanos e o líder,
 // aliar-se a outros bots (menos os que estão quase ganhando) e negociar itens exclusivos da sua classe.
-import { CARD_DEFS, type CardDef, type ItemCard, type MonsterCard } from "../catalog";
+import { CARD_DEFS, type CardDef, findFx, type ItemCard, type MonsterCard } from "../catalog";
 import { abilityInfos } from "../engine/abilities";
 import { type Action, applyAction } from "../engine/actions";
 import { type Ctx, type GameState, GameError, MAX_LEVEL, type PlayerState, type Prompt } from "../engine/state";
-import { computeCombat, equipCheck, fleeInfo, playerPower, playerSide, slotOf, specialIds } from "../engine/stats";
+import { combatHas } from "../engine/fx";
+import { computeCombat, equipCheck, fleeInfo, playerPower, playerSide, slotOf } from "../engine/stats";
 import { isCurrent } from "../engine/util";
 
 export const BOT_DELAY_MS = 900;
@@ -72,6 +73,10 @@ function itemDefOf(state: GameState, cardId: string): ItemCard | null {
   const df = d(state, cardId);
   return df.kind === "item" ? df : null;
 }
+
+const fxIs = (state: GameState, cardId: string, tipo: string) => !!findFx(state.cards[cardId]?.defId, tipo);
+const unbreakable = (state: GameState, cardId: string) =>
+  (state.cards[cardId]?.runes ?? []).some((r) => findFx(state.cards[r]?.defId, "naoRoubavel"));
 
 /** Determinístico e "médio" para simular (d6 = 4). */
 const SIM_RNG = { int: (max: number) => Math.floor((max - 1) / 2) + (max === 6 ? 1 : 0) };
@@ -287,9 +292,9 @@ function boostCandidates(state: GameState, me: PlayerState): Action[] {
     const df = d(state, id);
     if (df.kind === "monsterBonus" && df.value < 0) for (const m of monsters) out.push({ type: "PLAY_MONSTER_BONUS", cardId: id, monsterId: m });
     if (df.kind === "potion") {
-      if (["potion.forca-menor", "potion.fogo-grego", "potion.elixir-gigante", "potion.agua-benta"].includes(df.id))
+      if (fxIs(state, id, "bonusLado") || fxIs(state, id, "contraMortosVivos"))
         out.push({ type: "USE_CARD", cardId: id, side: "player", targetId: side.includes(me.id) ? me.id : c.fighterId });
-      if (df.id === "potion.acido") for (const m of monsters) out.push({ type: "USE_CARD", cardId: id, monsterId: m });
+      if (fxIs(state, id, "menosEmAlvo")) for (const m of monsters) out.push({ type: "USE_CARD", cardId: id, monsterId: m });
     }
   }
   if (me.id === c.fighterId) {
@@ -313,16 +318,12 @@ function hinderCandidates(state: GameState, me: PlayerState): Action[] {
     const df = d(state, id);
     if (df.kind === "monsterBonus" && df.value > 0) for (const m of monsters) out.push({ type: "PLAY_MONSTER_BONUS", cardId: id, monsterId: m });
     if (df.kind === "wandering" && strongestHandMonster) out.push({ type: "PLAY_WANDERING", cardId: id, monsterCardId: strongestHandMonster });
-    if (df.kind === "potion" && ["potion.forca-menor", "potion.fogo-grego", "potion.elixir-gigante"].includes(df.id))
-      out.push({ type: "USE_CARD", cardId: id, side: "monster" });
-    if (df.id === "potion.acido") out.push({ type: "USE_CARD", cardId: id, targetId: c.fighterId });
-    if (df.id === "misc.isca") for (const m of monsters) out.push({ type: "USE_CARD", cardId: id, monsterId: m });
-    if (df.kind === "curse" && ["curse.fraqueza", "curse.escuro", "curse.ilusao-traidora", "curse.isolamento"].includes(df.id))
-      out.push({ type: "PLAY_CURSE", cardId: id, targetId: c.fighterId });
+    if (df.kind === "potion" && fxIs(state, id, "bonusLado")) out.push({ type: "USE_CARD", cardId: id, side: "monster" });
+    if (fxIs(state, id, "menosEmAlvo")) out.push({ type: "USE_CARD", cardId: id, targetId: c.fighterId });
+    if (df.kind === "curse" && df.curseType === "combat") out.push({ type: "PLAY_CURSE", cardId: id, targetId: c.fighterId });
   }
   for (const id of [...me.hand, ...me.carried]) {
-    const df = d(state, id);
-    if (df.id === "misc.isca") for (const m of monsters) out.push({ type: "USE_CARD", cardId: id, monsterId: m });
+    if (fxIs(state, id, "isca")) for (const m of monsters) out.push({ type: "USE_CARD", cardId: id, monsterId: m });
   }
   out.push(...abilityCandidates(state, me, "hinder"));
   return out;
@@ -352,7 +353,7 @@ function manageCandidates(state: GameState, me: PlayerState, ownTurn: boolean): 
   for (const id of me.hand) {
     const df = d(state, id);
     if (df.kind === "levelup" && me.level < MAX_LEVEL - 1) out.push({ type: "PLAY_LEVELUP", cardId: id });
-    if (df.id === "potion.ascensao" && me.level < MAX_LEVEL - 1) out.push({ type: "USE_CARD", cardId: id });
+    if (fxIs(state, id, "subirNivel") && me.level < MAX_LEVEL - 1) out.push({ type: "USE_CARD", cardId: id });
     if (df.kind === "curse") {
       for (const o of state.players) if (o.id !== me.id && !isAlly(state, me.id, o)) out.push({ type: "PLAY_CURSE", cardId: id, targetId: o.id });
     }
@@ -540,16 +541,16 @@ function decideBadStuff(state: GameState, me: PlayerState): Action | null {
     const md = d(state, r.monsterCardId) as MonsterCard;
     return md.badStuff.some((e) => e.t === "death" || (e.t === "levels" && e.n >= 2));
   });
-  if (severe && me.equipped.some((id) => state.cards[id].defId === "item.anel-desejos")) return { type: "WISH_RING" };
+  if (severe && me.equipped.some((id) => fxIs(state, id, "desejos"))) return { type: "WISH_RING" };
   const rolled = mine.find(({ r }) => r.roll > 0);
   if (rolled) {
-    if (me.equipped.some((id) => state.cards[id].defId === "item.cajado-arquimago") && !c.rerolled.includes(`${me.id}:cajado`))
+    if (me.equipped.some((id) => fxIs(state, id, "rerrolarFuga")) && !c.rerolled.includes(`${me.id}:cajado`))
       return { type: "REROLL", index: rolled.i, source: "cajado" };
-    const dado = [...me.hand, ...me.carried].find((id) => state.cards[id].defId === "misc.dado-viciado");
+    const dado = [...me.hand, ...me.carried].find((id) => fxIs(state, id, "rerrolarFuga"));
     if (dado && severe) return { type: "REROLL", index: rolled.i, source: "dado", cardId: dado };
   }
   if (severe) {
-    const escape = [...me.hand, ...me.carried].find((id) => ["misc.pergaminho", "potion.invisibilidade"].includes(state.cards[id].defId));
+    const escape = [...me.hand, ...me.carried].find((id) => fxIs(state, id, "teletransporte") || fxIs(state, id, "fugaAutomatica"));
     if (escape) return { type: "USE_CARD", cardId: escape, targetId: me.id };
   }
   return { type: "ACCEPT_BAD_STUFF" };
@@ -563,7 +564,7 @@ function decideFighter(state: GameState, me: PlayerState, ctx: Ctx): Action | nu
   if (calc.winning) {
     // Antes de atacar: Mapa do Tesouro e desejo do Glabrezu se continuar vencendo
     const extras: Action[] = [{ type: "ACCEPT_WISH" }];
-    for (const id of [...me.hand, ...me.carried]) if (state.cards[id].defId === "misc.mapa") extras.push({ type: "USE_CARD", cardId: id });
+    for (const id of [...me.hand, ...me.carried]) if (fxIs(state, id, "mapa")) extras.push({ type: "USE_CARD", cardId: id });
     for (const a of extras) {
       const s = simulate(state, me.id, a, ctx);
       if (s && winning(s) && computeCombat(s)!.playerTotal - computeCombat(s)!.monsterTotal >= 3) return a;
@@ -575,7 +576,7 @@ function decideFighter(state: GameState, me: PlayerState, ctx: Ctx): Action | nu
   if (p) return p;
   // Pede ajuda (prefere bots aliados)
   const m = mem(state);
-  if (!c.helperId && !specialIds(state, c).has("monster.bugbear")) {
+  if (!c.helperId && !combatHas(state, c, "semPedirAjuda")) {
     if (state.prompts.some((pr) => pr.kind === "helpRequest" && pr.data.fighterId === me.id)) return null;
     const treasures = c.monsters.reduce((a, x) => a + (d(state, x.cardId) as MonsterCard).treasures, 0);
     const candidates = state.players
@@ -607,8 +608,8 @@ function decideFighter(state: GameState, me: PlayerState, ctx: Ctx): Action | nu
       escapes.push({ type: "ABILITY", key: ab.key, discard: disc, params });
     }
     for (const id of [...me.hand, ...me.carried]) {
-      if (state.cards[id].defId === "misc.pergaminho") escapes.push({ type: "USE_CARD", cardId: id });
-      if (state.cards[id].defId === "potion.invisibilidade") escapes.push({ type: "USE_CARD", cardId: id, targetId: me.id });
+      if (fxIs(state, id, "teletransporte")) escapes.push({ type: "USE_CARD", cardId: id });
+      if (fxIs(state, id, "fugaAutomatica")) escapes.push({ type: "USE_CARD", cardId: id, targetId: me.id });
     }
     for (const a of escapes) if (simulate(state, me.id, a, ctx)) return a;
   }
@@ -675,13 +676,13 @@ function tradeIdea(state: GameState, me: PlayerState): Action | null {
       if (!exclusive) continue;
       const key = `trade:${me.id}:${it}`;
       if (m[key] && state.turnSerial - m[key] < state.players.length * 3) continue;
-      if ((state.cards[it].runes ?? []).some((r) => state.cards[r]?.defId === "rune.vinculo")) continue;
+      if (unbreakable(state, it)) continue;
       // Precisa ser melhor que o que já uso no slot
       const current = me.equipped.filter((e) => slotOf(state, e) === df.slot).map((e) => cardValue(state, e));
       if (current.length && Math.max(...current) >= cardValue(state, it)) continue;
       // Oferta justa: item meu (fora de uso de preferência) com preço parecido
       const offer = [...me.carried, ...me.equipped.filter((e) => slotOf(state, e) !== df.slot)]
-        .filter((id) => itemDefOf(state, id) && !(state.cards[id].runes ?? []).some((r) => state.cards[r]?.defId === "rune.vinculo"))
+        .filter((id) => itemDefOf(state, id) && !unbreakable(state, id))
         .map((id) => ({ id, diff: Math.abs((itemDefOf(state, id)!.price ?? 0) - df.price), price: itemDefOf(state, id)!.price, carried: me.carried.includes(id) }))
         .filter((x) => x.price >= df.price * 0.7)
         .sort((a, b) => Number(b.carried) - Number(a.carried) || a.diff - b.diff)[0];

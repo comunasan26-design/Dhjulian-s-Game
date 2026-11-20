@@ -1,5 +1,21 @@
 // Núcleo das regras: turnos, combate, fuga, Coisas Ruins, morte, recompensas e maldições.
-import { ALL_CARDS, def, type CurseCard, type MonsterCard, type Slot } from "../catalog";
+import { ALL_CARDS, CARD_DEFS, def, findFx, type CurseCard, type MonsterCard, type Slot } from "../catalog";
+import {
+  cardFxAll,
+  combatFx,
+  combatHas,
+  curseFx,
+  equippedFx,
+  equippedFxAll,
+  flag,
+  type Fx,
+  hasCurseFx,
+  matchesListed,
+  monsterFx,
+  num,
+  runeFx,
+  strs,
+} from "./fx";
 import {
   type ActiveCurse,
   type CombatMonster,
@@ -22,12 +38,10 @@ import {
   fleeInfo,
   handLimit,
   handsUsed,
-  hasCurse,
   isLegendaryItem,
   monsterDef,
   playerSide,
   slotOf,
-  specialIds,
   tier11,
 } from "./stats";
 import {
@@ -42,7 +56,6 @@ import {
   giveItem,
   hasClass,
   hasRace,
-  inst,
   isCurrent,
   itemDef,
   leftOf,
@@ -226,7 +239,7 @@ export function beginTurn(state: GameState, ctx: Ctx, pid: string, depth: number
   }
   log(state, ctx, `— Turno de ${p.name} (rodada ${state.round}) —`, "system", p.id);
 
-  const sono = p.curses.find((c) => c.defId === "curse.sono");
+  const sono = p.curses.find((c) => findFx(c.defId, "pulaTurno"));
   if (sono && depth < state.players.length * 2) {
     sono.remaining = (sono.remaining ?? 1) - 1;
     if ((sono.remaining ?? 0) <= 0) removeCurse(state, p, sono.id);
@@ -234,7 +247,7 @@ export function beginTurn(state: GameState, ctx: Ctx, pid: string, depth: number
     advanceTurn(state, ctx, depth + 1);
     return;
   }
-  if (hasCurse(p, "curse.divida") && p.hand.length > 0) {
+  if (hasCurseFx(p, "descartaNoInicioDoTurno") && p.hand.length > 0) {
     createPrompt(state, ctx, "debt", p.id, {}, { blocking: true });
   }
 }
@@ -247,7 +260,7 @@ export function advanceTurn(state: GameState, ctx: Ctx, depth = 0) {
   const cur = currentPlayer(state);
   // Maldições com duração e Maldição Sombria
   for (const c of [...cur.curses]) {
-    if (c.defId === "curse.sono") continue;
+    if (findFx(c.defId, "pulaTurno")) continue;
     if (c.remaining !== undefined) {
       c.remaining -= 1;
       if (c.remaining <= 0) {
@@ -372,7 +385,7 @@ export function startCombat(state: GameState, ctx: Ctx, fighterId: string, monst
     glabrezuAccepted: false,
     legendaryResistanceUsed: false,
     oniDoubled: false,
-    mapa: false,
+    mapa: 0,
     pendingTraitor: false,
     isolated: [],
     silenced: [],
@@ -418,23 +431,26 @@ export function addMonster(
   const d = monsterDef(state, cm);
   const fighter = player(state, combat.fighterId);
   if (opts.wandering) log(state, ctx, `👹 ${d.name} entrou no combate como Monstro Errante!`, "combat", opts.addedBy ?? undefined);
-  if (d.id === "monster.basilisco") {
-    const r = rollD6(state, fighter, ctx, "olhar do Basilisco");
-    if (r.total <= 2) {
-      cm.petrified = true;
-      log(state, ctx, `${fighter.name} ficou meio petrificado (-5).`, "combat");
+  for (const fx of d.fx ?? []) {
+    if (fx.tipo === "aoRevelar") {
+      const r = rollD6(state, fighter, ctx, `${d.name} (ao revelar)`);
+      if (r.total <= num(fx, "dadoAte")) {
+        if (fx.jogadorGanha !== undefined) {
+          cm.petrified = true;
+          cm.revealPlayer = (cm.revealPlayer ?? 0) + num(fx, "jogadorGanha");
+          log(state, ctx, `${d.name}: ${fighter.name} fica com ${num(fx, "jogadorGanha")}.`, "combat");
+        }
+        if (fx.monstroGanha !== undefined) {
+          cm.ettinFight = true;
+          cm.revealMonster = (cm.revealMonster ?? 0) + num(fx, "monstroGanha");
+          log(state, ctx, `${d.name} fica com ${num(fx, "monstroGanha")}.`, "combat");
+        }
+      }
     }
-  }
-  if (d.id === "monster.ettin") {
-    const r = rollD6(state, fighter, ctx, "cabeças do Ettin");
-    if (r.total <= 2) {
-      cm.ettinFight = true;
-      log(state, ctx, "As cabeças do Ettin estão brigando (-6).", "combat");
+    if (fx.tipo === "grito" && state.players.length > 1) {
+      combat.screamerFor = leftOf(state, combat.fighterId).id;
+      log(state, ctx, `📣 ${d.name} grita! ${player(state, combat.screamerFor).name} pode pôr um monstro da mão no combate.`, "combat");
     }
-  }
-  if (d.id === "monster.cogumelo" && state.players.length > 1) {
-    combat.screamerFor = leftOf(state, combat.fighterId).id;
-    log(state, ctx, `O Cogumelo grita! ${player(state, combat.screamerFor).name} pode pôr um monstro da mão no combate.`, "combat");
   }
   onCombatChanged(state, ctx);
 }
@@ -497,8 +513,8 @@ export function joinHelper(
     }.`,
     "combat",
   );
-  if (specialIds(state, combat).has("monster.dragao-verde")) {
-    if (h.equipped.some((id) => state.cards[id]?.defId === "item.amuleto-saude")) {
+  if (combatHas(state, combat, "venenoNoAjudante")) {
+    if (equippedFx(state, h, "imuneVeneno")) {
       log(state, ctx, `${h.name} está imune ao sopro venenoso (Amuleto da Saúde).`, "combat");
     } else {
       loseLevels(state, h, 1, ctx, "Sopro venenoso do Dragão Verde");
@@ -533,32 +549,27 @@ export function removeMonster(state: GameState, ctx: Ctx, cardId: string, toDisc
   onCombatChanged(state, ctx);
 }
 
-function clericOrPaladinOnSide(state: GameState, combat: CombatState): boolean {
-  return playerSide(state, combat).some((id) => {
-    const p = player(state, id);
-    return hasClass(state, p, "clerigo") || hasClass(state, p, "paladino");
-  });
-}
-
 export function endCombat(state: GameState, ctx: Ctx, result: "won" | "fled" | "lost" | "ended") {
   const combat = state.combat;
   if (!combat) return;
-  const specials = specialIds(state, combat);
-  if (result !== "won" && specials.has("monster.dragao-vermelho-anciao")) {
-    const exclude = new Set([combat.fighterId, combat.helperId]);
-    log(state, ctx, "🔥 O Dragão Vermelho Ancião incendeia a vila!", "combat");
-    for (const p of state.players) if (!exclude.has(p.id)) loseLevels(state, p, 1, ctx, "vila incendiada");
+  if (result !== "won") {
+    for (const { cm, fx } of combatFx(state, combat, "incendeiaVila")) {
+      const exclude = new Set([combat.fighterId, combat.helperId]);
+      log(state, ctx, `🔥 ${monsterDef(state, cm).name} incendeia a vila!`, "combat");
+      for (const p of state.players) if (!exclude.has(p.id)) loseLevels(state, p, num(fx, "niveis", 1), ctx, "vila incendiada");
+    }
   }
-  const clericPal = clericOrPaladinOnSide(state, combat);
+  const side = playerSide(state, combat).map((id) => player(state, id));
   const toTop: string[] = [];
   for (const cm of combat.monsters) {
     const d = monsterDef(state, cm);
-    if ((result === "fled" || result === "lost") && d.id === "monster.zumbi" && !cm.ignoreSpecial && !cm.defeated) {
+    const phylactery = monsterFx(state, cm, "filacteria")[0];
+    if ((result === "fled" || result === "lost") && monsterFx(state, cm, "voltaAoFugir").length && !cm.defeated) {
       toTop.push(cm.cardId);
-      log(state, ctx, "🧟 O Zumbi Lerdo não desiste: voltou ao topo do baralho de Portas.", "combat");
-    } else if (result === "won" && d.id === "monster.lich" && !cm.ignoreSpecial && !clericPal) {
+      log(state, ctx, `🧟 ${d.name} não desiste: voltou ao topo do baralho de Portas.`, "combat");
+    } else if (result === "won" && phylactery && !side.some((p) => matchesListed(state, p, phylactery))) {
       toTop.push(cm.cardId);
-      log(state, ctx, "☠️ A filactéria do Lich o trouxe de volta ao topo do baralho de Portas!", "combat");
+      log(state, ctx, `☠️ ${d.name} voltou ao topo do baralho de Portas!`, "combat");
     } else {
       discardCard(state, cm.cardId);
     }
@@ -583,12 +594,11 @@ export function resolveVictory(state: GameState, ctx: Ctx) {
   const helperId = effectiveHelper(state, combat);
   const helper = tryPlayer(state, helperId);
   const side = playerSide(state, combat).map((id) => player(state, id));
-  const specials = specialIds(state, combat);
   const beaten = combat.monsters;
   const fighterLevelBefore = fighter.level;
   let levels = 0;
   let treasures = 0;
-  const elmo = fighter.equipped.some((id) => state.cards[id]?.defId === "item.elmo-olho");
+  const elmo = !!equippedFx(state, fighter, "metadeErrantes");
   for (const cm of beaten) {
     const d = monsterDef(state, cm);
     levels += d.levels;
@@ -608,17 +618,19 @@ export function resolveVictory(state: GameState, ctx: Ctx) {
     return t.includes("animal") || t.includes("voador");
   }))
     treasures += 1;
-  if (combat.mapa) treasures += 2;
-  if (hasCurse(fighter, "curse.sombra")) treasures -= 1;
-  if (hasCurse(fighter, "curse.riqueza")) treasures = Math.floor(treasures / 2);
+  treasures += Number(combat.mapa) || 0;
+  for (const fx of curseFx(fighter, "menosTesouros")) treasures -= num(fx, "quantidade", 1);
+  if (hasCurseFx(fighter, "metadeTesouros")) treasures = Math.floor(treasures / 2);
   treasures = Math.max(0, treasures);
   const bardo = hasClass(state, fighter, "bardo");
   if (bardo) treasures += 1;
 
-  if (hasCurse(fighter, "curse.marca") && beaten.some((m) => monsterDef(state, m).level >= 20)) {
-    const mk = fighter.curses.find((c) => c.defId === "curse.marca")!;
-    removeCurse(state, fighter, mk.id);
-    log(state, ctx, `A Marca do Caçador sumiu de ${fighter.name}.`, "curse");
+  for (const cu of [...fighter.curses]) {
+    const fx = findFx(cu.defId, "monstrosGanham");
+    if (fx && fx.someAoDerrotarNivel !== undefined && beaten.some((m) => monsterDef(state, m).level >= num(fx, "someAoDerrotarNivel"))) {
+      removeCurse(state, fighter, cu.id);
+      log(state, ctx, `${def(cu.defId).name} sumiu de ${fighter.name}.`, "curse");
+    }
   }
   for (const p of side) if (hasClass(state, p, "berserker")) p.streak += 1;
 
@@ -633,9 +645,9 @@ export function resolveVictory(state: GameState, ctx: Ctx) {
     gainLevels(state, fighter, 1, ctx, true, "Sede de Sangue");
   }
   for (const p of side) {
-    if (p.equipped.some((id) => state.cards[id]?.defId === "item.espada-vorpal")) {
-      const r = rollD6(state, p, ctx, "Espada Vorpal");
-      if (r.total >= 6) gainLevels(state, p, 1, ctx, true, "Espada Vorpal cortou a cabeça");
+    for (const { cardId, fx } of equippedFxAll(state, p, "nivelExtraAoVencer")) {
+      const r = rollD6(state, p, ctx, nameOf(state, cardId));
+      if (r.total >= num(fx, "dado", 6)) gainLevels(state, p, 1, ctx, true, nameOf(state, cardId));
     }
   }
   if (helper && hasRace(state, helper, "elfo") && helper.usage["elfGrace"] !== state.round) {
@@ -647,7 +659,7 @@ export function resolveVictory(state: GameState, ctx: Ctx) {
     return;
   }
   // Efeitos "mesmo vencendo"
-  if (specials.has("monster.senhor-mumias")) {
+  if (combatHas(state, combat, "maldicaoDoFarao")) {
     for (const p of side) {
       if (p.equipped.length === 0) continue;
       const c = pickRandom(p.equipped, ctx);
@@ -655,7 +667,7 @@ export function resolveVictory(state: GameState, ctx: Ctx) {
       discardFromPlayer(state, p, c);
     }
   }
-  if (specials.has("monster.balor")) {
+  if (combatHas(state, combat, "explodeAoMorrer")) {
     for (const p of side) {
       if (p.equipped.length === 0) continue;
       if (p.equipped.length === 1) {
@@ -671,7 +683,7 @@ export function resolveVictory(state: GameState, ctx: Ctx) {
       }
     }
   }
-  const tarrasque = beaten.some((m) => inst(state, m.cardId).defId === "monster.tarrasque");
+  const helperBonus = beaten.reduce((a, m) => a + monsterFx(state, m, "tesouroExtraAjudante").reduce((x, fx) => x + num(fx, "quantidade", 1), 0), 0);
   const deal = combat.helperForced ? null : combat.helperDeal;
   const bribes = (combat.bribes ?? []).filter((b) => state.players.some((p) => p.id === b.playerId));
   endCombat(state, ctx, "won");
@@ -688,12 +700,12 @@ export function resolveVictory(state: GameState, ctx: Ctx) {
     deal: helper ? deal : null,
     faceUp: !!helper,
     bardo: bardo && pool.length > 0,
-    helperExtra: tarrasque && helper ? 1 : 0,
+    helperExtra: helper ? helperBonus : 0,
     bribes,
   };
-  if (helper && tarrasque) {
-    const got = drawTo(state, helper, "treasure", 1, ctx);
-    if (got.length) log(state, ctx, `${helper.name} comprou 1 tesouro extra (Tarrasque).`);
+  if (helper && helperBonus > 0) {
+    const got = drawTo(state, helper, "treasure", helperBonus, ctx);
+    if (got.length) log(state, ctx, `${helper.name} comprou ${got.length} tesouro(s) extra(s) por ajudar.`);
   }
   continueReward(state, ctx);
 }
@@ -772,14 +784,13 @@ export function startFlee(state: GameState, ctx: Ctx) {
   const combat = state.combat!;
   cancelHelpPrompts(state);
   const participants = playerSide(state, combat);
-  const specials = specialIds(state, combat);
   const results: NonNullable<CombatState["flee"]>["results"] = [];
   for (const pid of participants) {
     const p = player(state, pid);
     for (const cm of activeMonsters(combat)) {
       const d = monsterDef(state, cm);
-      if (pid !== combat.fighterId && specials.has("monster.medusa") && d.id === "monster.medusa") {
-        results.push({ playerId: pid, monsterCardId: cm.cardId, roll: 0, bonus: 0, success: false, note: "Medusa: o ajudante também sofre" });
+      if (pid !== combat.fighterId && monsterFx(state, cm, "ajudanteSofre").length) {
+        results.push({ playerId: pid, monsterCardId: cm.cardId, roll: 0, bonus: 0, success: false, note: `${d.name}: o ajudante também sofre` });
         continue;
       }
       const info = fleeInfo(state, p, cm);
@@ -794,8 +805,9 @@ export function startFlee(state: GameState, ctx: Ctx) {
       const r = rollD6(state, p, ctx, `Fugir de ${d.name} (bônus ${info.bonus >= 0 ? "+" : ""}${info.bonus})`);
       let success = r.total + info.bonus >= 5;
       let note: string | undefined;
-      if (success && p.equipped.some((id) => state.cards[id]?.defId === "item.mula")) {
-        const m = rollD6(state, p, ctx, "Mula Teimosa");
+      const stubborn = equippedFx(state, p, "podeEmpacar");
+      if (success && stubborn) {
+        const m = rollD6(state, p, ctx, nameOf(state, stubborn.cardId));
         if (m.natural === 1) {
           success = false;
           note = "a Mula empacou";
@@ -867,8 +879,8 @@ export function applyAllBadStuff(state: GameState, ctx: Ctx) {
     // Runa do Sangue: perca 1 nível a mais ao perder um combate
     let blood = 0;
     for (const id of target.equipped)
-      for (const r of state.cards[id]?.runes ?? []) if (state.cards[r]?.defId === "rune.sangue") blood++;
-    if (blood) loseLevels(state, target, blood, ctx, "Runa do Sangue");
+      for (const fx of runeFx(state, id, "perdeNivelAoPerder")) blood += num(fx, "quantidade", 1);
+    if (blood) loseLevels(state, target, blood, ctx, "runa (perdeu o combate)");
     for (const mid of monsters) {
       const cm = combat.monsters.find((m) => m.cardId === mid);
       if (!cm) continue;
@@ -889,13 +901,13 @@ export function applyAllBadStuff(state: GameState, ctx: Ctx) {
 function itemProtected(state: GameState, p: PlayerState, cardId: string, d: MonsterCard | null): boolean {
   const c = state.cards[cardId];
   if (!c) return true;
-  if (c.defId === "item.calcas-dignidade") return true;
+  const prot = cardFxAll(state, cardId, "protecao").map((fx) => fx.contra);
+  if (prot.includes("tudo")) return true;
   if (d) {
-    if (c.defId === "item.calcas-antichamas" && d.tags.includes("fogo")) return true;
-    if (d.acidRust && c.defId === "item.grevas-mithral") return true;
-    if (d.acidRust && (c.runes ?? []).some((r) => state.cards[r]?.defId === "rune.pedra")) return true;
+    if (prot.includes("fogo") && d.tags.includes("fogo")) return true;
+    if (d.acidRust && (prot.includes("acido") || runeFx(state, cardId, "protegeAcido").length > 0)) return true;
   }
-  if (slotOf(state, cardId) === "head" && p.equipped.some((id) => state.cards[id]?.defId === "item.escudo-torre")) return true;
+  if (slotOf(state, cardId) === "head" && equippedFx(state, p, "protegeCapacete")) return true;
   return false;
 }
 
@@ -918,10 +930,12 @@ export function applyBadStuff(state: GameState, ctx: Ctx, target: PlayerState, c
   if (hasRace(state, target, "draconato") && !d.legendary && (d.tags.includes("fogo") || d.tags.includes("dragao")))
     return immune("Escamas Dracônicas");
   if (hasRace(state, target, "tritao") && d.tags.includes("aquatico")) return immune("Filho das Marés");
-  if (!d.legendary && d.tags.includes("fogo") && target.equipped.some((id) => state.cards[id]?.defId === "item.armadura-dragao"))
-    return immune("Armadura de Escamas de Dragão Vermelho");
-  if (d.poison && target.equipped.some((id) => state.cards[id]?.defId === "item.amuleto-saude"))
-    return immune("Amuleto da Saúde");
+  for (const { cardId, fx } of equippedFxAll(state, target, "imuneCoisasRuins")) {
+    if (flag(fx, "excetoLendarios") && d.legendary) continue;
+    if (strs(fx, "tags").some((t) => d.tags.includes(t as never))) return immune(nameOf(state, cardId));
+  }
+  const antidote = equippedFx(state, target, "imuneVeneno");
+  if (d.poison && antidote) return immune(nameOf(state, antidote.cardId));
 
   log(state, ctx, `☠️ Coisas Ruins de ${d.name} em ${target.name}: ${d.badStuffText}`, "combat");
   let dwarfSave = hasRace(state, target, "anao") ? 1 : 0;
@@ -939,12 +953,14 @@ export function applyBadStuff(state: GameState, ctx: Ctx, target: PlayerState, c
     switch (e.t) {
       case "levels": {
         let n = e.n;
-        if (target.equipped.some((id) => state.cards[id]?.defId === "item.anel-regeneracao") && target.usage["regen"] !== state.round) {
+        const regen = equippedFx(state, target, "perdeMenosNiveis");
+        if (regen && target.usage["regen"] !== state.round) {
           target.usage["regen"] = state.round;
-          n = Math.max(0, n - 1);
-          log(state, ctx, `💍 Anel da Regeneração: ${target.name} perde 1 nível a menos.`);
+          const less = num(regen.fx, "quantidade", 1);
+          n = Math.max(0, n - less);
+          log(state, ctx, `💍 ${nameOf(state, regen.cardId)}: ${target.name} perde ${less} nível(is) a menos.`);
         }
-        loseLevels(state, target, n, ctx, d.name, { corpoSeco: d.id === "monster.corpo-seco" });
+        loseLevels(state, target, n, ctx, d.name, { corpoSeco: (d.fx ?? []).some((fx) => fx.tipo === "drenoDeVida") });
         break;
       }
       case "slot":
@@ -1105,7 +1121,7 @@ export function killPlayer(state: GameState, ctx: Ctx, p: PlayerState, reason: s
   p.streak = 0;
   p.needsNewHand = true;
   p.hibernating = false;
-  if (state.combat && specialIds(state, state.combat).has("monster.vampiro")) {
+  if (state.combat && state.combat.monsters.some((m) => monsterDef(state, m).badStuff.some((e) => e.t === "vampirize"))) {
     if (p.race) discardCard(state, p.race);
     p.race = newCard(state, "race.vampirico", true);
     log(state, ctx, `🧛 ${p.name} renasceu como Vampírico!`, "combat");
@@ -1182,11 +1198,11 @@ export function defendCurse(
     allowReflect &&
     caster &&
     caster.id !== target.id &&
-    target.equipped.some((id) => state.cards[id]?.defId === "item.escudo-refletor") &&
+    !!equippedFx(state, target, "refleteMaldicao") &&
     target.usage["refletor"] !== state.round
   ) {
     target.usage["refletor"] = state.round;
-    log(state, ctx, `🪞 O Escudo Refletor de ${target.name} devolve ${label} para ${caster.name}!`, "curse");
+    log(state, ctx, `🪞 ${nameOf(state, equippedFx(state, target, "refleteMaldicao")!.cardId)} de ${target.name} devolve ${label} para ${caster.name}!`, "curse");
     return defendCurse(state, ctx, caster, target, label, false);
   }
   if (!bruxo && hasRace(state, target, "divino")) {
@@ -1203,10 +1219,12 @@ export function defendCurse(
       return defendCurse(state, ctx, caster, target, label, false);
     }
   }
-  const ring = target.equipped.find((id) => state.cards[id]?.defId === "item.anel-protecao");
-  if (ring) {
-    state.cards[ring].defId = "item.anel-lata";
-    log(state, ctx, `💍 O Anel de Proteção de ${target.name} anulou ${label} e virou um Anel de Lata.`, "curse");
+  const ward = equippedFx(state, target, "anulaMaldicao");
+  if (ward) {
+    const before = nameOf(state, ward.cardId);
+    const into = `item.${String(ward.fx.viraEm)}`;
+    if (CARD_DEFS[into]) state.cards[ward.cardId].defId = into;
+    log(state, ctx, `💍 ${before} de ${target.name} anulou ${label}${CARD_DEFS[into] ? ` e virou ${def(into).name}` : ""}.`, "curse");
     return null;
   }
   return target;
@@ -1233,7 +1251,7 @@ export function castCurse(state: GameState, ctx: Ctx, cardId: string, caster: Pl
 }
 
 function loseSlotByCurse(state: GameState, ctx: Ctx, p: PlayerState, slot: Slot) {
-  const items = p.equipped.filter((id) => slotOf(state, id) === slot && state.cards[id]?.defId !== "item.calcas-dignidade");
+  const items = p.equipped.filter((id) => slotOf(state, id) === slot && !cardFxAll(state, id, "protecao").some((fx) => fx.contra === "tudo"));
   if (items.length === 0) {
     log(state, ctx, `${p.name} não tinha nada nesse slot.`, "curse");
     return;
@@ -1244,36 +1262,52 @@ function loseSlotByCurse(state: GameState, ctx: Ctx, p: PlayerState, slot: Slot)
   }
 }
 
+const CURSE_SLOT: Record<string, Slot> = { capacete: "head", peitoral: "chest", calcas: "legs", botas: "feet", montaria: "mount" };
+
 export function applyCurse(state: GameState, ctx: Ctx, cardId: string, target: PlayerState, caster: PlayerState | null) {
   const d = defOf(state, cardId) as CurseCard;
   const bruxo = !!caster && hasClass(state, caster, "bruxo");
   const keepCard = d.curseType === "duration" || d.curseType === "persistent";
-  switch (d.id) {
-    case "curse.azar":
-      loseLevels(state, target, 1, ctx, d.name);
+  if (d.curseType === "combat") {
+    const combat = state.combat;
+    const inCombat = combat && (combat.fighterId === target.id || combat.helperId === target.id);
+    if (inCombat) {
+      applyCombatCurse(state, ctx, cardId, target, caster?.id ?? null);
+    } else {
+      target.pendingCombatCurses.push({ cardId, casterId: caster?.id ?? null });
+      log(state, ctx, `${d.name} vai valer no próximo combate de ${target.name}.`, "curse");
+      return;
+    }
+  } else if (d.curseType === "duration") {
+    let turns = (d.duration ?? 1) + (bruxo ? 1 : 0);
+    if (!findFx(d.id, "pulaTurno") && isCurrent(state, target.id)) turns += 1;
+    target.curses.push({ id: uid(state, "k"), defId: d.id, cardId, remaining: turns, casterId: caster?.id ?? null });
+    onPersistentCurse(state, ctx, target, d.id);
+  } else if (d.curseType === "persistent") {
+    target.curses.push({ id: uid(state, "k"), defId: d.id, cardId, casterId: caster?.id ?? null });
+    onPersistentCurse(state, ctx, target, d.id);
+  } else {
+    for (const fx of d.fx ?? []) applyInstantCurseFx(state, ctx, d, fx, target, caster);
+  }
+  if (!keepCard) discardCard(state, cardId);
+}
+
+function applyInstantCurseFx(state: GameState, ctx: Ctx, d: CurseCard, fx: Fx, target: PlayerState, caster: PlayerState | null) {
+  switch (fx.tipo) {
+    case "perderNiveis": {
+      let n = num(fx, "quantidade", 1);
+      if (fx.nivelMinimoParaExtra !== undefined && target.level >= num(fx, "nivelMinimoParaExtra")) n += num(fx, "extra");
+      loseLevels(state, target, n, ctx, d.name);
       break;
-    case "curse.lich":
-      loseLevels(state, target, target.level >= 15 ? 3 : 2, ctx, d.name);
+    }
+    case "perderSlot":
+      loseSlotByCurse(state, ctx, target, CURSE_SLOT[String(fx.slot)] ?? "head");
       break;
-    case "curse.vento":
-      loseSlotByCurse(state, ctx, target, "head");
-      break;
-    case "curse.ferrugem":
-      loseSlotByCurse(state, ctx, target, "chest");
-      break;
-    case "curse.calcas":
-      loseSlotByCurse(state, ctx, target, "legs");
-      break;
-    case "curse.botas":
-      loseSlotByCurse(state, ctx, target, "feet");
-      break;
-    case "curse.montaria":
-      loseSlotByCurse(state, ctx, target, "mount");
-      break;
-    case "curse.dedos": {
+    case "perderAneis": {
+      const n = num(fx, "quantidade", 1);
       const rings = target.equipped.filter((id) => slotOf(state, id) === "ring");
-      if (rings.length <= 2 || !caster || caster.id === target.id) {
-        const lose = rings.length <= 2 ? rings : shuffle([...rings], ctx).slice(0, 2);
+      if (rings.length <= n || !caster || caster.id === target.id) {
+        const lose = rings.length <= n ? rings : shuffle([...rings], ctx).slice(0, n);
         for (const id of lose) {
           log(state, ctx, `${target.name} perdeu ${nameOf(state, id)}.`, "curse");
           discardFromPlayer(state, target, id);
@@ -1282,13 +1316,13 @@ export function applyCurse(state: GameState, ctx: Ctx, cardId: string, target: P
         createPrompt(state, ctx, "chooseLoss", caster.id, {
           victimId: target.id,
           candidates: rings,
-          count: 2,
-          reason: `Dedos Escorregadios: escolha 2 anéis de ${target.name}`,
+          count: n,
+          reason: `${d.name}: escolha ${n} anel(éis) de ${target.name}`,
         });
       }
       break;
     }
-    case "curse.mimico": {
+    case "perderMelhorItem": {
       const items = [...target.equipped].sort((a, b) => itemWorth(state, b) - itemWorth(state, a));
       if (items[0]) {
         log(state, ctx, `${target.name} perdeu ${nameOf(state, items[0])}.`, "curse");
@@ -1296,13 +1330,13 @@ export function applyCurse(state: GameState, ctx: Ctx, cardId: string, target: P
       }
       break;
     }
-    case "curse.mao-furada": {
-      const cards = shuffle([...target.hand], ctx).slice(0, 2);
+    case "descartarCartas": {
+      const cards = shuffle([...target.hand], ctx).slice(0, num(fx, "quantidade", 1));
       for (const c of cards) discardFromPlayer(state, target, c);
       log(state, ctx, `${target.name} descartou ${cards.length} carta(s) da mão.`, "curse");
       break;
     }
-    case "curse.impostos": {
+    case "impostos": {
       const lower = state.players.filter((x) => x.level < target.level);
       for (const o of lower) {
         if (target.hand.length === 0) break;
@@ -1313,51 +1347,32 @@ export function applyCurse(state: GameState, ctx: Ctx, cardId: string, target: P
       log(state, ctx, `${target.name} pagou impostos para ${lower.length} jogador(es).`, "curse");
       break;
     }
-    case "curse.troca": {
+    case "trocaFeerica": {
       const left = leftOf(state, target.id);
-      if (left.id !== target.id) {
-        createPrompt(state, ctx, "fairyCurse", left.id, { victimId: target.id });
-      }
+      if (left.id !== target.id) createPrompt(state, ctx, "fairyCurse", left.id, { victimId: target.id });
       break;
     }
-    case "curse.amnesia":
+    case "perderClasse":
       for (const c of [...target.classes]) discardCard(state, c);
       target.classes = [];
       target.artificeSlots = [];
       revalidateEquipment(state, ctx, target);
       log(state, ctx, `${target.name} esqueceu a própria classe.`, "curse");
       break;
-    case "curse.identidade":
+    case "virarRaca": {
+      const raceId = `race.${String(fx.raca)}`;
+      if (!CARD_DEFS[raceId]) break;
       if (target.race) discardCard(state, target.race);
-      target.race = newCard(state, "race.humano", true);
+      target.race = newCard(state, raceId, true);
       revalidateEquipment(state, ctx, target);
-      log(state, ctx, `${target.name} agora é Humano.`, "curse");
+      log(state, ctx, `${target.name} agora é ${def(raceId).name}.`, "curse");
       break;
-    default:
-      if (d.curseType === "combat") {
-        const combat = state.combat;
-        const inCombat = combat && (combat.fighterId === target.id || combat.helperId === target.id);
-        if (inCombat) {
-          applyCombatCurse(state, ctx, cardId, target, caster?.id ?? null);
-        } else {
-          target.pendingCombatCurses.push({ cardId, casterId: caster?.id ?? null });
-          log(state, ctx, `${d.name} vai valer no próximo combate de ${target.name}.`, "curse");
-          return;
-        }
-      } else if (d.curseType === "duration") {
-        let turns = (d.duration ?? 1) + (bruxo ? 1 : 0);
-        if (d.id !== "curse.sono" && isCurrent(state, target.id)) turns += 1;
-        target.curses.push({ id: uid(state, "k"), defId: d.id, cardId, remaining: turns, casterId: caster?.id ?? null });
-      } else if (d.curseType === "persistent") {
-        target.curses.push({ id: uid(state, "k"), defId: d.id, cardId, casterId: caster?.id ?? null });
-        onPersistentCurse(state, ctx, target, d.id);
-      }
+    }
   }
-  if (!keepCard) discardCard(state, cardId);
 }
 
 export function onPersistentCurse(state: GameState, ctx: Ctx, target: PlayerState, defId: string) {
-  if (defId === "curse.espada") {
+  if (findFx(defId, "ocupaUmaMao")) {
     // Libera uma mão
     while (handsUsed(state, target) > 2) {
       const handItems = target.equipped.filter((id) => slotOf(state, id) === "hand");
@@ -1365,15 +1380,15 @@ export function onPersistentCurse(state: GameState, ctx: Ctx, target: PlayerStat
       handItems.sort((a, b) => itemWorth(state, a) - itemWorth(state, b));
       removeFromPlayer(target, handItems[0]);
       target.carried.push(handItems[0]);
-      log(state, ctx, `${target.name} teve que largar ${nameOf(state, handItems[0])} para segurar a Espada Amaldiçoada.`, "curse");
+      log(state, ctx, `${target.name} teve que largar ${nameOf(state, handItems[0])} (${def(defId).name}).`, "curse");
     }
   }
-  if (defId === "curse.coroa-espinhos") {
+  if (findFx(defId, "semLendarios")) {
     for (const id of [...target.equipped]) {
       if (isLegendaryItem(state, id)) {
         removeFromPlayer(target, id);
         target.hand.push(id);
-        log(state, ctx, `${nameOf(state, id)} voltou para a mão de ${target.name} (Coroa de Espinhos).`, "curse");
+        log(state, ctx, `${nameOf(state, id)} voltou para a mão de ${target.name} (${def(defId).name}).`, "curse");
       }
     }
   }
@@ -1383,43 +1398,47 @@ export function onPersistentCurse(state: GameState, ctx: Ctx, target: PlayerStat
 export function applyCombatCurse(state: GameState, ctx: Ctx, cardId: string, target: PlayerState, casterId: string | null) {
   const combat = state.combat!;
   const d = defOf(state, cardId);
-  switch (d.id) {
-    case "curse.fraqueza":
-      combat.playerMods.push({ id: uid(state, "m"), value: tier11(target) ? -5 : -3, by: casterId, label: `Fraqueza Súbita (${target.name})`, target: target.id });
-      break;
-    case "curse.chumbo":
-      combat.cantFlee.push(target.id);
-      break;
-    case "curse.escuro":
-      combat.monsterSideMods.push({ id: uid(state, "m"), value: 5, by: casterId, label: "Medo do Escuro" });
-      break;
-    case "curse.isolamento":
-      combat.isolated.push(target.id);
-      if (combat.fighterId === target.id && combat.helperId) removeHelper(state, ctx, "Isolamento");
-      break;
-    case "curse.silencio":
-      combat.silenced.push(target.id);
-      break;
-    case "curse.horda": {
-      for (let guard = 0; guard < 200; guard++) {
-        const c = drawCard(state, "door", ctx);
-        if (!c) break;
-        if (defOf(state, c).kind === "monster") {
-          addMonster(state, ctx, c, { wandering: true, addedBy: casterId });
-          break;
+  for (const fx of d.fx ?? []) {
+    switch (fx.tipo) {
+      case "forcaNoCombate": {
+        const v = tier11(target) && fx.valorNivel11 !== undefined ? num(fx, "valorNivel11") : num(fx, "valor");
+        combat.playerMods.push({ id: uid(state, "m"), value: v, by: casterId, label: `${d.name} (${target.name})`, target: target.id });
+        break;
+      }
+      case "naoPodeFugir":
+        combat.cantFlee.push(target.id);
+        break;
+      case "monstroGanha":
+        combat.monsterSideMods.push({ id: uid(state, "m"), value: num(fx, "valor"), by: casterId, label: d.name });
+        break;
+      case "ninguemAjuda":
+        combat.isolated.push(target.id);
+        if (combat.fighterId === target.id && combat.helperId) removeHelper(state, ctx, d.name);
+        break;
+      case "semAtivas":
+        combat.silenced.push(target.id);
+        break;
+      case "chamadoDaHorda": {
+        for (let guard = 0; guard < 300; guard++) {
+          const c = drawCard(state, "door", ctx);
+          if (!c) break;
+          if (defOf(state, c).kind === "monster") {
+            addMonster(state, ctx, c, { wandering: true, addedBy: casterId });
+            break;
+          }
+          discardCard(state, c);
         }
-        discardCard(state, c);
+        break;
       }
-      break;
+      case "ajudanteTraidor":
+        if (combat.helperId) {
+          combat.helperTraitor = true;
+          log(state, ctx, `🌀 ${player(state, combat.helperId).name} passou para o lado do monstro!`, "curse");
+        } else {
+          combat.pendingTraitor = true;
+        }
+        break;
     }
-    case "curse.ilusao-traidora":
-      if (combat.helperId) {
-        combat.helperTraitor = true;
-        log(state, ctx, `🌀 ${player(state, combat.helperId).name} passou para o lado do monstro!`, "curse");
-      } else {
-        combat.pendingTraitor = true;
-      }
-      break;
   }
   log(state, ctx, `${d.name} afeta o combate de ${target.name}.`, "curse");
   onCombatChanged(state, ctx);

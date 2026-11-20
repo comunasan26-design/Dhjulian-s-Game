@@ -11,6 +11,8 @@ raças, classes, itens, runas, poções e maldições, e seja o primeiro a chega
 - **Bots** com IA nas salas online (o anfitrião adiciona na sala de espera)
 - **Modo local** (`/local`): partida contra bots rodando só no navegador, sem conta e sem banco (salva no aparelho)
 - Layout para celular com abas (Mesa, Você, Jogadores, Histórico)
+- **Cartas editáveis em JSON** (pasta [`cartas/`](cartas/LEIA-ME.md)): qualquer pessoa altera ou cria cartas mudando textos e números
+- Ameaçar atrapalhar (pedir tesouros para não atrapalhar) e desistir da partida
 
 ## Rodando localmente
 
@@ -35,6 +37,8 @@ Scripts úteis:
 | `npm run typecheck` | Verificação de tipos |
 | `npm test` | Testes do motor de regras (Vitest) |
 | `npm run db:migrate` | Nova migração em desenvolvimento |
+| `npm run cartas:validar` | Confere os arquivos de cartas e mostra erros em português |
+| `npm run cartas:docs` | Gera `cartas/EFEITOS.md` (lista de efeitos disponíveis) |
 
 ## Deploy na Vercel
 
@@ -53,8 +57,9 @@ recebe o novo estado na hora e os outros jogadores em menos de 1 s.
 ## Como funciona
 
 ```
+cartas/             # TODAS as cartas em JSON (edite aqui) + LEIA-ME.md e EFEITOS.md
 src/
-  game/catalog/     # todas as cartas do livro (raças, classes, itens, poções, runas, maldições, bestiário)
+  game/catalog/     # carrega e valida os JSON de cartas; registro de efeitos
   game/engine/      # motor de regras puro (sem banco): estado, combate, habilidades, prompts, visão por jogador
   game/bot/         # IA dos bots
   lib/              # Prisma, autenticação, salas (concorrência otimista por versão)
@@ -73,6 +78,12 @@ src/
   (níveis, poder, vencer monstros), dando peso maior a prejudicar humanos e o líder. Preferem alianças com outros bots
   (menos os que estão quase ganhando) e propõem trocas justas por itens exclusivos da sua raça/classe. Nas salas online,
   o servidor faz os bots agirem pelo mesmo stream de eventos (um passo a cada ~0,9 s); no modo local, o navegador.
+- **Cartas**: o motor não conhece cartas pelo nome; ele lê os `"efeitos"` de cada carta (ex.: `bonusContra`, `anula`,
+  `naoPersegue`). Assim, cartas novas podem reaproveitar qualquer efeito existente. Veja `cartas/LEIA-ME.md`.
+- **Ameaça**: quem não está no combate pode pedir tesouros para não atrapalhar. Se o lutador aceitar, paga com a
+  recompensa (se vencer) e quem ameaçou não pode atrapalhá-lo pelo resto da rodada.
+- **Desistência**: conta como morte (os outros saqueiam os itens) e o jogador sai da mesa. Se só restarem bots, a sala
+  é apagada; se restar um único jogador, ele vence.
 - **Reconexão**: basta voltar à sala (o lobby lista “Suas salas”). Recarregar a página ou perder a internet não perde nada.
 
 ## Regras e interpretações

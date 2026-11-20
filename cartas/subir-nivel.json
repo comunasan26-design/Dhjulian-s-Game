@@ -1,0 +1,32 @@
+[
+  {
+    "id": "critico",
+    "nome": "Rolagem Crítica",
+    "texto": "Um 20 natural na hora certa."
+  },
+  {
+    "id": "bajular",
+    "nome": "Bajular o Mestre",
+    "texto": "Elogie a narração com sinceridade duvidosa."
+  },
+  {
+    "id": "treino",
+    "nome": "Treino Intenso",
+    "texto": "Mil flexões antes do café."
+  },
+  {
+    "id": "heranca",
+    "nome": "Herança Inesperada",
+    "texto": "Um tio-avô aventureiro deixou tudo para você."
+  },
+  {
+    "id": "licao",
+    "nome": "Lição Aprendida",
+    "texto": "Da próxima vez, não abra o baú."
+  },
+  {
+    "id": "sabedoria",
+    "nome": "Sabedoria Ancestral",
+    "texto": "Os antigos sussurram conselhos úteis."
+  }
+]

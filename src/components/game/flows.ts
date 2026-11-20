@@ -1,6 +1,6 @@
 "use client";
 
-import type { CardDef } from "@/game/catalog";
+import { type CardDef, findFx } from "@/game/catalog";
 import type { AbilityInfo, Action, GameView } from "@/game/engine";
 import type { GameApi } from "./GameContext";
 import type { PickOption, usePicker } from "./Picker";
@@ -319,7 +319,7 @@ export async function flowAbility(api: GameApi, picker: Picker, info: AbilityInf
         case "dealMode":
           break;
         case "kit": {
-          const kit = [...(me.hand ?? []), ...me.carried].find((id) => api.def(id)?.id === "misc.kit-ladrao");
+          const kit = [...(me.hand ?? []), ...me.carried].find((id) => !!findFx(api.def(id)?.id, "kitLadrao"));
           if (!kit) break;
           const isThief = me.classIds.includes("ladino");
           if (!isThief) {
@@ -379,69 +379,64 @@ async function consumeCard(api: GameApi, picker: Picker, cardId: string): Promis
     });
   const pickSidePlayer = () =>
     picker.pick({ title: `${d.name}: em quem?`, options: playerOptions(view, (id) => sidePlayers(view).includes(id)) });
-  switch (d.id) {
-    case "potion.forca-menor":
-    case "potion.fogo-grego":
-    case "potion.elixir-gigante": {
-      const side = await pickSide();
-      if (!side) return;
-      return api.act({ ...base, side: side as "player" | "monster" });
-    }
-    case "potion.acido": {
-      const v = await picker.pick({
-        title: "Frasco de Ácido: em quem?",
-        options: [
-          ...monsterIds(view).map((id) => ({ value: `m:${id}`, label: api.name(id), sub: "Monstro" })),
-          ...playerOptions(view, (id) => sidePlayers(view).includes(id)).map((o) => ({ ...o, value: `p:${o.value}` })),
-        ],
-      });
-      if (!v) return;
-      return api.act(v.startsWith("m:") ? { ...base, monsterId: v.slice(2) } : { ...base, targetId: v.slice(2) });
-    }
-    case "potion.fuga-rapida":
-    case "potion.invisibilidade": {
-      const t = await pickSidePlayer();
-      if (!t) return;
-      return api.act({ ...base, targetId: t });
-    }
-    case "potion.agua-benta": {
-      if (view.combat) return api.act(base);
-      const t = await picker.pick({
-        title: "Remover Podridão Antiga de quem?",
-        options: playerOptions(view, (id) => !!view.players.find((p) => p.id === id)?.curses.some((c) => c.defId === "curse.podridao")),
-      });
-      if (!t) return;
-      return api.act({ ...base, targetId: t });
-    }
-    case "potion.cura":
-    case "potion.amizade": {
-      const t = await picker.pick({
-        title: d.id === "potion.cura" ? "Devolver nível a quem?" : "Obrigar quem a ajudar?",
-        options: playerOptions(view, (id) => (d.id === "potion.amizade" ? id !== me.id : true)),
-      });
-      if (!t) return;
-      return api.act({ ...base, targetId: t });
-    }
-    case "misc.isca": {
-      const m = await picker.pick({ title: "Isca: em qual monstro?", options: cardOptions(monsterIds(view)) });
-      if (!m) return;
-      return api.act({ ...base, monsterId: m });
-    }
-    case "misc.dado-viciado": {
-      const idx = await pickFailedRoll(api, picker);
-      if (idx === null) return;
-      return api.act({ ...base, index: idx });
-    }
-    case "misc.espelho-prata": {
-      const m = await picker.pick({ title: "Qual Monstro Errante refletir?", options: cardOptions(monsterIds(view, true)) });
-      if (!m) return;
-      const t = await picker.pick({ title: "Para quem?", options: playerOptions(view, (id) => id !== me.id) });
-      if (!t) return;
-      return api.act({ ...base, monsterId: m, targetId: t });
-    }
-    default:
-      return api.act(base);
+  const has = (t: string) => !!findFx(d.id, t);
+  if (has("bonusLado")) {
+    const side = await pickSide();
+    if (!side) return;
+    return api.act({ ...base, side: side as "player" | "monster" });
   }
+  if (has("menosEmAlvo")) {
+    const v = await picker.pick({
+      title: `${d.name}: em quem?`,
+      options: [
+        ...monsterIds(view).map((id) => ({ value: `m:${id}`, label: api.name(id), sub: "Monstro" })),
+        ...playerOptions(view, (id) => sidePlayers(view).includes(id)).map((o) => ({ ...o, value: `p:${o.value}` })),
+      ],
+    });
+    if (!v) return;
+    return api.act(v.startsWith("m:") ? { ...base, monsterId: v.slice(2) } : { ...base, targetId: v.slice(2) });
+  }
+  if (has("bonusFugir") || has("fugaAutomatica")) {
+    const t = await pickSidePlayer();
+    if (!t) return;
+    return api.act({ ...base, targetId: t });
+  }
+  if (has("contraMortosVivos") || has("removePodridao")) {
+    if (view.combat) return api.act(base);
+    const t = await picker.pick({
+      title: `${d.name}: remover maldição de quem?`,
+      options: playerOptions(view, (id) => !!view.players.find((p) => p.id === id)?.curses.some((c) => !!findFx(c.defId, "removidaPorAguaBenta"))),
+    });
+    if (!t) return;
+    return api.act({ ...base, targetId: t });
+  }
+  if (has("devolveNivel") || has("forcaAjuda")) {
+    const helping = has("forcaAjuda");
+    const t = await picker.pick({
+      title: helping ? "Obrigar quem a ajudar?" : "Devolver nível a quem?",
+      options: playerOptions(view, (id) => (helping ? id !== me.id : true)),
+    });
+    if (!t) return;
+    return api.act({ ...base, targetId: t });
+  }
+  if (has("isca")) {
+    const m = await picker.pick({ title: `${d.name}: em qual monstro?`, options: cardOptions(monsterIds(view)) });
+    if (!m) return;
+    return api.act({ ...base, monsterId: m });
+  }
+  if (has("rerrolarFuga")) {
+    const idx = await pickFailedRoll(api, picker);
+    if (idx === null) return;
+    return api.act({ ...base, index: idx });
+  }
+  if (has("espelho")) {
+    const m = await picker.pick({ title: "Qual Monstro Errante refletir?", options: cardOptions(monsterIds(view, true)) });
+    if (!m) return;
+    const t = await picker.pick({ title: "Para quem?", options: playerOptions(view, (id) => id !== me.id) });
+    if (!t) return;
+    return api.act({ ...base, monsterId: m, targetId: t });
+  }
+  return api.act(base);
 }
 
 export async function pickFailedRoll(api: GameApi, picker: Picker): Promise<number | null> {
@@ -486,7 +481,7 @@ export function cardActions(api: GameApi, picker: Picker, cardId: string): CardA
       },
     });
   }
-  if (d.kind === "potion" || (d.kind === "misc" && !d.permanent && d.id !== "misc.kit-ladrao")) {
+  if (d.kind === "potion" || (d.kind === "misc" && !d.permanent && !findFx(d.id, "kitLadrao"))) {
     out.push({ label: "Usar", run: () => consumeCard(api, picker, cardId), primary: true });
   }
   if (zone === "hand") {
@@ -566,7 +561,7 @@ export function cardActions(api: GameApi, picker: Picker, cardId: string): CardA
         break;
     }
     if ("price" in d) out.push({ label: "Colocar na mesa", run: act({ type: "PLACE", cardId }) });
-    const frogs = view.players.filter((p) => p.id !== me.id && p.curses.some((c) => c.defId === "curse.sapo"));
+    const frogs = view.players.filter((p) => p.id !== me.id && p.curses.some((c) => !!findFx(c.defId, "acabaComBeijo")));
     if (frogs.length)
       out.push({
         label: "Descartar para beijar o sapo",

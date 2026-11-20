@@ -94,6 +94,9 @@ export interface CombatMonster {
   ignoreSpecial: boolean;
   petrified?: boolean;
   ettinFight?: boolean;
+  /** Efeito "aoRevelar": quanto o lutador / o monstro ganham. */
+  revealPlayer?: number;
+  revealMonster?: number;
   defeated?: boolean;
 }
 
@@ -136,7 +139,8 @@ export interface CombatState {
   glabrezuAccepted: boolean;
   legendaryResistanceUsed: boolean;
   oniDoubled: boolean;
-  mapa: boolean;
+  /** Tesouros extras se vencer (Mapa do Tesouro). */
+  mapa: number;
   pendingTraitor: boolean;
   isolated: string[];
   silenced: string[];

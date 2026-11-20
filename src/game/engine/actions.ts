@@ -1,5 +1,18 @@
 // Despachante de ações dos jogadores + processamento de prazos.
-import { type CurseCard } from "../catalog";
+import { CARD_DEFS, type CurseCard, fxOf } from "../catalog";
+import {
+  cardFx,
+  combatHas,
+  equippedFx,
+  equippedFxAll,
+  flag,
+  hasCurseFx,
+  heldFx,
+  matchesWho,
+  monsterFx,
+  num,
+  runeFx,
+} from "./fx";
 import { type AbilityKey, type Params, activateAbility } from "./abilities";
 import {
   addMonster,
@@ -27,11 +40,9 @@ import {
   combatTags,
   computeCombat,
   equipCheck,
-  hasCurse,
   playerSide,
   runeSockets,
   slotOf,
-  specialIds,
   tier11,
 } from "./stats";
 import {
@@ -170,7 +181,7 @@ function canInterfere(state: GameState, p: PlayerState) {
   if (combat.stage === "badstuff") fail("O combate já foi decidido.");
   if (combat.desafio && combat.fighterId !== p.id) fail("Desafio: ninguém mais pode jogar cartas neste combate.");
   const side = playerSide(state, combat);
-  if (!side.includes(p.id) && specialIds(state, combat).has("monster.planetar") && p.curseCastRound === state.round)
+  if (!side.includes(p.id) && combatHas(state, combat, "detectaMentiras") && p.curseCastRound === state.round)
     fail("Planetar: quem lançou maldição nesta rodada não pode ajudar nem atrapalhar.");
   return combat;
 }
@@ -211,7 +222,7 @@ function canBeHelper(state: GameState, target: PlayerState): string | null {
   if (combat.isolated.includes(combat.fighterId)) return "Ninguém pode ajudar neste combate.";
   if (combat.desafio) return "Desafio: ninguém pode lutar junto.";
   if (target.id === combat.fighterId) return "Você não pode ajudar a si mesmo.";
-  if (specialIds(state, combat).has("monster.planetar") && target.curseCastRound === state.round)
+  if (combatHas(state, combat, "detectaMentiras") && target.curseCastRound === state.round)
     return "Planetar: quem lançou maldição nesta rodada não pode ajudar.";
   return null;
 }
@@ -398,7 +409,7 @@ function dispatch(state: GameState, p: PlayerState, a: Action, ctx: Ctx) {
     case "SELL": {
       ownTurn(state, p);
       if (state.combat) fail("Não dá para vender durante um combate.");
-      if (hasCurse(p, "curse.ganancia")) fail("Ganância Dracônica: você não pode vender itens.");
+      if (hasCurseFx(p, "naoPodeNegociar")) fail("Uma maldição impede você de vender itens.");
       const ids = [...new Set(a.cardIds ?? [])];
       if (ids.length === 0) fail("Escolha itens para vender.");
       let gold = 0;
@@ -412,7 +423,10 @@ function dispatch(state: GameState, p: PlayerState, a: Action, ctx: Ctx) {
           if ("price" in rd) gold += rd.price;
         }
       }
-      if ([...p.carried, ...p.equipped].some((id) => state.cards[id]?.defId === "misc.carta-rei")) gold = Math.floor(gold * 1.5);
+      for (const id of [...p.carried, ...p.equipped]) {
+        const fx = cardFx(state, id, "vendaMultiplicador");
+        if (fx) gold = Math.floor(gold * num(fx, "valor", 1));
+      }
       const levels = Math.floor(gold / 1000);
       for (const id of ids) discardFromPlayer(state, p, id);
       log(state, ctx, `💰 ${p.name} vendeu ${ids.length} item(ns) por ${gold} de ouro.`, "info", p.id);
@@ -491,7 +505,7 @@ function dispatch(state: GameState, p: PlayerState, a: Action, ctx: Ctx) {
         fail("Desafio: ninguém mais pode jogar cartas neste combate.");
       if (combat && (target.id === combat.fighterId || target.id === combat.helperId)) {
         const side = playerSide(state, combat);
-        if (!side.includes(p.id) && specialIds(state, combat).has("monster.planetar") && p.curseCastRound === state.round)
+        if (!side.includes(p.id) && combatHas(state, combat, "detectaMentiras") && p.curseCastRound === state.round)
           fail("Planetar: quem lançou maldição nesta rodada não pode atrapalhar.");
       }
       removeFromPlayer(p, a.cardId);
@@ -519,7 +533,7 @@ function dispatch(state: GameState, p: PlayerState, a: Action, ctx: Ctx) {
         value > 0 &&
         !combat.oniDoubled &&
         !cm.ignoreSpecial &&
-        state.cards[cm.cardId].defId === "monster.oni"
+        monsterFx(state, cm, "dobraPrimeiroBonus").length > 0
       ) {
         combat.oniDoubled = true;
         value *= 2;
@@ -540,8 +554,8 @@ function dispatch(state: GameState, p: PlayerState, a: Action, ctx: Ctx) {
       if (defOf(state, a.monsterCardId).kind !== "monster") fail("Escolha um monstro da mão.");
       const fighter = player(state, combat.fighterId);
       assertMayHinder(state, p, fighter.id);
-      if (fighter.equipped.some((id) => state.cards[id]?.defId === "item.anel-invisibilidade"))
-        fail("Anel da Invisibilidade: ninguém pode jogar Monstros Errantes neste combate.");
+      const block = equippedFx(state, fighter, "bloqueiaErrantes");
+      if (block) fail(`${nameOf(state, block.cardId)}: ninguém pode jogar Monstros Errantes neste combate.`);
       discardFromPlayer(state, p, a.cardId);
       removeFromPlayer(p, a.monsterCardId);
       addMonster(state, ctx, a.monsterCardId, { wandering: true, addedBy: p.id });
@@ -565,8 +579,8 @@ function dispatch(state: GameState, p: PlayerState, a: Action, ctx: Ctx) {
       if (state.phase !== "PLAYING") fail("A partida não está em andamento.");
       const target = player(state, a.targetId);
       if (target.id === p.id) fail("Você não pode se beijar.");
-      const sapo = target.curses.find((c) => c.defId === "curse.sapo");
-      if (!sapo) fail(`${target.name} não é um sapo.`);
+      const sapo = target.curses.find((c) => fxOf(c.defId).some((f) => f.tipo === "acabaComBeijo"));
+      if (!sapo) fail(`${target.name} não tem uma maldição que acaba com um beijo.`);
       inHand(p, a.cardId);
       discardFromPlayer(state, p, a.cardId);
       removeCurse(state, target, sapo.id);
@@ -577,15 +591,14 @@ function dispatch(state: GameState, p: PlayerState, a: Action, ctx: Ctx) {
       if (state.combat) fail("Não dá para trocar durante um combate.");
       const to = player(state, a.toId);
       if (to.id === p.id) fail("Escolha outro jogador.");
-      if (hasCurse(p, "curse.ganancia") || hasCurse(to, "curse.ganancia")) fail("Ganância Dracônica impede trocas.");
+      if (hasCurseFx(p, "naoPodeNegociar") || hasCurseFx(to, "naoPodeNegociar")) fail("Uma maldição impede essa troca.");
       const give = [...new Set(a.give ?? [])];
       const take = [...new Set(a.take ?? [])];
       if (give.length + take.length === 0) fail("Escolha itens para a troca.");
       for (const id of give) if (!p.equipped.includes(id) && !p.carried.includes(id)) fail("Só itens na mesa podem ser trocados.");
       for (const id of take) if (!to.equipped.includes(id) && !to.carried.includes(id)) fail("Item inválido do outro jogador.");
       for (const id of [...give, ...take])
-        if ((state.cards[id].runes ?? []).some((r) => state.cards[r]?.defId === "rune.vinculo"))
-          fail(`${nameOf(state, id)} tem Runa do Vínculo e não pode ser trocado.`);
+        if (runeFx(state, id, "naoRoubavel").length > 0) fail(`${nameOf(state, id)} tem uma runa que impede trocas.`);
       createPrompt(state, ctx, "trade", to.id, { fromId: p.id, give, take }, { blocking: false });
       log(state, ctx, `${p.name} propôs uma troca para ${to.name}.`);
       return;
@@ -596,7 +609,7 @@ function dispatch(state: GameState, p: PlayerState, a: Action, ctx: Ctx) {
       const combat = combatFor(state);
       if (combat.fighterId !== p.id) fail("Só quem luta pode pedir ajuda.");
       if (combat.stage === "badstuff") fail("O combate já foi decidido.");
-      if (specialIds(state, combat).has("monster.bugbear")) fail("Bugbear: você não pode pedir ajuda (mas outros podem se oferecer).");
+      if (combatHas(state, combat, "semPedirAjuda")) fail("Este monstro não deixa você pedir ajuda (mas outros podem se oferecer).");
       const target = player(state, a.targetId);
       const err = canBeHelper(state, target);
       if (err) fail(err);
@@ -661,13 +674,13 @@ function dispatch(state: GameState, p: PlayerState, a: Action, ctx: Ctx) {
       if (!r || r.playerId !== p.id) fail("Escolha uma rolagem sua.");
       if (r.success || r.roll === 0) fail("Essa rolagem não pode ser refeita.");
       if (a.source === "cajado") {
-        if (!p.equipped.some((id) => state.cards[id]?.defId === "item.cajado-arquimago")) fail("Você não tem o Cajado do Arquimago equipado.");
-        if (combat.rerolled.includes(`${p.id}:cajado`)) fail("O Cajado já foi usado neste combate.");
+        if (!equippedFx(state, p, "rerrolarFuga")) fail("Você não tem um item equipado que refaz a fuga.");
+        if (combat.rerolled.includes(`${p.id}:cajado`)) fail("Esse item já foi usado neste combate.");
         combat.rerolled.push(`${p.id}:cajado`);
       } else {
-        const card = a.cardId ?? [...p.hand, ...p.carried].find((id) => state.cards[id]?.defId === "misc.dado-viciado");
-        if (!card || !(p.hand.includes(card) || p.carried.includes(card)) || state.cards[card].defId !== "misc.dado-viciado")
-          fail("Você não tem um Dado Viciado.");
+        const card = a.cardId ?? heldFx(state, p, "rerrolarFuga")?.cardId;
+        if (!card || !(p.hand.includes(card) || p.carried.includes(card)) || !cardFx(state, card, "rerrolarFuga"))
+          fail("Você não tem uma carta que refaz a fuga.");
         discardFromPlayer(state, p, card);
       }
       const roll = rollD6(state, p, ctx, `nova rolagem para fugir de ${nameOf(state, r.monsterCardId)}`);
@@ -681,35 +694,39 @@ function dispatch(state: GameState, p: PlayerState, a: Action, ctx: Ctx) {
     case "WISH_RING": {
       const combat = combatFor(state);
       if (!combat.flee) fail("Use quando for sofrer Coisas Ruins.");
-      const ring = p.equipped.find((id) => state.cards[id]?.defId === "item.anel-desejos");
-      if (!ring) fail("Você não tem o Anel dos Três Desejos equipado.");
+      const wish = equippedFx(state, p, "desejos");
+      if (!wish) fail("Você não tem um item de desejos equipado.");
+      const ring = wish.cardId;
       const mine = combat.flee.results.filter((r) => r.playerId === p.id && !r.success);
       if (mine.length === 0) fail("Você não vai sofrer Coisas Ruins.");
       const c = state.cards[ring];
-      c.charges = (c.charges ?? 3) - 1;
+      c.charges = (c.charges ?? num(wish.fx, "cargas", 3)) - 1;
       for (const r of mine) {
         r.success = true;
         r.note = "Anel dos Três Desejos";
       }
       log(state, ctx, `💍 ${p.name} gastou um desejo e anulou as Coisas Ruins! (${c.charges} carga(s) restante(s))`, "combat");
       if (c.charges <= 0) {
-        c.defId = "item.anel-lata";
+        const into = `item.${String(wish.fx.viraEm ?? "")}`;
         delete c.charges;
-        log(state, ctx, "O Anel dos Três Desejos virou um Anel de Lata.");
+        if (CARD_DEFS[into]) {
+          c.defId = into;
+          log(state, ctx, `O item virou ${CARD_DEFS[into].name}.`);
+        }
       }
       maybeApplyBadStuff(state, ctx);
       return;
     }
     case "ARCO": {
       const combat = canInterfere(state, p);
-      if (!hasRace(state, p, "elfo")) fail("Só um Elfo pode ajudar de fora com o Arco Élfico.");
-      const bow = p.equipped.find((id) => state.cards[id]?.defId === "item.arco-elfico");
-      if (!bow) fail("Você não tem o Arco Élfico equipado.");
+      const bowFx = equippedFxAll(state, p, "atirarDeLonge").find(({ fx }) => matchesWho(state, p, fx));
+      if (!bowFx) fail("Você não tem um item para atirar de longe (ou sua raça não pode usá-lo assim).");
+      const bow = bowFx.cardId;
       if (playerSide(state, combat).includes(p.id)) fail("Você já está no combate.");
       if (combat.bowUsedBy.includes(p.id)) fail("Você já atirou neste combate.");
       combat.bowUsedBy.push(p.id);
-      combat.playerMods.push({ id: uid(state, "m"), value: itemDef(state, bow)!.bonus, by: p.id, label: `Arco Élfico (${p.name})` });
-      log(state, ctx, `🏹 ${p.name} atirou de longe com o Arco Élfico!`, "combat");
+      combat.playerMods.push({ id: uid(state, "m"), value: itemDef(state, bow)!.bonus, by: p.id, label: `${nameOf(state, bow)} (${p.name})` });
+      log(state, ctx, `🏹 ${p.name} atirou de longe com ${nameOf(state, bow)}!`, "combat");
       onCombatChanged(state, ctx);
       return;
     }
@@ -717,23 +734,24 @@ function dispatch(state: GameState, p: PlayerState, a: Action, ctx: Ctx) {
       const combat = combatFor(state);
       if (combat.stage === "badstuff") fail("O combate já foi decidido.");
       if (!playerSide(state, combat).includes(p.id)) fail("Você precisa estar no combate.");
-      if (!p.equipped.some((id) => state.cards[id]?.defId === "item.dragao-bebe")) fail("Você não tem o Dragão Bebê.");
-      if (combat.breathUsedBy.includes(p.id)) fail("O Dragão Bebê já soprou neste combate.");
+      const breath = equippedFx(state, p, "sopro");
+      if (!breath) fail("Você não tem um item que sopra fogo.");
+      if (combat.breathUsedBy.includes(p.id)) fail("Já soprou neste combate.");
       combat.breathUsedBy.push(p.id);
-      combat.playerMods.push({ id: uid(state, "m"), value: 3, by: p.id, label: `Sopro do Dragão Bebê (${p.name})`, fire: true });
-      log(state, ctx, "🐲 O Dragão Bebê Rabugento soprou fogo!", "combat");
+      combat.playerMods.push({ id: uid(state, "m"), value: num(breath.fx, "valor", 3), by: p.id, label: `Sopro: ${nameOf(state, breath.cardId)} (${p.name})`, fire: true });
+      log(state, ctx, `🐲 ${nameOf(state, breath.cardId)} soprou fogo!`, "combat");
       onCombatChanged(state, ctx);
       return;
     }
     case "ACCEPT_WISH": {
       const combat = combatFor(state);
       if (combat.fighterId !== p.id) fail("Só quem luta pode aceitar o desejo.");
-      if (!specialIds(state, combat).has("monster.glabrezu")) fail("Não há Glabrezu oferecendo desejos.");
+      if (!combatHas(state, combat, "desejo")) fail("Nenhum monstro está oferecendo um desejo.");
       if (combat.glabrezuAccepted) fail("Você já aceitou o desejo.");
       if (combat.stage !== "fight") fail("Tarde demais para desejos.");
       combat.glabrezuAccepted = true;
       gainLevels(state, p, 1, ctx, false, "desejo do Glabrezu");
-      log(state, ctx, "😈 O Glabrezu sorri e ganha +10.", "combat");
+      log(state, ctx, "😈 O monstro sorri: o desejo tem um preço.", "combat");
       onCombatChanged(state, ctx);
       return;
     }
@@ -782,7 +800,7 @@ function dispatch(state: GameState, p: PlayerState, a: Action, ctx: Ctx) {
       return;
     }
     case "MEDALHAO": {
-      if (!p.equipped.some((id) => state.cards[id]?.defId === "item.medalhao")) fail("Você não tem o Medalhão equipado.");
+      if (!equippedFx(state, p, "verMao")) fail("Você não tem um item que lê pensamentos.");
       if (p.usage["medalhao"] === state.round) fail("Medalhão: 1x por rodada.");
       const target = player(state, a.targetId);
       if (target.id === p.id) fail("Escolha outro jogador.");
@@ -856,48 +874,24 @@ function dispense(state: GameState, ctx: Ctx, p: PlayerState, monsterId: string,
   const cm = combat.monsters.find((m) => m.cardId === monsterId && !m.defeated);
   if (!cm) fail("Monstro inválido.");
   if (cm.ignoreSpecial) fail("O texto Especial desse monstro está sendo ignorado.");
-  const id = state.cards[cm.cardId].defId;
-  const needDiscard = () => {
-    if (!discardId) fail("Escolha 1 carta para descartar.");
-    inHand(p, discardId);
-    discardFromPlayer(state, p, discardId);
-  };
-  switch (id) {
-    case "monster.goblin":
-      if (!hasRace(state, p, "goblin")) fail("Só Goblins podem dispensá-lo.");
-      removeMonster(state, ctx, cm.cardId);
-      log(state, ctx, `👺 ${p.name} dispensou o primo Goblin e ganhou 1 tesouro.`, "combat");
-      drawTreasuresTo(state, ctx, p, 1);
-      return;
-    case "monster.urso-coruja":
-      if (!hasClass(state, p, "druida")) fail("Só Druidas podem dispensá-lo.");
-      needDiscard();
-      break;
-    case "monster.gigante-colinas":
-      if (!hasRace(state, p, "gigante")) fail("Só Gigantes podem dispensá-lo.");
-      needDiscard();
-      break;
-    case "monster.elemental-fogo":
-      if (!hasRace(state, p, "elemental")) fail("Só Elementais podem dispensá-lo.");
-      needDiscard();
-      break;
-    case "monster.vampiro":
-      if (!hasRace(state, p, "vampirico")) fail("Só Vampíricos podem dispensá-lo.");
-      removeMonster(state, ctx, cm.cardId);
-      log(state, ctx, `🧛 ${p.name} dispensou o Vampiro Ancestral e ganhou 2 tesouros.`, "combat");
-      drawTreasuresTo(state, ctx, p, 2);
-      return;
-    case "monster.solar":
-      if (!hasRace(state, p, "divino") && !hasClass(state, p, "paladino")) fail("Só Divinos e Paladinos podem dispensá-lo.");
-      removeMonster(state, ctx, cm.cardId);
-      log(state, ctx, `☀️ O Solar abençoa ${p.name} e vai embora.`, "combat");
-      gainLevels(state, p, 1, ctx, false, "bênção do Solar");
-      return;
-    default:
-      fail("Esse monstro não pode ser dispensado por você.");
+  const fx = monsterFx(state, cm, "dispensavel").find((f) => matchesWho(state, p, f));
+  if (!fx) fail("Esse monstro não pode ser dispensado por você.");
+  const name = nameOf(state, cm.cardId);
+  if (num(fx, "descartar") > 0) {
+    const n = num(fx, "descartar");
+    if (n === 1) {
+      if (!discardId) fail("Escolha 1 carta para descartar.");
+      inHand(p, discardId);
+      discardFromPlayer(state, p, discardId);
+    } else {
+      if (p.hand.length < n) fail(`Precisa descartar ${n} cartas.`);
+      for (const c of p.hand.slice(0, n)) discardFromPlayer(state, p, c);
+    }
   }
-  log(state, ctx, `${p.name} dispensou ${nameOf(state, cm.cardId)}.`, "combat");
   removeMonster(state, ctx, cm.cardId);
+  log(state, ctx, `${p.name} dispensou ${name}.`, "combat");
+  if (num(fx, "tesouros") > 0) drawTreasuresTo(state, ctx, p, num(fx, "tesouros"));
+  if (num(fx, "niveis") > 0) gainLevels(state, p, num(fx, "niveis"), ctx, false, `dispensou ${name}`);
 }
 
 function drawTreasuresTo(state: GameState, ctx: Ctx, p: PlayerState, n: number) {
@@ -915,14 +909,16 @@ function playConsumable(state: GameState, ctx: Ctx, p: PlayerState, a: Extract<A
   if (state.phase !== "PLAYING") fail("A partida não está em andamento.");
   handOrTable(p, a.cardId);
   const d = defOf(state, a.cardId);
-  const mult = multiplier(state, p);
+  const mult = d.kind === "potion" ? multiplier(state, p) : 1;
   const combat = state.combat;
+  const fxs = d.fx ?? [];
+  const has = (t: string) => fxs.find((f) => f.tipo === t);
   const label = (txt: string) => `${d.name}${mult > 1 ? " x2" : ""} (${txt})`;
-
-  if (combat && (a.side === "monster" || d.id === "misc.isca" || (d.id === "potion.acido" && a.targetId)))
+  if (combat && (a.side === "monster" || has("isca") || (has("menosEmAlvo") && a.targetId)))
     assertMayHinder(state, p, combat.fighterId);
-  const finishPotion = () => {
-    if (hasRace(state, p, "gnomo")) {
+
+  const finish = () => {
+    if (d.kind === "potion" && hasRace(state, p, "gnomo")) {
       const r = rollD6(state, p, ctx, "Gambiarra");
       if (r.total >= 6) {
         log(state, ctx, `🔧 Gambiarra: ${p.name} guardou a poção.`);
@@ -933,7 +929,7 @@ function playConsumable(state: GameState, ctx: Ctx, p: PlayerState, a: Extract<A
   };
   const potionCombat = () => {
     const c = canInterfere(state, p);
-    if (specialIds(state, c).has("monster.dragao-branco")) fail("Dragão Branco: ninguém pode usar poções neste combate.");
+    if (d.kind === "potion" && combatHas(state, c, "semPocoes")) fail("Ninguém pode usar poções neste combate.");
     return c;
   };
   const sideTarget = (c: NonNullable<GameState["combat"]>): PlayerState => {
@@ -943,191 +939,172 @@ function playConsumable(state: GameState, ctx: Ctx, p: PlayerState, a: Extract<A
     return t;
   };
 
-  if (d.kind === "potion") {
-    switch (d.id) {
-      case "potion.forca-menor":
-      case "potion.fogo-grego":
-      case "potion.elixir-gigante": {
-        const c = potionCombat();
-        const base = d.id === "potion.forca-menor" ? 2 : d.id === "potion.fogo-grego" ? 3 : 5;
-        const value = base * mult;
-        const fire = d.id === "potion.fogo-grego";
-        if (a.side === "monster") {
-          c.monsterSideMods.push({ id: uid(state, "m"), value, by: p.id, label: label(p.name) });
-        } else {
-          c.playerMods.push({ id: uid(state, "m"), value, by: p.id, label: label(p.name), fire });
-          if (d.id === "potion.elixir-gigante") {
-            const drinker = sideTarget(c);
-            c.fleeMods.push({ id: uid(state, "m"), value: -1, by: p.id, label: "Elixir de Gigante", target: drinker.id });
-          }
-        }
-        log(state, ctx, `🧪 ${p.name} usou ${d.name} (${value > 0 ? "+" : ""}${value} para ${a.side === "monster" ? "o monstro" : "os jogadores"}).`, "combat", p.id);
-        finishPotion();
-        onCombatChanged(state, ctx);
-        return;
-      }
-      case "potion.acido": {
-        const c = potionCombat();
-        const value = -3 * mult;
-        if (a.monsterId) {
-          const cm = c.monsters.find((m) => m.cardId === a.monsterId && !m.defeated);
-          if (!cm) fail("Monstro inválido.");
-          cm.mods.push({ id: uid(state, "m"), value, by: p.id, label: label(p.name) });
-          log(state, ctx, `🧪 ${p.name} jogou ácido em ${nameOf(state, cm.cardId)} (${value}).`, "combat", p.id);
-        } else {
-          const t = player(state, a.targetId ?? "");
-          const inside = playerSide(state, c).includes(t.id);
-          if (!inside) fail("Escolha o monstro ou um jogador que esteja lutando.");
-          c.playerMods.push({ id: uid(state, "m"), value, by: p.id, label: label(`em ${t.name}`), target: t.id });
-          log(state, ctx, `🧪 ${p.name} jogou ácido em ${t.name} (${value}).`, "combat", p.id);
-        }
-        finishPotion();
-        onCombatChanged(state, ctx);
-        return;
-      }
-      case "potion.fuga-rapida": {
-        const c = potionCombat();
-        const t = sideTarget(c);
-        c.fleeMods.push({ id: uid(state, "m"), value: 2 * mult, by: p.id, label: label(t.name), target: t.id });
-        log(state, ctx, `🧪 ${t.name} ganhou +${2 * mult} em Fugir.`, "combat", p.id);
-        finishPotion();
-        return;
-      }
-      case "potion.agua-benta": {
-        const t = a.targetId ? player(state, a.targetId) : p;
-        const rot = t.curses.find((c) => c.defId === "curse.podridao");
-        if (combat && combat.stage !== "badstuff" && (combatTags(state, combat).has("morto-vivo") || combatTags(state, combat).has("demonio"))) {
-          const c = potionCombat();
-          c.playerMods.push({ id: uid(state, "m"), value: 4 * mult, by: p.id, label: label(p.name) });
-          log(state, ctx, `💧 ${p.name} jogou Água Benta (+${4 * mult}).`, "combat", p.id);
-          if (rot) removeCurse(state, t, rot.id);
-          finishPotion();
-          onCombatChanged(state, ctx);
-          return;
-        }
-        if (!rot) fail("Use contra Mortos-vivos/Demônios, ou para remover a Podridão Antiga.");
-        removeCurse(state, t, rot.id);
-        log(state, ctx, `💧 A Água Benta removeu a Podridão Antiga de ${t.name}.`, "curse");
-        finishPotion();
-        return;
-      }
-      case "potion.cura": {
-        const t = a.targetId ? player(state, a.targetId) : p;
-        const lost = combat ? (combat.levelsLost[t.id] ?? 0) : (state.turn.lastCombatLost[t.id] ?? 0);
-        if (lost <= 0) fail(`${t.name} não perdeu níveis neste combate.`);
-        const back = Math.min(lost, mult);
-        if (combat) combat.levelsLost[t.id] = lost - back;
-        else state.turn.lastCombatLost[t.id] = lost - back;
-        gainLevels(state, t, back, ctx, false, d.name);
-        finishPotion();
-        return;
-      }
-      case "potion.amizade": {
-        const c = potionCombat();
-        if (c.fighterId !== p.id) fail("Use no seu próprio combate.");
-        const t = player(state, a.targetId ?? "");
-        const err = canBeHelper(state, t);
-        if (err) fail(err);
-        finishPotion();
-        log(state, ctx, `🧪 A Amizade Duvidosa obriga ${t.name} a ajudar.`, "combat");
-        joinHelper(state, ctx, t.id, null, true);
-        return;
-      }
-      case "potion.invisibilidade": {
-        if (!combat) fail("Só durante um combate.");
-        const t = a.targetId ? player(state, a.targetId) : p;
-        if (!playerSide(state, combat).includes(t.id)) fail("Escolha alguém que esteja lutando.");
-        if (combat.flee) {
-          for (const r of combat.flee.results) {
-            if (r.playerId === t.id && !r.success && !defOfMonster(state, r.monsterCardId).legendary) {
-              r.success = true;
-              r.note = "Poção de Invisibilidade";
-            }
-          }
-          finishPotion();
-          log(state, ctx, `👻 ${t.name} ficou invisível!`, "combat");
-          maybeApplyBadStuff(state, ctx);
-          return;
-        }
-        if (specialIds(state, combat).has("monster.dragao-branco")) fail("Dragão Branco: ninguém pode usar poções neste combate.");
-        combat.autoFlee.push(`${t.id}|nonleg`);
-        finishPotion();
-        log(state, ctx, `👻 ${t.name} ficou invisível e vai fugir automaticamente de monstros não Lendários.`, "combat");
-        return;
-      }
-      case "potion.ascensao": {
-        if (p.level >= 19) fail("O Elixir nunca leva ao nível 20.");
-        finishPotion();
-        gainLevels(state, p, mult, ctx, false, d.name);
-        return;
+  if (d.kind !== "potion" && d.kind !== "misc") fail("Essa carta não pode ser usada assim.");
+  if (d.kind === "misc" && d.permanent) fail("Essa carta é permanente: coloque-a na mesa.");
+
+  // --- Bônus para um lado do combate
+  const bonus = has("bonusLado");
+  if (bonus) {
+    const c = potionCombat();
+    const value = num(bonus, "valor") * mult;
+    if (a.side === "monster") {
+      c.monsterSideMods.push({ id: uid(state, "m"), value, by: p.id, label: label(p.name) });
+    } else {
+      c.playerMods.push({ id: uid(state, "m"), value, by: p.id, label: label(p.name), fire: flag(bonus, "fogo") });
+      if (bonus.quemBebeFugir !== undefined) {
+        const drinker = sideTarget(c);
+        c.fleeMods.push({ id: uid(state, "m"), value: num(bonus, "quemBebeFugir"), by: p.id, label: d.name, target: drinker.id });
       }
     }
-    fail("Poção desconhecida.");
+    log(state, ctx, `🧪 ${p.name} usou ${d.name} (${value > 0 ? "+" : ""}${value} para ${a.side === "monster" ? "o monstro" : "os jogadores"}).`, "combat", p.id);
+    finish();
+    onCombatChanged(state, ctx);
+    return;
   }
-  if (d.kind === "misc") {
-    switch (d.id) {
-      case "misc.isca": {
-        const c = canInterfere(state, p);
-        if (playerSide(state, c).includes(p.id)) fail("Use no combate de outro jogador.");
-        const cm = c.monsters.find((m) => m.cardId === a.monsterId && !m.defeated);
-        if (!cm) fail("Escolha um monstro.");
-        cm.mods.push({ id: uid(state, "m"), value: 5, by: p.id, label: d.name });
-        discardFromPlayer(state, p, a.cardId);
-        log(state, ctx, `🍖 ${p.name} jogou uma Isca de Monstro (+5).`, "combat", p.id);
-        onCombatChanged(state, ctx);
-        return;
-      }
-      case "misc.dado-viciado":
-        dispatch(state, p, { type: "REROLL", index: a.index ?? -1, source: "dado", cardId: a.cardId }, ctx);
-        return;
-      case "misc.espelho-prata": {
-        const c = combatFor(state);
-        if (c.fighterId !== p.id) fail("Use no seu combate.");
-        const cm = c.monsters.find((m) => m.cardId === a.monsterId && m.wandering && !m.defeated);
-        if (!cm) fail("Escolha um Monstro Errante.");
-        const t = player(state, a.targetId ?? "");
-        if (t.id === p.id) fail("Escolha outro jogador.");
-        discardFromPlayer(state, p, a.cardId);
-        removeMonster(state, ctx, cm.cardId, false);
-        t.ambush.push(cm.cardId);
-        log(state, ctx, `🪞 ${p.name} refletiu ${nameOf(state, cm.cardId)} para ${t.name}, que vai enfrentá-lo no próximo turno!`, "combat");
-        return;
-      }
-      case "misc.mapa": {
-        const c = combatFor(state);
-        if (c.fighterId !== p.id) fail("Use no seu combate.");
-        if (c.mapa) fail("Já há um Mapa do Tesouro neste combate.");
-        c.mapa = true;
-        discardFromPlayer(state, p, a.cardId);
-        log(state, ctx, `🗺️ ${p.name} abriu um Mapa do Tesouro: +2 tesouros se vencer.`, "combat");
-        return;
-      }
-      case "misc.pergaminho": {
-        const c = combatFor(state);
-        if (!playerSide(state, c).includes(p.id)) fail("Você precisa estar no combate.");
-        discardFromPlayer(state, p, a.cardId);
-        if (c.flee) {
-          for (const r of c.flee.results) {
-            if (r.playerId === p.id && !r.success) {
-              r.success = true;
-              r.note = "Pergaminho de Teletransporte";
-            }
-          }
-          log(state, ctx, `📜 ${p.name} se teletransportou para longe!`, "combat");
-          maybeApplyBadStuff(state, ctx);
-          return;
-        }
-        c.autoFlee.push(`${p.id}|all`);
-        log(state, ctx, `📜 ${p.name} preparou o Pergaminho de Teletransporte: vai fugir automaticamente.`, "combat");
-        return;
-      }
-      case "misc.kit-ladrao":
-        fail("Use o Kit de Ladrão pela habilidade Roubo.");
-        break;
-      default:
-        fail("Essa carta é permanente: coloque-a na mesa.");
+  const minus = has("menosEmAlvo");
+  if (minus) {
+    const c = potionCombat();
+    const value = -num(minus, "valor") * mult;
+    if (a.monsterId) {
+      const cm = c.monsters.find((m) => m.cardId === a.monsterId && !m.defeated);
+      if (!cm) fail("Monstro inválido.");
+      cm.mods.push({ id: uid(state, "m"), value, by: p.id, label: label(p.name) });
+      log(state, ctx, `🧪 ${p.name} usou ${d.name} em ${nameOf(state, cm.cardId)} (${value}).`, "combat", p.id);
+    } else {
+      const t = player(state, a.targetId ?? "");
+      if (!playerSide(state, c).includes(t.id)) fail("Escolha o monstro ou um jogador que esteja lutando.");
+      c.playerMods.push({ id: uid(state, "m"), value, by: p.id, label: label(`em ${t.name}`), target: t.id });
+      log(state, ctx, `🧪 ${p.name} usou ${d.name} em ${t.name} (${value}).`, "combat", p.id);
     }
+    finish();
+    onCombatChanged(state, ctx);
+    return;
   }
+  const fleeUp = has("bonusFugir");
+  if (fleeUp) {
+    const c = potionCombat();
+    const t = sideTarget(c);
+    const v = num(fleeUp, "valor") * mult;
+    c.fleeMods.push({ id: uid(state, "m"), value: v, by: p.id, label: label(t.name), target: t.id });
+    log(state, ctx, `🧪 ${t.name} ganhou +${v} em Fugir.`, "combat", p.id);
+    finish();
+    return;
+  }
+  const holy = has("contraMortosVivos");
+  const cleanse = has("removePodridao");
+  if (holy || cleanse) {
+    const t = a.targetId ? player(state, a.targetId) : p;
+    const rot = t.curses.find((c) => fxOf(c.defId).some((f) => f.tipo === "removidaPorAguaBenta"));
+    const tags = combatTags(state, combat);
+    if (holy && combat && combat.stage !== "badstuff" && (tags.has("morto-vivo") || tags.has("demonio"))) {
+      const c = potionCombat();
+      const v = num(holy, "valor") * mult;
+      c.playerMods.push({ id: uid(state, "m"), value: v, by: p.id, label: label(p.name) });
+      log(state, ctx, `💧 ${p.name} usou ${d.name} (+${v}).`, "combat", p.id);
+      if (rot && cleanse) removeCurse(state, t, rot.id);
+      finish();
+      onCombatChanged(state, ctx);
+      return;
+    }
+    if (!rot || !cleanse) fail("Use contra Mortos-vivos/Demônios, ou para remover uma maldição que a Água Benta remove.");
+    removeCurse(state, t, rot.id);
+    log(state, ctx, `💧 ${d.name} removeu uma maldição de ${t.name}.`, "curse");
+    finish();
+    return;
+  }
+  const heal = has("devolveNivel");
+  if (heal) {
+    const t = a.targetId ? player(state, a.targetId) : p;
+    const lost = combat ? (combat.levelsLost[t.id] ?? 0) : (state.turn.lastCombatLost[t.id] ?? 0);
+    if (lost <= 0) fail(`${t.name} não perdeu níveis neste combate.`);
+    const back = Math.min(lost, num(heal, "quantidade", 1) * mult);
+    if (combat) combat.levelsLost[t.id] = lost - back;
+    else state.turn.lastCombatLost[t.id] = lost - back;
+    gainLevels(state, t, back, ctx, false, d.name);
+    finish();
+    return;
+  }
+  if (has("forcaAjuda")) {
+    const c = potionCombat();
+    if (c.fighterId !== p.id) fail("Use no seu próprio combate.");
+    const t = player(state, a.targetId ?? "");
+    const err = canBeHelper(state, t);
+    if (err) fail(err);
+    finish();
+    log(state, ctx, `🧪 ${d.name} obriga ${t.name} a ajudar.`, "combat");
+    joinHelper(state, ctx, t.id, null, true);
+    return;
+  }
+  const escape = has("fugaAutomatica") ?? (has("teletransporte") ? ({ tipo: "teletransporte" } as const) : undefined);
+  if (escape) {
+    if (!combat) fail("Só durante um combate.");
+    const all = escape.tipo === "teletransporte" || !flag(escape as never, "excetoLendarios");
+    const t = escape.tipo === "teletransporte" ? p : a.targetId ? player(state, a.targetId) : p;
+    if (!playerSide(state, combat).includes(t.id)) fail("Escolha alguém que esteja lutando.");
+    if (d.kind === "potion" && combatHas(state, combat, "semPocoes") && !combat.flee) fail("Ninguém pode usar poções neste combate.");
+    if (combat.flee) {
+      for (const r of combat.flee.results) {
+        if (r.playerId === t.id && !r.success && (all || !defOfMonster(state, r.monsterCardId).legendary)) {
+          r.success = true;
+          r.note = d.name;
+        }
+      }
+      finish();
+      log(state, ctx, `💨 ${t.name} escapou (${d.name})!`, "combat");
+      maybeApplyBadStuff(state, ctx);
+      return;
+    }
+    combat.autoFlee.push(`${t.id}|${all ? "all" : "nonleg"}`);
+    finish();
+    log(state, ctx, `💨 ${t.name} vai fugir automaticamente (${d.name}).`, "combat");
+    return;
+  }
+  const up = has("subirNivel");
+  if (up) {
+    if (p.level >= 19) fail("Isso nunca leva ao nível 20.");
+    finish();
+    gainLevels(state, p, num(up, "quantidade", 1) * mult, ctx, false, d.name);
+    return;
+  }
+  const bait = has("isca");
+  if (bait) {
+    const c = canInterfere(state, p);
+    if (playerSide(state, c).includes(p.id)) fail("Use no combate de outro jogador.");
+    const cm = c.monsters.find((m) => m.cardId === a.monsterId && !m.defeated);
+    if (!cm) fail("Escolha um monstro.");
+    cm.mods.push({ id: uid(state, "m"), value: num(bait, "valor"), by: p.id, label: d.name });
+    discardFromPlayer(state, p, a.cardId);
+    log(state, ctx, `🍖 ${p.name} jogou ${d.name} (+${num(bait, "valor")}).`, "combat", p.id);
+    onCombatChanged(state, ctx);
+    return;
+  }
+  if (has("rerrolarFuga")) {
+    dispatch(state, p, { type: "REROLL", index: a.index ?? -1, source: "dado", cardId: a.cardId }, ctx);
+    return;
+  }
+  if (has("espelho")) {
+    const c = combatFor(state);
+    if (c.fighterId !== p.id) fail("Use no seu combate.");
+    const cm = c.monsters.find((m) => m.cardId === a.monsterId && m.wandering && !m.defeated);
+    if (!cm) fail("Escolha um Monstro Errante.");
+    const t = player(state, a.targetId ?? "");
+    if (t.id === p.id) fail("Escolha outro jogador.");
+    discardFromPlayer(state, p, a.cardId);
+    removeMonster(state, ctx, cm.cardId, false);
+    t.ambush.push(cm.cardId);
+    log(state, ctx, `🪞 ${p.name} refletiu ${nameOf(state, cm.cardId)} para ${t.name}, que vai enfrentá-lo no próximo turno!`, "combat");
+    return;
+  }
+  const map = has("mapa");
+  if (map) {
+    const c = combatFor(state);
+    if (c.fighterId !== p.id) fail("Use no seu combate.");
+    discardFromPlayer(state, p, a.cardId);
+    c.mapa = (c.mapa || 0) + num(map, "tesouros", 2);
+    log(state, ctx, `🗺️ ${p.name} usou ${d.name}: +${num(map, "tesouros", 2)} tesouros se vencer.`, "combat");
+    return;
+  }
+  if (has("kitLadrao")) fail("Use esta carta pela habilidade Roubo.");
   fail("Essa carta não pode ser usada assim.");
 }
 

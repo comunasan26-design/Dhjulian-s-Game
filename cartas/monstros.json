@@ -1,0 +1,1588 @@
+[
+  {
+    "id": "kobold",
+    "nome": "Kobold Covarde",
+    "nivel": 1,
+    "tesouros": 1,
+    "niveis": 1,
+    "goblinoide": true,
+    "especial": "Não persegue jogadores de nível 5 ou mais.",
+    "efeitos": [
+      {
+        "tipo": "naoPersegue",
+        "nivelMinimo": 5
+      }
+    ],
+    "coisasRuinsTexto": "Morde o tornozelo: perca as botas.",
+    "coisasRuins": [
+      {
+        "tipo": "perderSlot",
+        "slot": "botas"
+      }
+    ]
+  },
+  {
+    "id": "estirge",
+    "nome": "Estirge",
+    "nivel": 1,
+    "tags": [
+      "voador",
+      "animal"
+    ],
+    "tesouros": 1,
+    "niveis": 1,
+    "especial": "Vampíricos ganham +3 (concorrência).",
+    "efeitos": [
+      {
+        "tipo": "jogadoresGanham",
+        "racas": [
+          "vampirico"
+        ],
+        "valor": 3
+      }
+    ],
+    "coisasRuinsTexto": "Suga seu sangue: perca 1 nível.",
+    "coisasRuins": [
+      {
+        "tipo": "perderNiveis",
+        "quantidade": 1
+      }
+    ]
+  },
+  {
+    "id": "goblin",
+    "nome": "Goblin Batedor de Carteira",
+    "nivel": 2,
+    "tesouros": 1,
+    "niveis": 1,
+    "goblinoide": true,
+    "especial": "Jogadores da raça Goblin podem dispensá-lo: descartam o monstro e compram 1 tesouro (sem nível).",
+    "efeitos": [
+      {
+        "tipo": "dispensavel",
+        "racas": [
+          "goblin"
+        ],
+        "descartar": 0,
+        "tesouros": 1
+      }
+    ],
+    "coisasRuinsTexto": "Perca 2 anéis à sua escolha.",
+    "coisasRuins": [
+      {
+        "tipo": "perderAneis",
+        "quantidade": 2
+      }
+    ]
+  },
+  {
+    "id": "cogumelo",
+    "nome": "Cogumelo Gritante",
+    "nivel": 2,
+    "tesouros": 1,
+    "niveis": 1,
+    "especial": "Grito: ao ser revelado, o jogador à sua esquerda pode pôr 1 monstro da mão neste combate, como Monstro Errante.",
+    "efeitos": [
+      {
+        "tipo": "grito"
+      }
+    ],
+    "coisasRuinsTexto": "Perca 1 carta da mão (de vergonha).",
+    "coisasRuins": [
+      {
+        "tipo": "perderCartasDaMao",
+        "quantidade": 1
+      }
+    ]
+  },
+  {
+    "id": "esqueleto",
+    "nome": "Esqueleto Desmontável",
+    "nivel": 3,
+    "tags": [
+      "morto-vivo"
+    ],
+    "tesouros": 1,
+    "niveis": 1,
+    "especial": "Vulnerável a impacto: Monges e Bárbaros (e quem usa arma de impacto) ganham +3.",
+    "efeitos": [
+      {
+        "tipo": "jogadoresGanham",
+        "classes": [
+          "monge",
+          "barbaro"
+        ],
+        "armaDeImpacto": true,
+        "valor": 3
+      }
+    ],
+    "coisasRuinsTexto": "Perca o capacete.",
+    "coisasRuins": [
+      {
+        "tipo": "perderSlot",
+        "slot": "capacete"
+      }
+    ]
+  },
+  {
+    "id": "zumbi",
+    "nome": "Zumbi Lerdo",
+    "nivel": 4,
+    "tags": [
+      "morto-vivo"
+    ],
+    "tesouros": 1,
+    "niveis": 1,
+    "fugir": 1,
+    "especial": "+1 em Fugir contra ele. Se você fugir, ele volta ao topo do baralho de Portas (zumbi não desiste).",
+    "efeitos": [
+      {
+        "tipo": "voltaAoFugir"
+      }
+    ],
+    "coisasRuinsTexto": "Perca 1 nível.",
+    "coisasRuins": [
+      {
+        "tipo": "perderNiveis",
+        "quantidade": 1
+      }
+    ]
+  },
+  {
+    "id": "gnoll",
+    "nome": "Gnoll",
+    "nivel": 4,
+    "tesouros": 1,
+    "niveis": 1,
+    "especial": "Faro de sangue: +3 contra quem perdeu nível nesta rodada.",
+    "efeitos": [
+      {
+        "tipo": "bonusContra",
+        "perdeuNivelNaRodada": true,
+        "valor": 3
+      }
+    ],
+    "coisasRuinsTexto": "Perca 1 nível e 1 anel.",
+    "coisasRuins": [
+      {
+        "tipo": "perderNiveis",
+        "quantidade": 1
+      },
+      {
+        "tipo": "perderAneis",
+        "quantidade": 1
+      }
+    ]
+  },
+  {
+    "id": "gosma",
+    "nome": "Gosma Cinzenta",
+    "nivel": 5,
+    "tesouros": 2,
+    "niveis": 1,
+    "acido": true,
+    "especial": "Ácido: itens de mão não somam bônus contra ela.",
+    "efeitos": [
+      {
+        "tipo": "anula",
+        "alvo": "itensDeMao"
+      }
+    ],
+    "coisasRuinsTexto": "Perca o peitoral.",
+    "coisasRuins": [
+      {
+        "tipo": "perderSlot",
+        "slot": "peitoral"
+      }
+    ]
+  },
+  {
+    "id": "harpia",
+    "nome": "Harpia Desafinada",
+    "nivel": 6,
+    "tags": [
+      "voador"
+    ],
+    "tesouros": 2,
+    "niveis": 1,
+    "fugir": -1,
+    "especial": "Canto hipnótico: -1 em Fugir. Tritão/Sereia e Bardos ganham +3 (cantam melhor).",
+    "efeitos": [
+      {
+        "tipo": "jogadoresGanham",
+        "racas": [
+          "tritao"
+        ],
+        "classes": [
+          "bardo"
+        ],
+        "valor": 3
+      }
+    ],
+    "coisasRuinsTexto": "Perca a montaria.",
+    "coisasRuins": [
+      {
+        "tipo": "perderSlot",
+        "slot": "montaria"
+      }
+    ]
+  },
+  {
+    "id": "bugbear",
+    "nome": "Bugbear",
+    "nivel": 6,
+    "tesouros": 2,
+    "niveis": 1,
+    "especial": "Ataque surpresa: você não pode pedir ajuda, mas outros podem se oferecer.",
+    "efeitos": [
+      {
+        "tipo": "semPedirAjuda"
+      }
+    ],
+    "coisasRuinsTexto": "Perca o capacete e 1 nível.",
+    "coisasRuins": [
+      {
+        "tipo": "perderSlot",
+        "slot": "capacete"
+      },
+      {
+        "tipo": "perderNiveis",
+        "quantidade": 1
+      }
+    ]
+  },
+  {
+    "id": "mimico",
+    "nome": "Mímico",
+    "nivel": 7,
+    "tesouros": 2,
+    "niveis": 1,
+    "naoDaPraFugir": true,
+    "especial": "Não dá para fugir: você já abriu o baú.",
+    "coisasRuinsTexto": "Perca 1 item Grande; sem item Grande, perca 2 itens à sua escolha.",
+    "coisasRuins": [
+      {
+        "tipo": "perderGrandeOuDoisItens"
+      }
+    ]
+  },
+  {
+    "id": "urso-coruja",
+    "nome": "Urso-Coruja",
+    "nivel": 8,
+    "tags": [
+      "animal"
+    ],
+    "tesouros": 2,
+    "niveis": 1,
+    "especial": "+4 contra Owlin (assunto de família). Druidas podem dispensá-lo descartando 1 carta.",
+    "efeitos": [
+      {
+        "tipo": "bonusContra",
+        "racas": [
+          "owlin"
+        ],
+        "valor": 4
+      },
+      {
+        "tipo": "dispensavel",
+        "classes": [
+          "druida"
+        ],
+        "descartar": 1
+      }
+    ],
+    "coisasRuinsTexto": "Perca 2 níveis.",
+    "coisasRuins": [
+      {
+        "tipo": "perderNiveis",
+        "quantidade": 2
+      }
+    ]
+  },
+  {
+    "id": "ferrugem",
+    "nome": "Monstro da Ferrugem",
+    "nivel": 9,
+    "tags": [
+      "animal"
+    ],
+    "tesouros": 2,
+    "niveis": 1,
+    "acido": true,
+    "especial": "Não persegue quem não tem nenhuma armadura equipada (Bárbaros agradecem).",
+    "efeitos": [
+      {
+        "tipo": "naoPersegue",
+        "semArmadura": true
+      },
+      {
+        "tipo": "bonusContra",
+        "itemEquipado": "cota-enferrujada",
+        "valor": 3
+      }
+    ],
+    "coisasRuinsTexto": "Perca o capacete e o peitoral.",
+    "coisasRuins": [
+      {
+        "tipo": "perderSlot",
+        "slot": "capacete"
+      },
+      {
+        "tipo": "perderSlot",
+        "slot": "peitoral"
+      }
+    ]
+  },
+  {
+    "id": "ankheg",
+    "nome": "Ankheg",
+    "nivel": 9,
+    "tags": [
+      "animal"
+    ],
+    "tesouros": 2,
+    "niveis": 1,
+    "acido": true,
+    "especial": "Brota do chão: montarias não somam bônus.",
+    "efeitos": [
+      {
+        "tipo": "anula",
+        "alvo": "montarias"
+      }
+    ],
+    "coisasRuinsTexto": "Ácido: perca as calças e 1 nível.",
+    "coisasRuins": [
+      {
+        "tipo": "perderSlot",
+        "slot": "calcas"
+      },
+      {
+        "tipo": "perderNiveis",
+        "quantidade": 1
+      }
+    ]
+  },
+  {
+    "id": "cubo",
+    "nome": "Cubo Gelatinoso",
+    "nivel": 10,
+    "tesouros": 2,
+    "niveis": 1,
+    "especial": "Itens Grandes não somam bônus (afundam no cubo).",
+    "efeitos": [
+      {
+        "tipo": "anula",
+        "alvo": "itensGrandes"
+      }
+    ],
+    "coisasRuinsTexto": "Perca 2 itens equipados aleatórios.",
+    "coisasRuins": [
+      {
+        "tipo": "perderItensAleatorios",
+        "quantidade": 2
+      }
+    ]
+  },
+  {
+    "id": "ogro",
+    "nome": "Ogro Faminto",
+    "nivel": 11,
+    "tesouros": 3,
+    "niveis": 1,
+    "especial": "+3 contra Gnomos, Fadas e Goblins (petiscos).",
+    "efeitos": [
+      {
+        "tipo": "bonusContra",
+        "racas": [
+          "gnomo",
+          "fada",
+          "goblin"
+        ],
+        "valor": 3
+      }
+    ],
+    "coisasRuinsTexto": "Perca 2 níveis.",
+    "coisasRuins": [
+      {
+        "tipo": "perderNiveis",
+        "quantidade": 2
+      }
+    ]
+  },
+  {
+    "id": "carnical",
+    "nome": "Carniçal",
+    "nivel": 12,
+    "tags": [
+      "morto-vivo"
+    ],
+    "tesouros": 3,
+    "niveis": 1,
+    "especial": "Toque paralisante: ninguém do seu lado usa habilidades ativas neste combate. Clérigos ignoram isso.",
+    "efeitos": [
+      {
+        "tipo": "paralisaAtivas"
+      }
+    ],
+    "coisasRuinsTexto": "Perca 2 níveis.",
+    "coisasRuins": [
+      {
+        "tipo": "perderNiveis",
+        "quantidade": 2
+      }
+    ]
+  },
+  {
+    "id": "cao-infernal",
+    "nome": "Cão Infernal",
+    "nivel": 12,
+    "tags": [
+      "demonio",
+      "fogo",
+      "animal"
+    ],
+    "tesouros": 3,
+    "niveis": 1,
+    "fugir": -2,
+    "especial": "Faro: -2 em Fugir.",
+    "coisasRuinsTexto": "Perca 2 níveis e as botas.",
+    "coisasRuins": [
+      {
+        "tipo": "perderNiveis",
+        "quantidade": 2
+      },
+      {
+        "tipo": "perderSlot",
+        "slot": "botas"
+      }
+    ]
+  },
+  {
+    "id": "basilisco",
+    "nome": "Basilisco",
+    "nivel": 13,
+    "tags": [
+      "animal"
+    ],
+    "tesouros": 3,
+    "niveis": 1,
+    "especial": "Ao revelar, role 1d6: com 1–2 você fica meio petrificado e luta com -5.",
+    "efeitos": [
+      {
+        "tipo": "aoRevelar",
+        "dadoAte": 2,
+        "jogadorGanha": -5
+      }
+    ],
+    "coisasRuinsTexto": "Perca as calças e as botas (viraram pedra).",
+    "coisasRuins": [
+      {
+        "tipo": "perderSlot",
+        "slot": "calcas"
+      },
+      {
+        "tipo": "perderSlot",
+        "slot": "botas"
+      }
+    ]
+  },
+  {
+    "id": "corpo-seco",
+    "nome": "Corpo-Seco",
+    "nivel": 13,
+    "tags": [
+      "morto-vivo"
+    ],
+    "tesouros": 3,
+    "niveis": 1,
+    "especial": "Dreno de vida: a Cura do Clérigo não devolve níveis perdidos para ele.",
+    "efeitos": [
+      {
+        "tipo": "drenoDeVida"
+      }
+    ],
+    "coisasRuinsTexto": "Perca 2 níveis.",
+    "coisasRuins": [
+      {
+        "tipo": "perderNiveis",
+        "quantidade": 2
+      }
+    ]
+  },
+  {
+    "id": "mumia",
+    "nome": "Múmia",
+    "nivel": 14,
+    "tags": [
+      "morto-vivo"
+    ],
+    "tesouros": 3,
+    "niveis": 1,
+    "veneno": true,
+    "especial": "Vulnerável a fogo: +4 para o seu lado se alguém causar dano de fogo.",
+    "efeitos": [
+      {
+        "tipo": "fogoDaBonus",
+        "valor": 4
+      }
+    ],
+    "coisasRuinsTexto": "Podridão de Múmia: perca 2 níveis e fique com -2 em combate por 2 rodadas (conta como maldição).",
+    "coisasRuins": [
+      {
+        "tipo": "perderNiveis",
+        "quantidade": 2
+      },
+      {
+        "tipo": "podridaoDeMumia"
+      }
+    ]
+  },
+  {
+    "id": "gargula",
+    "nome": "Gárgula",
+    "nivel": 14,
+    "tags": [
+      "voador"
+    ],
+    "tesouros": 3,
+    "niveis": 1,
+    "especial": "Pele de pedra: itens de mão dão metade do bônus.",
+    "efeitos": [
+      {
+        "tipo": "anula",
+        "alvo": "metadeItensDeMao"
+      }
+    ],
+    "coisasRuinsTexto": "Perca o capacete e 2 níveis.",
+    "coisasRuins": [
+      {
+        "tipo": "perderSlot",
+        "slot": "capacete"
+      },
+      {
+        "tipo": "perderNiveis",
+        "quantidade": 2
+      }
+    ]
+  },
+  {
+    "id": "minotauro",
+    "nome": "Minotauro",
+    "nivel": 15,
+    "tesouros": 3,
+    "niveis": 2,
+    "fugir": -2,
+    "especial": "Labirinto: -2 em Fugir.",
+    "coisasRuinsTexto": "Perca 3 níveis.",
+    "coisasRuins": [
+      {
+        "tipo": "perderNiveis",
+        "quantidade": 3
+      }
+    ]
+  },
+  {
+    "id": "troll",
+    "nome": "Troll",
+    "nivel": 16,
+    "tesouros": 4,
+    "niveis": 2,
+    "especial": "Regenera: +6, a menos que alguém do seu lado cause dano de fogo.",
+    "efeitos": [
+      {
+        "tipo": "bonusContra",
+        "semFogo": true,
+        "valor": 6
+      }
+    ],
+    "coisasRuinsTexto": "Perca 2 itens equipados à sua escolha.",
+    "coisasRuins": [
+      {
+        "tipo": "escolherItensParaPerder",
+        "quantidade": 2
+      }
+    ]
+  },
+  {
+    "id": "manticora",
+    "nome": "Mantícora",
+    "nivel": 17,
+    "tags": [
+      "voador"
+    ],
+    "tesouros": 4,
+    "niveis": 2,
+    "especial": "Espinhos: cada ajudante dá 2 a menos do que daria. Elfos e Patrulheiros ganham +3 (atacam de longe).",
+    "efeitos": [
+      {
+        "tipo": "jogadoresGanham",
+        "racas": [
+          "elfo"
+        ],
+        "classes": [
+          "patrulheiro"
+        ],
+        "valor": 3
+      },
+      {
+        "tipo": "jogadoresGanham",
+        "soAjudante": true,
+        "valor": -2
+      }
+    ],
+    "coisasRuinsTexto": "Perca o capacete e 2 níveis.",
+    "coisasRuins": [
+      {
+        "tipo": "perderSlot",
+        "slot": "capacete"
+      },
+      {
+        "tipo": "perderNiveis",
+        "quantidade": 2
+      }
+    ]
+  },
+  {
+    "id": "ettin",
+    "nome": "Ettin",
+    "nivel": 17,
+    "tesouros": 4,
+    "niveis": 2,
+    "gigante": true,
+    "especial": "Duas cabeças: ao revelar, role 1d6; com 1–2 ele briga consigo mesmo e luta com -6.",
+    "efeitos": [
+      {
+        "tipo": "aoRevelar",
+        "dadoAte": 2,
+        "monstroGanha": -6
+      }
+    ],
+    "coisasRuinsTexto": "Perca 3 níveis.",
+    "coisasRuins": [
+      {
+        "tipo": "perderNiveis",
+        "quantidade": 3
+      }
+    ]
+  },
+  {
+    "id": "medusa",
+    "nome": "Medusa",
+    "nivel": 18,
+    "tesouros": 4,
+    "niveis": 2,
+    "especial": "Quem te ajudar também sofre as Coisas Ruins se vocês perderem.",
+    "efeitos": [
+      {
+        "tipo": "ajudanteSofre"
+      }
+    ],
+    "coisasRuinsTexto": "Vira estátua: perca 3 níveis.",
+    "coisasRuins": [
+      {
+        "tipo": "perderNiveis",
+        "quantidade": 3
+      }
+    ]
+  },
+  {
+    "id": "gigante-colinas",
+    "nome": "Gigante das Colinas",
+    "nivel": 19,
+    "tesouros": 4,
+    "niveis": 2,
+    "fugir": -1,
+    "gigante": true,
+    "especial": "Arremessa pedras: -1 em Fugir. Jogadores da raça Gigante podem dispensá-lo descartando 1 carta (são primos).",
+    "efeitos": [
+      {
+        "tipo": "dispensavel",
+        "racas": [
+          "gigante"
+        ],
+        "descartar": 1
+      }
+    ],
+    "coisasRuinsTexto": "Perca 1 item Grande ou 3 níveis.",
+    "coisasRuins": [
+      {
+        "tipo": "perderGrandeOuNiveis",
+        "niveis": 3
+      }
+    ]
+  },
+  {
+    "id": "oni",
+    "nome": "Ogro Mago (Oni)",
+    "nivel": 19,
+    "tesouros": 4,
+    "niveis": 2,
+    "especial": "Mestre das ilusões: o primeiro bônus de monstro jogado a favor dele vale o dobro.",
+    "efeitos": [
+      {
+        "tipo": "dobraPrimeiroBonus"
+      }
+    ],
+    "coisasRuinsTexto": "Perca 3 níveis e 1 item à sua escolha.",
+    "coisasRuins": [
+      {
+        "tipo": "perderNiveis",
+        "quantidade": 3
+      },
+      {
+        "tipo": "escolherItensParaPerder",
+        "quantidade": 1
+      }
+    ]
+  },
+  {
+    "id": "serpe",
+    "nome": "Serpe",
+    "nivel": 20,
+    "tags": [
+      "dragao",
+      "voador"
+    ],
+    "tesouros": 4,
+    "niveis": 2,
+    "veneno": true,
+    "especial": "Ataca de cima: +3 contra quem estiver montado.",
+    "efeitos": [
+      {
+        "tipo": "bonusContra",
+        "montado": true,
+        "valor": 3
+      }
+    ],
+    "coisasRuinsTexto": "Ferrão venenoso: perca 3 níveis e a montaria.",
+    "coisasRuins": [
+      {
+        "tipo": "perderNiveis",
+        "quantidade": 3
+      },
+      {
+        "tipo": "perderSlot",
+        "slot": "montaria"
+      }
+    ]
+  },
+  {
+    "id": "fantasma",
+    "nome": "Fantasma Choramingão",
+    "nivel": 21,
+    "tags": [
+      "morto-vivo"
+    ],
+    "tesouros": 5,
+    "niveis": 2,
+    "especial": "Incorpóreo: itens de mão não somam bônus; anéis, runas e poções funcionam normalmente.",
+    "efeitos": [
+      {
+        "tipo": "anula",
+        "alvo": "itensDeMao"
+      }
+    ],
+    "coisasRuinsTexto": "Possessão: o jogador à sua esquerda escolhe 1 item seu e fica com ele.",
+    "coisasRuins": [
+      {
+        "tipo": "possessao"
+      }
+    ]
+  },
+  {
+    "id": "elemental-fogo",
+    "nome": "Elemental do Fogo",
+    "nivel": 21,
+    "tags": [
+      "fogo"
+    ],
+    "tesouros": 5,
+    "niveis": 2,
+    "especial": "Tritão/Sereia ganham +4. Jogadores da raça Elemental podem dispensá-lo descartando 1 carta (parentes).",
+    "efeitos": [
+      {
+        "tipo": "jogadoresGanham",
+        "racas": [
+          "tritao"
+        ],
+        "valor": 4
+      },
+      {
+        "tipo": "dispensavel",
+        "racas": [
+          "elemental"
+        ],
+        "descartar": 1
+      }
+    ],
+    "coisasRuinsTexto": "Perca o peitoral e 2 níveis.",
+    "coisasRuins": [
+      {
+        "tipo": "perderSlot",
+        "slot": "peitoral"
+      },
+      {
+        "tipo": "perderNiveis",
+        "quantidade": 2
+      }
+    ]
+  },
+  {
+    "id": "gigante-gelo",
+    "nome": "Gigante do Gelo",
+    "nivel": 22,
+    "tesouros": 5,
+    "niveis": 2,
+    "fugir": -2,
+    "gigante": true,
+    "especial": "Congela: -2 em Fugir. +4 para o seu lado se alguém causar dano de fogo.",
+    "efeitos": [
+      {
+        "tipo": "fogoDaBonus",
+        "valor": 4
+      }
+    ],
+    "coisasRuinsTexto": "Perca as botas e 3 níveis.",
+    "coisasRuins": [
+      {
+        "tipo": "perderSlot",
+        "slot": "botas"
+      },
+      {
+        "tipo": "perderNiveis",
+        "quantidade": 3
+      }
+    ]
+  },
+  {
+    "id": "hidra",
+    "nome": "Hidra",
+    "nivel": 23,
+    "tags": [
+      "aquatico",
+      "animal"
+    ],
+    "tesouros": 5,
+    "niveis": 2,
+    "especial": "Cabeças crescem: +3 para cada jogador que ajudar você.",
+    "efeitos": [
+      {
+        "tipo": "bonusContra",
+        "porAjudante": true,
+        "valor": 3
+      }
+    ],
+    "coisasRuinsTexto": "Perca 4 níveis.",
+    "coisasRuins": [
+      {
+        "tipo": "perderNiveis",
+        "quantidade": 4
+      }
+    ]
+  },
+  {
+    "id": "naga",
+    "nome": "Naga Espiritual",
+    "nivel": 23,
+    "tesouros": 5,
+    "niveis": 2,
+    "especial": "Feitiço: o ajudante de maior nível passa a lutar do lado dela.",
+    "efeitos": [
+      {
+        "tipo": "seduzAjudante"
+      }
+    ],
+    "coisasRuinsTexto": "Perca 3 níveis.",
+    "coisasRuins": [
+      {
+        "tipo": "perderNiveis",
+        "quantidade": 3
+      }
+    ]
+  },
+  {
+    "id": "golem",
+    "nome": "Golem de Ferro",
+    "nivel": 24,
+    "tesouros": 5,
+    "niveis": 2,
+    "especial": "Imune a magia: nenhuma habilidade ativa funciona neste combate, de nenhum lado.",
+    "efeitos": [
+      {
+        "tipo": "imuneMagia"
+      }
+    ],
+    "coisasRuinsTexto": "Perca o peitoral e 2 níveis.",
+    "coisasRuins": [
+      {
+        "tipo": "perderSlot",
+        "slot": "peitoral"
+      },
+      {
+        "tipo": "perderNiveis",
+        "quantidade": 2
+      }
+    ]
+  },
+  {
+    "id": "dragao-branco",
+    "nome": "Dragão Branco Adulto",
+    "nivel": 24,
+    "tags": [
+      "dragao",
+      "voador"
+    ],
+    "tesouros": 5,
+    "niveis": 2,
+    "especial": "Sopro congelante: ninguém pode usar poções neste combate.",
+    "efeitos": [
+      {
+        "tipo": "semPocoes"
+      }
+    ],
+    "coisasRuinsTexto": "Perca as botas e 3 níveis.",
+    "coisasRuins": [
+      {
+        "tipo": "perderSlot",
+        "slot": "botas"
+      },
+      {
+        "tipo": "perderNiveis",
+        "quantidade": 3
+      }
+    ]
+  },
+  {
+    "id": "quimera",
+    "nome": "Quimera",
+    "nivel": 25,
+    "tags": [
+      "fogo",
+      "voador",
+      "animal",
+      "dragao"
+    ],
+    "tesouros": 6,
+    "niveis": 2,
+    "especial": "Três cabeças: conta também como Dragão.",
+    "coisasRuinsTexto": "Role 1d6 três vezes: perca 1 nível para cada resultado de 1 a 3.",
+    "coisasRuins": [
+      {
+        "tipo": "quimera"
+      }
+    ]
+  },
+  {
+    "id": "vampiro",
+    "nome": "Vampiro Ancestral",
+    "nivel": 26,
+    "tags": [
+      "morto-vivo"
+    ],
+    "tesouros": 6,
+    "niveis": 2,
+    "especial": "Jogadores da raça Vampírico podem dispensá-lo e comprar 2 tesouros (sem nível). Divinos e Paladinos ganham +4.",
+    "efeitos": [
+      {
+        "tipo": "dispensavel",
+        "racas": [
+          "vampirico"
+        ],
+        "descartar": 0,
+        "tesouros": 2
+      },
+      {
+        "tipo": "jogadoresGanham",
+        "racas": [
+          "divino"
+        ],
+        "classes": [
+          "paladino"
+        ],
+        "valor": 4
+      }
+    ],
+    "coisasRuinsTexto": "Perca 4 níveis. Se morrer neste combate, sua raça vira Vampírico.",
+    "coisasRuins": [
+      {
+        "tipo": "perderNiveis",
+        "quantidade": 4
+      },
+      {
+        "tipo": "virarVampirico"
+      }
+    ]
+  },
+  {
+    "id": "gigante-fogo",
+    "nome": "Gigante do Fogo",
+    "nivel": 27,
+    "tags": [
+      "fogo"
+    ],
+    "tesouros": 6,
+    "niveis": 2,
+    "gigante": true,
+    "especial": "Anões ganham +3 (rivalidade de forja).",
+    "efeitos": [
+      {
+        "tipo": "jogadoresGanham",
+        "racas": [
+          "anao"
+        ],
+        "valor": 3
+      }
+    ],
+    "coisasRuinsTexto": "Perca os itens das 2 mãos e 3 níveis.",
+    "coisasRuins": [
+      {
+        "tipo": "perderSlot",
+        "slot": "maos"
+      },
+      {
+        "tipo": "perderNiveis",
+        "quantidade": 3
+      }
+    ]
+  },
+  {
+    "id": "aboleth",
+    "nome": "Aboleth",
+    "nivel": 27,
+    "tags": [
+      "aquatico"
+    ],
+    "tesouros": 6,
+    "niveis": 2,
+    "especial": "Escraviza mentes: o jogador com mais cartas na mão (fora você) luta do lado dele.",
+    "efeitos": [
+      {
+        "tipo": "escravizaMente"
+      }
+    ],
+    "coisasRuinsTexto": "Perca 4 níveis.",
+    "coisasRuins": [
+      {
+        "tipo": "perderNiveis",
+        "quantidade": 4
+      }
+    ]
+  },
+  {
+    "id": "verme",
+    "nome": "Verme Púrpura",
+    "nivel": 28,
+    "tesouros": 6,
+    "niveis": 2,
+    "fugir": -2,
+    "especial": "Engole inteiro: -2 em Fugir.",
+    "coisasRuinsTexto": "Morte.",
+    "coisasRuins": [
+      {
+        "tipo": "morte"
+      }
+    ]
+  },
+  {
+    "id": "dragao-vermelho-adulto",
+    "nome": "Dragão Vermelho Adulto",
+    "nivel": 29,
+    "tags": [
+      "dragao",
+      "fogo",
+      "voador"
+    ],
+    "tesouros": 7,
+    "niveis": 2,
+    "especial": "Ganancioso: +5 contra quem tiver 8 ou mais itens equipados.",
+    "efeitos": [
+      {
+        "tipo": "bonusContra",
+        "itensEquipadosMin": 8,
+        "valor": 5
+      }
+    ],
+    "coisasRuinsTexto": "Morte.",
+    "coisasRuins": [
+      {
+        "tipo": "morte"
+      }
+    ]
+  },
+  {
+    "id": "gigante-tempestades",
+    "nome": "Gigante das Tempestades",
+    "nivel": 29,
+    "tesouros": 7,
+    "niveis": 2,
+    "gigante": true,
+    "especial": "Tempestade: montarias não somam bônus.",
+    "efeitos": [
+      {
+        "tipo": "anula",
+        "alvo": "montarias"
+      }
+    ],
+    "coisasRuinsTexto": "Perca 4 níveis e a montaria.",
+    "coisasRuins": [
+      {
+        "tipo": "perderNiveis",
+        "quantidade": 4
+      },
+      {
+        "tipo": "perderSlot",
+        "slot": "montaria"
+      }
+    ]
+  },
+  {
+    "id": "glabrezu",
+    "nome": "Glabrezu",
+    "nivel": 30,
+    "tags": [
+      "demonio"
+    ],
+    "tesouros": 7,
+    "niveis": 3,
+    "especial": "Oferece um desejo: antes do combate, você pode subir 1 nível na hora; se aceitar, ele ganha +10.",
+    "efeitos": [
+      {
+        "tipo": "desejo",
+        "valor": 10
+      }
+    ],
+    "coisasRuinsTexto": "Perca 4 níveis e todos os anéis.",
+    "coisasRuins": [
+      {
+        "tipo": "perderNiveis",
+        "quantidade": 4
+      },
+      {
+        "tipo": "perderAneis",
+        "quantidade": "todos"
+      }
+    ]
+  },
+  {
+    "id": "senhor-mumias",
+    "nome": "Senhor das Múmias",
+    "nivel": 31,
+    "tags": [
+      "morto-vivo"
+    ],
+    "tesouros": 7,
+    "niveis": 3,
+    "especial": "Maldição do faraó: mesmo vencendo, quem lutou perde 1 item aleatório. +4 para o seu lado se alguém causar dano de fogo.",
+    "efeitos": [
+      {
+        "tipo": "maldicaoDoFarao"
+      },
+      {
+        "tipo": "fogoDaBonus",
+        "valor": 4
+      }
+    ],
+    "coisasRuinsTexto": "Morte.",
+    "coisasRuins": [
+      {
+        "tipo": "morte"
+      }
+    ]
+  },
+  {
+    "id": "dragao-negro",
+    "nome": "Dragão Negro Ancião",
+    "nivel": 31,
+    "tags": [
+      "dragao",
+      "aquatico",
+      "voador"
+    ],
+    "tesouros": 7,
+    "niveis": 3,
+    "especial": "Sopro ácido: peitorais não somam bônus.",
+    "efeitos": [
+      {
+        "tipo": "anula",
+        "alvo": "peitorais"
+      }
+    ],
+    "coisasRuinsTexto": "Morte.",
+    "coisasRuins": [
+      {
+        "tipo": "morte"
+      }
+    ]
+  },
+  {
+    "id": "lich",
+    "nome": "Lich",
+    "nivel": 32,
+    "tags": [
+      "morto-vivo"
+    ],
+    "tesouros": 8,
+    "niveis": 3,
+    "especial": "Filactéria: se for derrotado sem um Clérigo ou Paladino no combate, volta ao topo do baralho de Portas.",
+    "efeitos": [
+      {
+        "tipo": "filacteria",
+        "classes": [
+          "clerigo",
+          "paladino"
+        ]
+      }
+    ],
+    "coisasRuinsTexto": "Morte e perca 2 níveis.",
+    "coisasRuins": [
+      {
+        "tipo": "perderNiveis",
+        "quantidade": 2
+      },
+      {
+        "tipo": "morte"
+      }
+    ]
+  },
+  {
+    "id": "dragao-azul",
+    "nome": "Dragão Azul Ancião",
+    "nivel": 33,
+    "tags": [
+      "dragao",
+      "voador"
+    ],
+    "tesouros": 8,
+    "niveis": 3,
+    "especial": "Sopro de relâmpago: anéis não somam bônus (metal conduz).",
+    "efeitos": [
+      {
+        "tipo": "anula",
+        "alvo": "aneis"
+      }
+    ],
+    "coisasRuinsTexto": "Morte.",
+    "coisasRuins": [
+      {
+        "tipo": "morte"
+      }
+    ]
+  },
+  {
+    "id": "planetar",
+    "nome": "Planetar",
+    "nivel": 33,
+    "tags": [
+      "sagrado",
+      "voador"
+    ],
+    "tesouros": 8,
+    "niveis": 3,
+    "especial": "Detecta mentiras: quem lançou uma maldição nesta rodada não pode ajudar nem atrapalhar este combate.",
+    "efeitos": [
+      {
+        "tipo": "detectaMentiras"
+      }
+    ],
+    "coisasRuinsTexto": "Perca 4 níveis.",
+    "coisasRuins": [
+      {
+        "tipo": "perderNiveis",
+        "quantidade": 4
+      }
+    ]
+  },
+  {
+    "id": "solar",
+    "nome": "Solar",
+    "nivel": 34,
+    "tags": [
+      "sagrado",
+      "voador"
+    ],
+    "tesouros": 8,
+    "niveis": 3,
+    "especial": "Divinos e Paladinos podem dispensá-lo e subir 1 nível. Vampíricos e Bruxos lutam com -5.",
+    "efeitos": [
+      {
+        "tipo": "dispensavel",
+        "racas": [
+          "divino"
+        ],
+        "classes": [
+          "paladino"
+        ],
+        "descartar": 0,
+        "niveis": 1
+      },
+      {
+        "tipo": "jogadoresGanham",
+        "racas": [
+          "vampirico"
+        ],
+        "classes": [
+          "bruxo"
+        ],
+        "valor": -5
+      }
+    ],
+    "coisasRuinsTexto": "Julgamento: perca 5 níveis.",
+    "coisasRuins": [
+      {
+        "tipo": "perderNiveis",
+        "quantidade": 5
+      }
+    ]
+  },
+  {
+    "id": "marilith",
+    "nome": "Marilith",
+    "nivel": 34,
+    "tags": [
+      "demonio"
+    ],
+    "tesouros": 8,
+    "niveis": 3,
+    "especial": "Seis braços: anula os 2 maiores bônus de item do seu lado.",
+    "efeitos": [
+      {
+        "tipo": "anula",
+        "alvo": "doisMaioresItens"
+      }
+    ],
+    "coisasRuinsTexto": "Morte.",
+    "coisasRuins": [
+      {
+        "tipo": "morte"
+      }
+    ]
+  },
+  {
+    "id": "balor",
+    "nome": "Balor",
+    "nivel": 35,
+    "tags": [
+      "demonio",
+      "fogo"
+    ],
+    "tesouros": 9,
+    "niveis": 3,
+    "especial": "Explode ao morrer: mesmo vencendo, cada jogador do seu lado perde 1 item equipado à escolha.",
+    "efeitos": [
+      {
+        "tipo": "explodeAoMorrer"
+      }
+    ],
+    "coisasRuinsTexto": "Morte.",
+    "coisasRuins": [
+      {
+        "tipo": "morte"
+      }
+    ]
+  },
+  {
+    "id": "kraken",
+    "nome": "Kraken",
+    "nivel": 36,
+    "tags": [
+      "aquatico"
+    ],
+    "tesouros": 9,
+    "niveis": 3,
+    "especial": "Tritão/Sereia ganham +6 (estão em casa). Montarias não somam bônus (afundam).",
+    "efeitos": [
+      {
+        "tipo": "jogadoresGanham",
+        "racas": [
+          "tritao"
+        ],
+        "valor": 6
+      },
+      {
+        "tipo": "anula",
+        "alvo": "montarias"
+      }
+    ],
+    "coisasRuinsTexto": "Morte.",
+    "coisasRuins": [
+      {
+        "tipo": "morte"
+      }
+    ]
+  },
+  {
+    "id": "dragao-verde",
+    "nome": "Dragão Verde Ancião",
+    "nivel": 36,
+    "tags": [
+      "dragao",
+      "voador"
+    ],
+    "tesouros": 9,
+    "niveis": 3,
+    "especial": "Sopro venenoso: cada ajudante perde 1 nível ao entrar no combate.",
+    "efeitos": [
+      {
+        "tipo": "venenoNoAjudante"
+      }
+    ],
+    "coisasRuinsTexto": "Morte.",
+    "coisasRuins": [
+      {
+        "tipo": "morte"
+      }
+    ]
+  },
+  {
+    "id": "diabo",
+    "nome": "Diabo das Profundezas",
+    "nivel": 37,
+    "tags": [
+      "demonio",
+      "fogo"
+    ],
+    "tesouros": 9,
+    "niveis": 3,
+    "fugir": -3,
+    "especial": "Aura de medo: -3 em Fugir e -2 para cada ajudante. Paladinos ignoram a aura.",
+    "efeitos": [
+      {
+        "tipo": "jogadoresGanham",
+        "soAjudante": true,
+        "excetoClasses": [
+          "paladino"
+        ],
+        "valor": -2
+      },
+      {
+        "tipo": "fugirIgnoradoPor",
+        "classes": [
+          "paladino"
+        ]
+      }
+    ],
+    "coisasRuinsTexto": "Morte.",
+    "coisasRuins": [
+      {
+        "tipo": "morte"
+      }
+    ]
+  },
+  {
+    "id": "dragao-vermelho-anciao",
+    "nome": "Dragão Vermelho Ancião",
+    "nivel": 38,
+    "tags": [
+      "dragao",
+      "fogo",
+      "voador"
+    ],
+    "tesouros": 10,
+    "niveis": 3,
+    "especial": "Incendeia a vila: se ninguém o derrotar, todos os outros jogadores perdem 1 nível.",
+    "efeitos": [
+      {
+        "tipo": "incendeiaVila",
+        "niveis": 1
+      }
+    ],
+    "coisasRuinsTexto": "Morte.",
+    "coisasRuins": [
+      {
+        "tipo": "morte"
+      }
+    ]
+  },
+  {
+    "id": "empireo",
+    "nome": "Empíreo",
+    "nivel": 38,
+    "tags": [
+      "sagrado"
+    ],
+    "tesouros": 10,
+    "niveis": 3,
+    "especial": "Fúria titânica: +2 para cada nível que você tiver acima do 15.",
+    "efeitos": [
+      {
+        "tipo": "bonusContra",
+        "porNivelAcimaDe": 15,
+        "valor": 2
+      }
+    ],
+    "coisasRuinsTexto": "Perca 5 níveis.",
+    "coisasRuins": [
+      {
+        "tipo": "perderNiveis",
+        "quantidade": 5
+      }
+    ]
+  },
+  {
+    "id": "dragao-dourado",
+    "nome": "Dragão Dourado Ancião",
+    "nivel": 39,
+    "tags": [
+      "dragao",
+      "sagrado",
+      "voador"
+    ],
+    "tesouros": 10,
+    "niveis": 3,
+    "especial": "Não persegue Divinos nem Paladinos. Julga a ganância: +1 para cada carta na sua mão.",
+    "efeitos": [
+      {
+        "tipo": "naoPersegue",
+        "racas": [
+          "divino"
+        ],
+        "classes": [
+          "paladino"
+        ]
+      },
+      {
+        "tipo": "bonusContra",
+        "porCartaNaMao": true,
+        "valor": 1
+      }
+    ],
+    "coisasRuinsTexto": "Perca 5 níveis e todos os itens que não estiverem equipados.",
+    "coisasRuins": [
+      {
+        "tipo": "perderNiveis",
+        "quantidade": 5
+      },
+      {
+        "tipo": "perderItensNaoEquipados"
+      }
+    ]
+  },
+  {
+    "id": "tarrasque",
+    "nome": "Tarrasque",
+    "nivel": 40,
+    "tesouros": 12,
+    "niveis": 3,
+    "especial": "Imbatível no papel: nenhuma habilidade pode encantá-lo, anulá-lo ou dispensá-lo. Cada ajudante que vencer com você compra 1 tesouro extra.",
+    "efeitos": [
+      {
+        "tipo": "imbativel"
+      },
+      {
+        "tipo": "tesouroExtraAjudante",
+        "quantidade": 1
+      }
+    ],
+    "coisasRuinsTexto": "Morte, e todos os outros jogadores perdem 2 níveis (ele passou pela cidade).",
+    "coisasRuins": [
+      {
+        "tipo": "morte"
+      },
+      {
+        "tipo": "outrosPerdemNiveis",
+        "quantidade": 2
+      }
+    ]
+  }
+]

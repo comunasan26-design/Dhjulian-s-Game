@@ -1,0 +1,37 @@
+[
+  {
+    "id": "faminto",
+    "nome": "Faminto",
+    "valor": 3,
+    "copias": 2,
+    "texto": "Não come há dias."
+  },
+  {
+    "id": "enfurecido",
+    "nome": "Enfurecido",
+    "valor": 5,
+    "copias": 2,
+    "texto": "Alguém pisou no rabo dele."
+  },
+  {
+    "id": "anciao",
+    "nome": "Ancião",
+    "valor": 10,
+    "copias": 1,
+    "texto": "Viu reinos nascerem e caírem."
+  },
+  {
+    "id": "ferido",
+    "nome": "Ferido",
+    "valor": -3,
+    "copias": 2,
+    "texto": "Já saiu de outra briga."
+  },
+  {
+    "id": "filhote",
+    "nome": "Filhote",
+    "valor": -5,
+    "copias": 2,
+    "texto": "Ainda está aprendendo a rugir."
+  }
+]

@@ -1,0 +1,142 @@
+[
+  {
+    "id": "forca-menor",
+    "nome": "Poção de Força Menor",
+    "raridade": "comum",
+    "preco": 100,
+    "copias": 2,
+    "texto": "+2 para um lado do combate.",
+    "efeitos": [
+      {
+        "tipo": "bonusLado",
+        "valor": 2
+      }
+    ]
+  },
+  {
+    "id": "acido",
+    "nome": "Frasco de Ácido",
+    "raridade": "comum",
+    "preco": 200,
+    "copias": 2,
+    "texto": "-3 para o monstro ou para um jogador.",
+    "efeitos": [
+      {
+        "tipo": "menosEmAlvo",
+        "valor": 3
+      }
+    ]
+  },
+  {
+    "id": "fuga-rapida",
+    "nome": "Poção de Fuga Rápida",
+    "raridade": "comum",
+    "preco": 200,
+    "copias": 2,
+    "texto": "+2 em Fugir.",
+    "efeitos": [
+      {
+        "tipo": "bonusFugir",
+        "valor": 2
+      }
+    ]
+  },
+  {
+    "id": "fogo-grego",
+    "nome": "Óleo de Fogo Grego",
+    "raridade": "incomum",
+    "preco": 300,
+    "copias": 2,
+    "texto": "+3 para um lado do combate; conta como dano de fogo.",
+    "efeitos": [
+      {
+        "tipo": "bonusLado",
+        "valor": 3,
+        "fogo": true
+      }
+    ]
+  },
+  {
+    "id": "agua-benta",
+    "nome": "Água Benta",
+    "raridade": "incomum",
+    "preco": 300,
+    "copias": 2,
+    "texto": "+4 contra Mortos-vivos e Demônios. Também remove a maldição Podridão Antiga.",
+    "efeitos": [
+      {
+        "tipo": "contraMortosVivos",
+        "valor": 4
+      },
+      {
+        "tipo": "removePodridao"
+      }
+    ]
+  },
+  {
+    "id": "cura",
+    "nome": "Poção de Cura",
+    "raridade": "incomum",
+    "preco": 400,
+    "copias": 2,
+    "texto": "Devolve 1 nível perdido neste combate.",
+    "efeitos": [
+      {
+        "tipo": "devolveNivel",
+        "quantidade": 1
+      }
+    ]
+  },
+  {
+    "id": "amizade",
+    "nome": "Poção da Amizade Duvidosa",
+    "raridade": "raro",
+    "preco": 500,
+    "texto": "Um jogador escolhido é obrigado a ajudar você neste combate e não recebe tesouro.",
+    "efeitos": [
+      {
+        "tipo": "forcaAjuda"
+      }
+    ]
+  },
+  {
+    "id": "elixir-gigante",
+    "nome": "Elixir de Gigante",
+    "raridade": "raro",
+    "preco": 500,
+    "texto": "+5 para um lado do combate, mas quem beber faz -1 em Fugir.",
+    "efeitos": [
+      {
+        "tipo": "bonusLado",
+        "valor": 5,
+        "quemBebeFugir": -1
+      }
+    ]
+  },
+  {
+    "id": "invisibilidade",
+    "nome": "Poção de Invisibilidade",
+    "raridade": "epico",
+    "preco": 700,
+    "texto": "Fuja automaticamente de um monstro que não seja Lendário.",
+    "efeitos": [
+      {
+        "tipo": "fugaAutomatica",
+        "excetoLendarios": true
+      }
+    ]
+  },
+  {
+    "id": "ascensao",
+    "nome": "Elixir da Ascensão",
+    "raridade": "lendario",
+    "preco": 1000,
+    "texto": "Suba 1 nível (nunca para o nível 20).",
+    "efeitos": [
+      {
+        "tipo": "subirNivel",
+        "quantidade": 1
+      }
+    ]
+  }
+]
