@@ -1,14 +1,19 @@
-// IA dos bots. Os bots decidem simulando ações no motor (que é puro) e escolhendo a que mais melhora
-// a situação deles: ganhar níveis e poder, vencer monstros, atrapalhar jogadores humanos e o líder,
-// aliar-se a outros bots (menos os que estão quase ganhando) e negociar itens exclusivos da sua classe.
-import { CARD_DEFS, type CardDef, findFx, type ItemCard, type MonsterCard, RULES } from "../catalog";
+// IA dos bots. Eles jogam para ganhar, sem dó:
+// - simulam cada jogada no motor (que é puro) e procuram o COMBO mais barato de cartas e habilidades
+//   que vira um combate — a favor deles ou contra quem está lutando;
+// - guardam as cartas boas para a hora certa e só gastam o necessário;
+// - procuram encrenca quando um combo garante a vitória com folga contra o que os outros podem jogar;
+// - vendem o que não serve para subir de nível, usam a mão que sobraria na Caridade e
+//   gastam tudo o que têm para impedir que alguém chegue ao nível máximo;
+// - aliam-se a outros bots contra humanos e contra quem está na frente, e traem quem está quase ganhando.
+import { CARD_DEFS, type CardDef, type CurseCard, findFx, type ItemCard, type MonsterCard, RULES } from "../catalog";
 import { abilityInfos } from "../engine/abilities";
 import { type Action, applyAction } from "../engine/actions";
 import { type Ctx, type GameState, GameError, type PlayerState, type Prompt } from "../engine/state";
-import { freeTreasures } from "../engine/core";
-import { combatHas } from "../engine/fx";
-import { computeCombat, equipCheck, fleeInfo, playerPower, playerSide, slotOf } from "../engine/stats";
-import { hasPassive, isCurrent } from "../engine/util";
+import { freeTreasures, rewardTreasures } from "../engine/core";
+import { combatHas, hasCurseFx } from "../engine/fx";
+import { computeCombat, equipCheck, fleeInfo, handLimit, playerPower, playerSide, slotOf } from "../engine/stats";
+import { hasPassive, isCurrent, passiveFx } from "../engine/util";
 
 export const BOT_DELAY_MS = 900;
 
@@ -41,35 +46,6 @@ function d(state: GameState, cardId: string): CardDef {
   return CARD_DEFS[state.cards[cardId].defId];
 }
 
-/** Valor aproximado de uma carta para quem a tem. */
-function cardValue(state: GameState, cardId: string): number {
-  const c = state.cards[cardId];
-  if (!c) return 0;
-  const df = CARD_DEFS[c.defId];
-  switch (df.kind) {
-    case "levelup":
-      return 90;
-    case "item":
-      return df.bonus * 10 + df.price / 50 + (df.flee ?? 0) * 6;
-    case "potion":
-      return 30 + df.price / 40;
-    case "rune":
-      return 20 + df.price / 50;
-    case "misc":
-      return 20 + df.price / 40;
-    case "monsterBonus":
-      return 25 + Math.abs(df.value) * 2;
-    case "wandering":
-      return 30;
-    case "curse":
-      return 30;
-    case "monster":
-      return 18;
-    default:
-      return 12;
-  }
-}
-
 function itemDefOf(state: GameState, cardId: string): ItemCard | null {
   const df = d(state, cardId);
   return df.kind === "item" ? df : null;
@@ -78,13 +54,21 @@ function itemDefOf(state: GameState, cardId: string): ItemCard | null {
 const fxIs = (state: GameState, cardId: string, tipo: string) => !!findFx(state.cards[cardId]?.defId, tipo);
 const unbreakable = (state: GameState, cardId: string) =>
   (state.cards[cardId]?.runes ?? []).some((r) => findFx(state.cards[r]?.defId, "naoRoubavel"));
+const fxVal = (state: GameState, cardId: string, tipo: string, key = "valor") => Number(findFx(state.cards[cardId]?.defId, tipo)?.[key] ?? 0) || 0;
 
 /** Determinístico e "médio" para simular (d6 = 4). */
 const SIM_RNG = { int: (max: number) => Math.floor((max - 1) / 2) + (max === 6 ? 1 : 0) };
 
+/** Simula uma ação numa cópia do estado (sem o histórico, que é o que mais pesa para copiar). */
 function simulate(state: GameState, actorId: string, action: Action, ctx: Ctx): GameState | null {
-  const s = structuredClone(state);
-  s.log = [];
+  const log = state.log;
+  state.log = [];
+  let s: GameState;
+  try {
+    s = structuredClone(state);
+  } finally {
+    state.log = log;
+  }
   try {
     applyAction(s, actorId, action, { now: ctx.now, rng: SIM_RNG, offline: ctx.offline });
     return s;
@@ -94,24 +78,97 @@ function simulate(state: GameState, actorId: string, action: Action, ctx: Ctx): 
   }
 }
 
-function maxOtherLevel(state: GameState, me: string): number {
-  return Math.max(0, ...state.players.filter((p) => p.id !== me).map((p) => p.level));
+const MAX = () => RULES.nivelMaximo;
+const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
+const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
+
+// ----------------------------------------------------------------------------
+// Valores
+// ----------------------------------------------------------------------------
+
+/** Valor de estar num nível: cada nível vale 100 e os últimos valem bem mais (a corrida aperta no fim). */
+function levelValue(level: number): number {
+  const end = Math.max(0, level - (MAX() - 6));
+  return level * 100 + end * end * 20;
 }
 
+function levelGain(from: number, n: number): number {
+  return levelValue(Math.min(MAX(), from + n)) - levelValue(from);
+}
+
+/** Valor aproximado de uma carta para o bot `me` (contexto: nível dele). */
+function cardValue(state: GameState, cardId: string, me?: PlayerState): number {
+  const c = state.cards[cardId];
+  if (!c) return 0;
+  const df = CARD_DEFS[c.defId];
+  switch (df.kind) {
+    case "levelup":
+      return me && me.level >= MAX() - 1 ? 8 : 95;
+    case "item":
+      return df.bonus * 11 + df.price / 50 + (df.flee ?? 0) * 6 + (c.runes?.length ?? 0) * 12 + (Number(c.reforged) || 0) * 10;
+    case "potion": {
+      const lado = fxVal(state, cardId, "bonusLado") || fxVal(state, cardId, "menosEmAlvo") || fxVal(state, cardId, "contraMortosVivos") * 0.7;
+      const special = fxIs(state, cardId, "forcaAjuda") || fxIs(state, cardId, "fugaAutomatica") ? 45 : fxIs(state, cardId, "subirNivel") ? (me && me.level >= MAX() - 1 ? 10 : 90) : 0;
+      return 18 + lado * 9 + special + df.price / 60;
+    }
+    case "rune":
+      return 22 + df.price / 50;
+    case "misc":
+      return 22 + df.price / 40 + (fxIs(state, cardId, "teletransporte") ? 25 : 0);
+    case "monsterBonus":
+      return 12 + Math.abs(df.value) * 6;
+    case "wandering":
+      return 34;
+    case "curse":
+      return 30;
+    case "monster":
+      return 18;
+    default:
+      return 12;
+  }
+}
+
+/** O que o jogador tem (nível + cartas), na escala dos valores acima. */
+function assets(state: GameState, me: string): number {
+  const p = P(state, me);
+  let v = levelValue(p.level);
+  for (const id of p.hand) v += cardValue(state, id, p);
+  for (const id of p.carried) v += cardValue(state, id, p) * 0.9;
+  for (const id of p.equipped) v += cardValue(state, id, p) * 1.1 + 4;
+  v -= p.curses.length * 22 + p.pendingCombatCurses.length * 28;
+  return v;
+}
+
+// ----------------------------------------------------------------------------
+// Quem é ameaça
+// ----------------------------------------------------------------------------
+
 /**
- * Peso de um adversário: humanos pesam um pouco mais que bots (preferência, não obsessão),
- * e quem está liderando ou perto de ganhar pesa muito — mesmo que seja outro bot.
+ * O quanto um adversário preocupa: humanos mais que bots, quem está acima da média e na liderança
+ * mais ainda, e quem está a poucos níveis da vitória vira o alvo de todo mundo — mesmo que seja outro bot.
  */
-function weight(state: GameState, me: string, other: PlayerState): number {
-  const leaderLevel = maxOtherLevel(state, me);
-  let w = other.bot ? 0.6 : 1;
-  if (other.level === leaderLevel && other.level >= P(state, me).level && other.level > 1) w *= 1.8;
-  if (other.level >= RULES.nivelMaximo - 4) w = Math.max(w, 1.6);
+function threat(state: GameState, me: string, o: PlayerState): number {
+  if (o.id === me) return 0;
+  let w = o.bot ? 0.7 : 1;
+  const others = state.players.filter((x) => x.id !== o.id);
+  w *= 1 + Math.max(0, o.level - avg(others.map((x) => x.level))) * 0.12;
+  const top = Math.max(...state.players.map((x) => x.level));
+  if (o.level === top && o.level > 1 && o.level >= P(state, me).level) w *= 1.35;
+  const toGo = MAX() - o.level;
+  if (toGo <= 4) w *= 1 + (5 - toGo) * 0.45;
+  // quem está bem atrás de mim preocupa menos
+  const behind = P(state, me).level - o.level - 2;
+  if (behind > 0 && toGo > 4) w *= Math.max(0.4, 1 - behind * 0.12);
   return w;
 }
 
+/** Peso antigo (mantido para as decisões de ajuda e ameaça). */
+function weight(state: GameState, me: string, other: PlayerState): number {
+  return threat(state, me, other);
+}
+
 function isAlly(state: GameState, me: string, other: PlayerState): boolean {
-  return !!other.bot && weight(state, me, other) < 0.8;
+  return !!other.bot && other.id !== me && threat(state, me, other) < 0.85 && other.level < MAX() - 3;
 }
 
 /**
@@ -121,34 +178,161 @@ function isAlly(state: GameState, me: string, other: PlayerState): boolean {
 export function strengthOf(state: GameState, p: PlayerState): number {
   const others = state.players.filter((x) => x.id !== p.id);
   if (others.length === 0) return 0;
-  const avg = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
-  const clamp = (v: number) => Math.max(0, Math.min(1, v));
-  const lead = clamp((p.level - avg(others.map((o) => o.level))) / 5);
+  const lead = clamp01((p.level - avg(others.map((o) => o.level))) / 5);
   const ahead = p.level >= Math.max(...others.map((o) => o.level)) && p.level > 1 ? 0.25 : 0;
-  const nearWin = clamp((p.level - (RULES.nivelMaximo - 8)) / 7);
-  const pow = clamp((playerPower(state, p) - avg(others.map((o) => playerPower(state, o)))) / 12);
-  return clamp(0.35 * lead + ahead + 0.25 * nearWin + 0.15 * pow);
+  const nearWin = clamp01((p.level - (MAX() - 8)) / 7);
+  const pow = clamp01((playerPower(state, p) - avg(others.map((o) => playerPower(state, o)))) / 12);
+  return clamp01(0.35 * lead + ahead + 0.25 * nearWin + 0.15 * pow);
 }
 
 /** Peso (baixo) de fortalecer alguém que já está forte, em "pontos" comparáveis a tesouros/níveis. */
 const STRENGTH_PENALTY = 50;
 
+// ----------------------------------------------------------------------------
+// Combate: o que está em jogo
+// ----------------------------------------------------------------------------
+
+function monsterStake(state: GameState): { levels: number; treasures: number } {
+  const c = state.combat;
+  if (!c) return { levels: 0, treasures: 0 };
+  let levels = 0;
+  for (const m of c.monsters) if (!m.defeated) levels += (d(state, m.cardId) as MonsterCard).levels;
+  if (c.desafio) levels *= c.desafioMult ?? 1;
+  return { levels, treasures: rewardTreasures(state, c) };
+}
+
+/** Valor, para `pid`, de o lado dos jogadores vencer o combate atual agora. */
+function stakeFor(state: GameState, pid: string): number {
+  const c = state.combat;
+  if (!c) return 0;
+  const p = P(state, pid);
+  const side = playerSide(state, c);
+  if (!side.includes(pid)) return 0;
+  const { levels, treasures } = monsterStake(state);
+  if (pid === c.fighterId) {
+    const share = c.helperId && !c.helperForced ? Math.max(0, treasures - (c.helperDeal?.count ?? 0)) : treasures;
+    if (p.level + levels >= MAX()) return 100_000;
+    return levelGain(p.level, levels) + share * 30;
+  }
+  const elf = hasPassive(state, p, "nivelAoAjudar") ? levelGain(p.level, 1) : 0;
+  return (c.helperForced ? 0 : (c.helperDeal?.count ?? 0) * 30) + elf;
+}
+
+/** Quanto custa sofrer as Coisas Ruins desse monstro. */
+function badStuffCost(state: GameState, p: PlayerState, md: MonsterCard): number {
+  const equippedVals = p.equipped.map((id) => cardValue(state, id, p) * 1.1);
+  const avgEq = avg(equippedVals) || 15;
+  let c = 0;
+  for (const e of md.badStuff) {
+    switch (e.t) {
+      case "death":
+        c += 220 + equippedVals.reduce((a, b) => a + b, 0) + p.carried.reduce((a, id) => a + cardValue(state, id, p), 0) + p.hand.reduce((a, id) => a + cardValue(state, id, p), 0) * 0.8;
+        break;
+      case "levels":
+        c += levelValue(p.level) - levelValue(Math.max(1, p.level - e.n));
+        break;
+      case "rollLevels":
+        c += (levelValue(p.level) - levelValue(Math.max(1, p.level - Math.ceil(e.upTo / 2)))) * Math.max(1, e.rolls) * 0.6;
+        break;
+      case "bigOrLevels":
+        c += Math.min(80, levelValue(p.level) - levelValue(Math.max(1, p.level - e.n)));
+        break;
+      case "handCards":
+        c += e.n * 25;
+        break;
+      case "chooseEquipped":
+      case "randomEquipped":
+        c += e.n * avgEq;
+        break;
+      case "carried":
+        c += p.carried.reduce((a, id) => a + cardValue(state, id, p), 0);
+        break;
+      case "tempPenalty":
+        c += Math.abs(e.value) * 12;
+        break;
+      case "othersLoseLevels":
+        break;
+      default:
+        c += 45;
+    }
+  }
+  return c;
+}
+
+/** Perda esperada se `p` tiver de fugir de todos os monstros do combate agora. */
+function expectedFleeLoss(state: GameState, p: PlayerState): number {
+  const c = state.combat;
+  if (!c) return 0;
+  let loss = 0;
+  for (const cm of c.monsters) {
+    if (cm.defeated) continue;
+    const md = d(state, cm.cardId) as MonsterCard;
+    const info = fleeInfo(state, p, cm);
+    let fail: number;
+    if (info.auto) fail = 0;
+    else if (info.impossible) fail = 1;
+    else {
+      const mods = c.fleeMods.filter((m) => !m.target || m.target === p.id).reduce((a, m) => a + m.value, 0);
+      const need = RULES.fugirCom - info.bonus - mods;
+      fail = 1 - clamp01((7 - need) / 6);
+    }
+    loss += fail * badStuffCost(state, p, md);
+  }
+  return loss;
+}
+
+/** Quanto os adversários de quem luta conseguem atrapalhar (estimativa pelo tamanho das mãos). */
+function hostileHinder(state: GameState, fighterId: string): number {
+  let h = 0;
+  for (const o of state.players) {
+    if (o.id === fighterId) continue;
+    if (o.bot && isAlly(state, o.id, P(state, fighterId))) continue;
+    h += Math.min(o.hand.length, 6) * 0.9;
+  }
+  return h;
+}
+
+/** Quanto ainda posso somar ao meu lado com as cartas que sobram na mão (estimativa). */
+function reserveBoost(state: GameState, p: PlayerState): number {
+  let r = 0;
+  for (const id of p.hand) {
+    const df = d(state, id);
+    if (df.kind === "monsterBonus" && df.value < 0) r += -df.value;
+    if (df.kind === "potion") r += fxVal(state, id, "bonusLado") || fxVal(state, id, "menosEmAlvo") || 0;
+  }
+  return r;
+}
+
+const marginOf = (s: GameState) => {
+  const calc = computeCombat(s);
+  return calc ? calc.playerTotal - calc.monsterTotal : 0;
+};
+const winningNow = (s: GameState) => !!s.combat && !!computeCombat(s)?.winning;
+/** O combate acabou bem para o lado dos jogadores (venceu ou o monstro foi embora)? */
+const endedWell = (s: GameState) => !s.combat && (s.turn.lastResult === "won" || s.turn.lastResult === "ended");
+
+// ----------------------------------------------------------------------------
+// Decisões de ajuda, ameaça e suborno
+// ----------------------------------------------------------------------------
+
 /** Aceito um pedido de ajuda de `fighter` em troca de `count` tesouros? */
-export function shouldAcceptHelpRequest(state: GameState, me: PlayerState, fighter: PlayerState, count: number, threat = false): boolean {
+export function shouldAcceptHelpRequest(state: GameState, me: PlayerState, fighter: PlayerState, count: number, threatened = false, threatLevels = 0): boolean {
   const calc = computeCombat(state);
   const wouldWin = !!calc && calc.playerTotal + playerPower(state, me) > calc.monsterTotal;
+  const refuseCost = threatened ? levelValue(me.level) - levelValue(Math.max(1, me.level - Math.max(1, threatLevels))) : 0;
   if (!wouldWin) return false;
   const stake = monsterStake(state);
   const ally = isAlly(state, me.id, fighter);
-  if (fighter.level >= RULES.nivelMaximo - 2 && !ally) return false;
+  if (fighter.level + stake.levels >= MAX() && !ally) return false;
+  if (fighter.level >= MAX() - 2 && !ally && !threatened) return false;
   // Ganho para mim (tesouros + nível do Elfo) contra o quanto o lutador avança
   const myGain = count * 40 + (hasPassive(state, me, "nivelAoAjudar") ? 100 : 0);
   const theirGain = weight(state, me.id, fighter) * stake.levels * 60;
   // mesmo quando vale a pena, fortalecer quem já está forte pesa um pouco contra
   const score = myGain - theirGain - STRENGTH_PENALTY * strengthOf(state, fighter) + (ally ? 80 : 0);
   if (score > 0) return true;
-  // ameaçado pelo lutador: às vezes é melhor ajudar do que sofrer
-  return threat && me.level > 1 && fighter.level < RULES.nivelMaximo - 2;
+  // ameaçado: às vezes é melhor ajudar do que perder níveis
+  return threatened && me.level > 1 && score + refuseCost > 0;
 }
 
 /** Aceito a oferta de `helper` (que leva `count` tesouros) para me ajudar? */
@@ -156,35 +340,20 @@ export function shouldAcceptHelpOffer(state: GameState, me: PlayerState, helper:
   const calc = computeCombat(state);
   if (!calc || calc.winning) return false;
   if (calc.playerTotal + playerPower(state, helper) <= calc.monsterTotal) return false;
-  if (!helper.bot && helper.level >= RULES.nivelMaximo - 3) return false;
+  if (!helper.bot && helper.level >= MAX() - 3) return false;
   const stake = monsterStake(state);
-  const benefit = stake.levels * 90 + Math.max(0, stake.treasures - count) * 25;
+  const benefit = stake.levels * 90 + Math.max(0, stake.treasures - count) * 25 + expectedFleeLoss(state, me) * 0.5;
   const w = isAlly(state, me.id, helper) ? 0.3 : weight(state, me.id, helper);
   const helperGain = w * (count * 30 + (hasPassive(state, helper, "nivelAoAjudar") ? 100 : 0));
   return benefit - helperGain - STRENGTH_PENALTY * strengthOf(state, helper) > 0;
 }
 
-function monsterStake(state: GameState): { levels: number; treasures: number } {
-  const c = state.combat;
-  if (!c) return { levels: 0, treasures: 0 };
-  let levels = 0;
-  let treasures = 0;
-  for (const m of c.monsters) {
-    const md = d(state, m.cardId) as MonsterCard;
-    levels += md.levels;
-    treasures += md.treasures;
-  }
-  return { levels, treasures };
-}
-
 /** O jogador `who` consegue fazer o lutador perder com as cartas que tem? */
 function canFlip(state: GameState, who: string, ctx: Ctx): boolean {
-  if (!state.combat) return false;
-  const winning = (s: GameState) => !!s.combat && !!computeCombat(s)?.winning;
-  if (!winning(state)) return false;
+  if (!winningNow(state)) return false;
   const w = P(state, who);
   if (!w) return false;
-  return !!plan(state, who, (s) => (s.combat ? hinderCandidates(s, P(s, who)) : []), (s) => !s.combat || !winning(s), ctx, 4);
+  return !!findCombo(state, who, hinderCandidates(state, w), hinderGoal(1), hinderMetric, ctx, { maxDepth: 3, simCap: 120 });
 }
 
 /**
@@ -201,7 +370,7 @@ export function shouldPayThreat(state: GameState, me: PlayerState, threatenerId:
   const threatener = P(state, threatenerId);
   if (!threatener) return false;
   const stake = monsterStake(state);
-  const winsGame = me.level + stake.levels >= RULES.nivelMaximo;
+  const winsGame = me.level + stake.levels >= MAX();
   // chance de a ameaça ser real
   let p = canFlip(state, threatenerId, ctx) ? 0.85 : threatener.hand.length >= 5 ? 0.15 : 0.03;
   // se outros também podem virar o combate, pagar um só não garante a vitória
@@ -217,37 +386,31 @@ export function shouldPayThreat(state: GameState, me: PlayerState, threatenerId:
   return reasonable || winsGame || (p >= 0.85 && stake.levels >= 2);
 }
 
-function handValue(state: GameState, p: PlayerState): number {
-  return p.hand.reduce((a, id) => a + cardValue(state, id), 0);
-}
+// ----------------------------------------------------------------------------
+// Avaliação geral do estado (para decisões fora de combate)
+// ----------------------------------------------------------------------------
 
-/** Avaliação do estado do ponto de vista do bot. */
 function evaluate(state: GameState, me: string): number {
-  if (state.winnerId === me) return 1e6;
-  if (state.winnerId) return -1e6;
+  if (state.winnerId === me) return 1e7;
+  if (state.winnerId) return -1e7;
   const bot = P(state, me);
-  let score = bot.level * 100 + playerPower(state, bot) * 8 + handValue(state, bot) * 0.4;
-  score += bot.carried.reduce((a, id) => a + cardValue(state, id), 0) * 0.15;
-  score -= bot.curses.length * 25 + bot.pendingCombatCurses.length * 30;
+  let score = assets(state, me) + playerPower(state, bot) * 12;
+  if (bot.race) score += 15;
+  if (bot.classes.length) score += 15;
   for (const o of state.players) {
     if (o.id === me) continue;
-    const w = weight(state, me, o);
-    score -= w * (o.level * 100 + playerPower(state, o) * 5 + o.curses.length * -25 + o.pendingCombatCurses.length * -35);
+    const w = threat(state, me, o);
+    score -= w * (levelValue(o.level) + playerPower(state, o) * 8 + o.hand.length * 10 - o.curses.length * 25 - o.pendingCombatCurses.length * 35);
   }
   const c = state.combat;
   if (c && c.stage !== "badstuff") {
     const calc = computeCombat(state);
     if (calc) {
       const margin = calc.playerTotal - calc.monsterTotal;
-      const stake =
-        c.monsters.reduce((a, m) => a + ((d(state, m.cardId) as MonsterCard).levels ?? 1), 0) * 100 +
-        c.monsters.reduce((a, m) => a + ((d(state, m.cardId) as MonsterCard).treasures ?? 1), 0) * 25;
       if (calc.side.includes(me)) {
-        score += calc.winning ? stake + 200 + Math.min(margin, 6) * 4 : Math.max(margin, -30) * 8;
-      } else {
-        const fighter = P(state, c.fighterId);
-        const w = weight(state, me, fighter);
-        if (calc.winning) score -= w * (stake + 200 + Math.min(margin, 6) * 4);
+        score += calc.winning ? stakeFor(state, me) * 0.9 + Math.min(margin, 6) * 4 : Math.max(margin, -30) * 6 - expectedFleeLoss(state, bot) * 0.6;
+      } else if (calc.winning) {
+        for (const pid of calc.side) score -= threat(state, me, P(state, pid)) * stakeFor(state, pid) * 0.9;
       }
     }
   }
@@ -256,7 +419,7 @@ function evaluate(state: GameState, me: string): number {
 
 /** Escolhe as N cartas menos valiosas da mão (exceto as reservadas). */
 function cheapest(state: GameState, p: PlayerState, n: number, reserved: string[] = []): string[] | null {
-  const pool = p.hand.filter((id) => !reserved.includes(id)).sort((a, b) => cardValue(state, a) - cardValue(state, b));
+  const pool = p.hand.filter((id) => !reserved.includes(id)).sort((a, b) => cardValue(state, a, p) - cardValue(state, b, p));
   return pool.length >= n ? pool.slice(0, n) : null;
 }
 
@@ -266,16 +429,39 @@ function cheapest(state: GameState, p: PlayerState, n: number, reserved: string[
 
 type Mode = "boost" | "hinder" | "manage";
 
+const COMBAT_ACOES = [
+  "bonusCombate",
+  "nivelDobradoAjudando",
+  "arremesso",
+  "monstrosPerdemNivel",
+  "ignorarEspecial",
+  "mandarMonstroEmbora",
+  "polimorfia",
+  "domarFera",
+  "duplicata",
+  "dobrarFuria",
+  "dobrarItem",
+  "cancelarBonusMonstro",
+  "itemDaMaoParaLado",
+  "forcarAjuda",
+  "usarItemRestrito",
+  "desafio",
+  "anularErrante",
+];
+/** Ativas que o bot usa por regras próprias (fora da busca de combos). */
+const SPECIAL_ACOES = ["encerrarCombate", "assumirCoisasRuins", "ameacarAjuda", "abrirOutraPorta", "hibernar", "pressagio"];
+
 function abilityCandidates(state: GameState, me: PlayerState, mode: Mode): Action[] {
   const out: Action[] = [];
   const c = state.combat;
   const monsters = c ? c.monsters.filter((m) => !m.defeated).map((m) => m.cardId) : [];
   for (const ab of abilityInfos(state, me)) {
     if (!ab.available) continue;
-    const combatOnly = ["bonusCombate", "nivelDobradoAjudando", "arremesso", "monstrosPerdemNivel", "ignorarEspecial", "mandarMonstroEmbora", "polimorfia", "domarFera", "duplicata", "dobrarFuria", "dobrarItem", "cancelarBonusMonstro", "itemDaMaoParaLado"];
-    if (mode === "manage" && combatOnly.includes(ab.acao)) continue;
-    if (mode !== "manage" && !combatOnly.includes(ab.acao) && ab.acao !== "maldicaoForca") continue;
-    if (["desafio", "encerrarCombate", "assumirCoisasRuins", "ameacarAjuda", "forcarAjuda", "usarItemRestrito"].includes(ab.acao)) continue;
+    const combatOnly = COMBAT_ACOES.includes(ab.acao);
+    if (mode === "manage" && combatOnly) continue;
+    if (mode !== "manage" && !combatOnly && ab.acao !== "maldicaoForca") continue;
+    if (SPECIAL_ACOES.includes(ab.acao)) continue;
+    const onSide = !!c && playerSide(state, c).includes(me.id);
     const base = (params: Record<string, unknown>, reserved: string[] = []) => {
       if (ab.wholeHand) return { type: "ABILITY", key: ab.key, discard: [], params } as Action;
       const disc = cheapest(state, me, ab.discard, reserved);
@@ -284,8 +470,16 @@ function abilityCandidates(state: GameState, me: PlayerState, mode: Mode): Actio
     };
     const push = (a: Action | null) => a && out.push(a);
     const fields = ab.fields.map((f) => f.kind);
+    // combos de combate: no modo "boost" só o que ajuda o meu lado; no "hinder" só o que atrapalha
+    if (mode === "hinder" && !["itemDaMaoParaLado", "maldicaoForca", "polimorfia"].includes(ab.acao)) continue;
+    if (mode === "boost" && ["maldicaoForca"].includes(ab.acao) && !onSide) continue;
+    if (ab.acao === "desafio" && (mode !== "boost" || c?.fighterId !== me.id)) continue;
     if (fields.length === 0) {
       push(base({}));
+      continue;
+    }
+    if (ab.acao === "anularErrante") {
+      for (const m of c?.monsters ?? []) if (m.wandering && !m.defeated) push(base({ monster: m.cardId }));
       continue;
     }
     if (fields[0] === "monster") {
@@ -315,8 +509,21 @@ function abilityCandidates(state: GameState, me: PlayerState, mode: Mode): Actio
       if (ms[0]) push(base({ handMonster: ms[0] }, [ms[0]]));
       continue;
     }
+    if (ab.acao === "forcarAjuda" && c) {
+      for (const o of state.players) if (o.id !== me.id && !playerSide(state, c).includes(o.id)) push(base({ player: o.id }));
+      continue;
+    }
+    if (ab.acao === "usarItemRestrito") {
+      const restricted = [...me.hand, ...me.carried].filter((id) => itemDefOf(state, id) && equipCheck(state, me, id).error);
+      restricted.sort((a, b) => (itemDefOf(state, b)?.bonus ?? 0) - (itemDefOf(state, a)?.bonus ?? 0));
+      for (const r of restricted.slice(0, 2)) push(base({ item: r }, [r]));
+      continue;
+    }
     if (ab.acao === "maldicaoForca") {
-      for (const o of state.players) if (o.id !== me.id) push(base({ player: o.id }));
+      if (c) {
+        const targets = mode === "hinder" ? playerSide(state, c).filter((id) => id !== me.id) : [];
+        for (const t of targets) push(base({ player: t }));
+      } else for (const o of state.players) if (o.id !== me.id && !isAlly(state, me.id, o)) push(base({ player: o.id }));
       continue;
     }
     if (ab.acao === "roubarNivel") {
@@ -324,10 +531,10 @@ function abilityCandidates(state: GameState, me: PlayerState, mode: Mode): Actio
       continue;
     }
     if (ab.acao === "reforjar") {
-      const cost = [...me.hand, ...me.carried].filter((id) => itemDefOf(state, id)).sort((a, b) => cardValue(state, a) - cardValue(state, b))[0];
+      const cost = [...me.hand, ...me.carried].filter((id) => itemDefOf(state, id)).sort((a, b) => cardValue(state, a, me) - cardValue(state, b, me))[0];
       const target = me.equipped
         .filter((id) => slotOf(state, id) !== "ring" && !state.cards[id].reforged)
-        .sort((a, b) => cardValue(state, b) - cardValue(state, a))[0];
+        .sort((a, b) => cardValue(state, b, me) - cardValue(state, a, me))[0];
       if (cost && target) push({ type: "ABILITY", key: ab.key, discard: [], params: { costItem: cost, item: target } });
       continue;
     }
@@ -348,15 +555,24 @@ function abilityCandidates(state: GameState, me: PlayerState, mode: Mode): Actio
       }
       continue;
     }
+    if (ab.acao === "trocarItem") {
+      for (const mine of me.equipped)
+        for (const o of state.players) {
+          if (o.id === me.id || isAlly(state, me.id, o)) continue;
+          for (const it of o.equipped)
+            if (slotOf(state, it) === slotOf(state, mine) && cardValue(state, it, me) > cardValue(state, mine, me) + 10) push(base({ item: mine, player: o.id, otherItem: it }));
+        }
+      continue;
+    }
     if (ab.acao === "bugiganga") {
       const best = state.decks.treasureDiscard
         .filter((id) => itemDefOf(state, id))
-        .sort((a, b) => cardValue(state, b) - cardValue(state, a))[0];
+        .sort((a, b) => cardValue(state, b, me) - cardValue(state, a, me))[0];
       if (best) push(base({ mode: "discard", card: best }));
       continue;
     }
-    if (ab.acao === "buscarPocao" || ab.acao === "abrirOutraPorta" || ab.acao === "hibernar") {
-      if (ab.acao === "abrirOutraPorta") push(base({}));
+    if (ab.acao === "buscarPocao") {
+      push(base({}));
       continue;
     }
   }
@@ -369,13 +585,15 @@ function boostCandidates(state: GameState, me: PlayerState): Action[] {
   const out: Action[] = [];
   const monsters = c.monsters.filter((m) => !m.defeated).map((m) => m.cardId);
   const side = playerSide(state, c);
-  for (const id of me.hand) {
+  const target = side.includes(me.id) ? me.id : c.fighterId;
+  for (const id of [...me.hand, ...me.carried]) {
     const df = d(state, id);
-    if (df.kind === "monsterBonus" && df.value < 0) for (const m of monsters) out.push({ type: "PLAY_MONSTER_BONUS", cardId: id, monsterId: m });
+    if (df.kind === "monsterBonus" && df.value < 0 && me.hand.includes(id)) for (const m of monsters) out.push({ type: "PLAY_MONSTER_BONUS", cardId: id, monsterId: m });
     if (df.kind === "potion") {
-      if (fxIs(state, id, "bonusLado") || fxIs(state, id, "contraMortosVivos"))
-        out.push({ type: "USE_CARD", cardId: id, side: "player", targetId: side.includes(me.id) ? me.id : c.fighterId });
+      if (fxIs(state, id, "bonusLado") || fxIs(state, id, "contraMortosVivos")) out.push({ type: "USE_CARD", cardId: id, side: "player", targetId: target });
       if (fxIs(state, id, "menosEmAlvo")) for (const m of monsters) out.push({ type: "USE_CARD", cardId: id, monsterId: m });
+      if (fxIs(state, id, "forcaAjuda") && me.id === c.fighterId && !c.helperId)
+        for (const o of state.players) if (o.id !== me.id) out.push({ type: "USE_CARD", cardId: id, targetId: o.id });
     }
   }
   if (me.id === c.fighterId) {
@@ -387,31 +605,62 @@ function boostCandidates(state: GameState, me: PlayerState): Action[] {
   return out;
 }
 
-/** Ações para atrapalhar quem está lutando. */
+/** Ações para atrapalhar quem está lutando (inclui combos com Monstro Errante). */
 function hinderCandidates(state: GameState, me: PlayerState): Action[] {
   const c = state.combat!;
   const out: Action[] = [];
+  const side = playerSide(state, c);
   const monsters = c.monsters.filter((m) => !m.defeated).map((m) => m.cardId);
-  const strongestHandMonster = me.hand
-    .filter((id) => d(state, id).kind === "monster")
-    .sort((a, b) => (d(state, b) as MonsterCard).level - (d(state, a) as MonsterCard).level)[0];
+  const handMonsters = me.hand.filter((id) => d(state, id).kind === "monster");
+  const wanderers = me.hand.filter((id) => d(state, id).kind === "wandering");
+  // Monstros Errantes primeiro: o resto do combo pode mirar no monstro que entra
+  for (const w of wanderers.slice(0, 1)) for (const m of handMonsters) out.push({ type: "PLAY_WANDERING", cardId: w, monsterCardId: m });
+  const targets = wanderers.length ? [...monsters, ...handMonsters] : monsters;
   for (const id of me.hand) {
     const df = d(state, id);
-    if (df.kind === "monsterBonus" && df.value > 0) for (const m of monsters) out.push({ type: "PLAY_MONSTER_BONUS", cardId: id, monsterId: m });
-    if (df.kind === "wandering" && strongestHandMonster) out.push({ type: "PLAY_WANDERING", cardId: id, monsterCardId: strongestHandMonster });
+    if (df.kind === "monsterBonus" && df.value > 0) for (const m of targets) out.push({ type: "PLAY_MONSTER_BONUS", cardId: id, monsterId: m });
     if (df.kind === "potion" && fxIs(state, id, "bonusLado")) out.push({ type: "USE_CARD", cardId: id, side: "monster" });
-    if (fxIs(state, id, "menosEmAlvo")) out.push({ type: "USE_CARD", cardId: id, targetId: c.fighterId });
-    if (df.kind === "curse" && df.curseType === "combat") out.push({ type: "PLAY_CURSE", cardId: id, targetId: c.fighterId });
+    if (fxIs(state, id, "menosEmAlvo")) for (const t of side) out.push({ type: "USE_CARD", cardId: id, targetId: t });
+    if (df.kind === "curse") {
+      const cd = df as CurseCard;
+      // maldições de combate no lutador; as outras (perder item, nível, poder) em quem estiver do lado dele
+      if (cd.curseType === "combat") out.push({ type: "PLAY_CURSE", cardId: id, targetId: c.fighterId });
+      else for (const t of side) out.push({ type: "PLAY_CURSE", cardId: id, targetId: t });
+    }
   }
   for (const id of [...me.hand, ...me.carried]) {
-    if (fxIs(state, id, "isca")) for (const m of monsters) out.push({ type: "USE_CARD", cardId: id, monsterId: m });
+    if (fxIs(state, id, "isca")) for (const m of targets) out.push({ type: "USE_CARD", cardId: id, monsterId: m });
   }
   out.push(...abilityCandidates(state, me, "hinder"));
   return out;
 }
 
 /** Melhorias fora de combate: equipar, runas, subir nível, maldições, habilidades. */
+/** Passivas que dão bônus por slots vazios ou mãos livres (aí tirar um item pode ser melhor). */
+function likesEmptySlots(state: GameState, me: PlayerState): boolean {
+  return hasPassive(state, me, "bonusPorSlotVazio") || passiveFx(state, me, "forca").some((f) => !!f.seMaosLivres);
+}
+
+/** Quantas vezes o bot já mexeu nesta carta (equipar/tirar) neste turno: evita vai-e-volta. */
+function gearMoves(state: GameState, me: string, cardId: string): number {
+  return mem(state)[`gear:${state.turnSerial}:${me}:${cardId}`] ?? 0;
+}
+function noteGear(state: GameState, me: string, a: Action | null): Action | null {
+  if (a && (a.type === "EQUIP" || a.type === "UNEQUIP")) {
+    const m = mem(state);
+    for (const k of Object.keys(m)) if (k.startsWith("gear:") && !k.startsWith(`gear:${state.turnSerial}:`)) delete m[k];
+    const k = `gear:${state.turnSerial}:${me}:${a.cardId}`;
+    m[k] = (m[k] ?? 0) + 1;
+  }
+  return a;
+}
+
 function manageCandidates(state: GameState, me: PlayerState, ownTurn: boolean): Action[] {
+  const all = manageCandidatesRaw(state, me, ownTurn);
+  return all.filter((a) => !((a.type === "EQUIP" || a.type === "UNEQUIP") && gearMoves(state, me.id, a.cardId) >= 2));
+}
+
+function manageCandidatesRaw(state: GameState, me: PlayerState, ownTurn: boolean): Action[] {
   const out: Action[] = [];
   if (ownTurn || state.phase === "SETUP") {
     for (const id of [...me.hand, ...me.carried]) {
@@ -421,31 +670,70 @@ function manageCandidates(state: GameState, me: PlayerState, ownTurn: boolean): 
         if (!chk.error) out.push({ type: "EQUIP", cardId: id });
         else if (df.kind === "item") {
           // Troca por um item pior no mesmo slot
-          const worse = me.equipped.filter((e) => slotOf(state, e) === df.slot && cardValue(state, e) < cardValue(state, id));
+          const worse = me.equipped.filter((e) => slotOf(state, e) === df.slot && cardValue(state, e, me) < cardValue(state, id, me));
           for (const w of worse) out.push({ type: "UNEQUIP", cardId: w });
         }
       }
       if (df.kind === "rune") for (const it of me.equipped) out.push({ type: "SOCKET_RUNE", runeId: id, itemId: it });
       if (df.kind === "race") out.push({ type: "PLAY_RACE", cardId: id });
-      if (df.kind === "class") for (const c of me.classes) out.push({ type: "PLAY_CLASS", cardId: id, replaceId: c });
+      if (df.kind === "class") {
+        out.push({ type: "PLAY_CLASS", cardId: id });
+        for (const c of me.classes) out.push({ type: "PLAY_CLASS", cardId: id, replaceId: c });
+      }
+      if (df.kind === "misc" && df.permanent && me.hand.includes(id)) out.push({ type: "PLACE", cardId: id });
     }
+    // montagem: tirar itens (Bárbaro, Monge…) e largar raça/classe que atrapalham
+    if (likesEmptySlots(state, me)) for (const id of me.equipped) out.push({ type: "UNEQUIP", cardId: id });
+    if (me.race) out.push({ type: "DISCARD_RACE" });
+    for (const c of me.classes) out.push({ type: "DISCARD_CLASS", cardId: c });
   }
   if (state.phase !== "PLAYING") return out;
   for (const id of me.hand) {
     const df = d(state, id);
-    if (df.kind === "levelup" && me.level < RULES.nivelMaximo - 1) out.push({ type: "PLAY_LEVELUP", cardId: id });
-    if (fxIs(state, id, "subirNivel") && me.level < RULES.nivelMaximo - 1) out.push({ type: "USE_CARD", cardId: id });
+    if (df.kind === "levelup" && me.level < MAX() - 1) out.push({ type: "PLAY_LEVELUP", cardId: id });
+    if (fxIs(state, id, "subirNivel") && me.level < MAX() - 1) out.push({ type: "USE_CARD", cardId: id });
     if (df.kind === "curse") {
       for (const o of state.players) if (o.id !== me.id && !isAlly(state, me.id, o)) out.push({ type: "PLAY_CURSE", cardId: id, targetId: o.id });
     }
   }
+  for (const cu of me.curses) {
+    const water = [...me.hand, ...me.carried].find((id) => fxIs(state, id, "removePodridao"));
+    if (water && findFx(cu.defId, "removidaPorAguaBenta")) out.push({ type: "USE_CARD", cardId: water, targetId: me.id });
+  }
+  const heal = [...me.hand, ...me.carried].find((id) => fxIs(state, id, "devolveNivel"));
+  if (heal && (state.turn.lastCombatLost[me.id] ?? 0) > 0) out.push({ type: "USE_CARD", cardId: heal, targetId: me.id });
   out.push(...abilityCandidates(state, me, "manage"));
   return out;
 }
 
 /** Escolhe a melhor ação (simulada) que melhora a avaliação acima de um limiar. */
-function bestOf(state: GameState, me: string, actions: Action[], ctx: Ctx, threshold: number): { action: Action; s: GameState; gain: number } | null {
+/** Jogadas que mudam a "montagem" do personagem: avaliadas depois de reequipar tudo (combos de raça/classe/itens). */
+const BUILD = new Set<Action["type"]>(["PLAY_RACE", "PLAY_CLASS", "DISCARD_RACE", "DISCARD_CLASS", "UNEQUIP"]);
+
+function gearCandidates(state: GameState, me: PlayerState): Action[] {
+  const out: Action[] = [];
+  for (const id of [...me.hand, ...me.carried]) if ((itemDefOf(state, id) || state.cards[id].tamed) && !equipCheck(state, me, id).error) out.push({ type: "EQUIP", cardId: id });
+  // tira itens que a nova montagem não aproveita (ou que impedem um melhor no mesmo slot)
+  const blocked = new Set([...me.hand, ...me.carried].map((id) => itemDefOf(state, id)?.slot).filter(Boolean));
+  for (const id of me.equipped) if (likesEmptySlots(state, me) || blocked.has(itemDefOf(state, id)?.slot)) out.push({ type: "UNEQUIP", cardId: id });
+  return out;
+}
+
+/** Reequipa gulosamente (até `steps` trocas) para ver o potencial de uma montagem. */
+function settle(state: GameState, me: string, ctx: Ctx, steps = 4): GameState {
+  let cur = state;
+  for (let i = 0; i < steps; i++) {
+    const b = bestOf(cur, me, gearCandidates(cur, P(cur, me)), ctx, 3, false);
+    if (!b) break;
+    cur = b.s;
+  }
+  return cur;
+}
+
+function bestOf(state: GameState, me: string, actions: Action[], ctx: Ctx, threshold: number, deep = true): { action: Action; s: GameState; gain: number } | null {
   const base = evaluate(state, me);
+  // montagens são comparadas com a montagem atual já reequipada (senão o bot tira e põe o mesmo item)
+  let settledBase: number | null = null;
   let best: { action: Action; s: GameState; gain: number } | null = null;
   const seen = new Set<string>();
   for (const a of actions) {
@@ -454,33 +742,138 @@ function bestOf(state: GameState, me: string, actions: Action[], ctx: Ctx, thres
     seen.add(k);
     const s = simulate(state, me, a, ctx);
     if (!s) continue;
-    const gain = evaluate(s, me) - base;
+    let gain: number;
+    if (deep && BUILD.has(a.type) && !s.combat && !state.combat) {
+      settledBase ??= evaluate(settle(state, me, ctx), me);
+      gain = evaluate(settle(s, me, ctx), me) - settledBase;
+    } else gain = evaluate(s, me) - base;
     if (gain > threshold && (!best || gain > best.gain)) best = { action: a, s, gain };
   }
   return best;
 }
 
+// ----------------------------------------------------------------------------
+// Busca de combos
+// ----------------------------------------------------------------------------
+
+interface Combo {
+  actions: Action[];
+  cost: number;
+  end: GameState;
+}
+
+/** Quanto vale "dar" ao jogador `pid` um lugar no meu combate (o ajudante leva tesouros / nível do Elfo). */
+function helperPenalty(s: GameState, me: string): number {
+  const c = s.combat;
+  if (!c?.helperId || c.helperId === me) return 0;
+  const h = P(s, c.helperId);
+  if (!h) return 0;
+  const gain = (c.helperForced ? 0 : (c.helperDeal?.count ?? 0) * 30) + (hasPassive(s, h, "nivelAoAjudar") ? 100 : 0) + 15;
+  return (isAlly(s, me, h) ? 0.3 : threat(s, me, h)) * gain + STRENGTH_PENALTY * strengthOf(s, h) * 0.5;
+}
+
 /**
- * Plano guloso: aplica até `steps` ações em sequência; se o objetivo for atingido, devolve a primeira.
+ * Procura a sequência mais barata (em cartas, níveis e habilidades gastos) de até `maxDepth` jogadas
+ * que atinge o objetivo. As jogadas quase sempre comutam, então a busca percorre combinações (não
+ * permutações) e só aceita passos que avançam a métrica — o que deixa a busca pequena.
  */
-function plan(
+function findCombo(
   state: GameState,
   me: string,
-  gen: (s: GameState) => Action[],
+  cands: Action[],
   goal: (s: GameState) => boolean,
+  metric: (s: GameState) => number,
   ctx: Ctx,
-  steps = 4,
-): Action | null {
-  let cur = state;
-  let first: Action | null = null;
-  for (let i = 0; i < steps; i++) {
-    const b = bestOf(cur, me, gen(cur), ctx, 0);
-    if (!b) return null;
-    first ??= b.action;
-    cur = b.s;
-    if (goal(cur)) return first;
+  opts: { maxDepth?: number; budget?: number; simCap?: number } = {},
+): Combo | null {
+  const maxDepth = opts.maxDepth ?? 4;
+  const budget = opts.budget ?? Infinity;
+  const simCap = opts.simCap ?? 450;
+  if (goal(state)) return null;
+  const base = assets(state, me);
+  const basePenalty = helperPenalty(state, me);
+  const costOf = (s: GameState, path: Action[]) =>
+    Math.max(0, base - assets(s, me)) + Math.max(0, helperPenalty(s, me) - basePenalty) + path.filter((a) => a.type === "ABILITY").length * 12;
+  const seen = new Set<string>();
+  const root: { a: Action; s: GameState; m: number }[] = [];
+  const deferred: Action[] = [];
+  let sims = 0;
+  const m0 = metric(state);
+  for (const a of cands) {
+    const k = JSON.stringify(a);
+    if (seen.has(k)) continue;
+    seen.add(k);
+    if (sims >= simCap) break;
+    const s = simulate(state, me, a, ctx);
+    sims++;
+    if (!s) {
+      // pode depender de outra jogada antes (ex.: bônus no monstro que um Monstro Errante vai trazer)
+      if (a.type === "PLAY_MONSTER_BONUS" || a.type === "USE_CARD") deferred.push(a);
+      continue;
+    }
+    const m = metric(s);
+    if (m <= m0) continue;
+    root.push({ a, s, m });
   }
-  return null;
+  // as mais eficientes primeiro: acham uma solução cedo e podam o resto
+  const eff = (r: { a: Action; s: GameState; m: number }) => (r.m - m0) / (costOf(r.s, [r.a]) + 5);
+  root.sort((x, y) => eff(y) - eff(x));
+  let best: Combo | null = null;
+  const dfs = (s: GameState, path: Action[], start: number, used: Set<number>, m: number) => {
+    const cost = path.length ? costOf(s, path) : 0;
+    if (cost > budget || (best && cost >= best.cost)) return;
+    if (path.length && goal(s)) {
+      best = { actions: [...path], cost, end: s };
+      return;
+    }
+    if (path.length >= maxDepth || sims >= simCap) return;
+    for (let i = start; i < root.length; i++) {
+      const r = root[i];
+      let s2: GameState | null;
+      if (path.length === 0) s2 = r.s;
+      else {
+        if (sims >= simCap) return;
+        s2 = simulate(s, me, r.a, ctx);
+        sims++;
+      }
+      if (!s2) continue;
+      const m2 = path.length === 0 ? r.m : metric(s2);
+      if (m2 <= m) continue;
+      dfs(s2, [...path, r.a], i + 1, used, m2);
+    }
+    if (path.length === 0) return;
+    for (let j = 0; j < deferred.length; j++) {
+      if (used.has(j) || sims >= simCap) continue;
+      const s2 = simulate(s, me, deferred[j], ctx);
+      sims++;
+      if (!s2) continue;
+      const m2 = metric(s2);
+      if (m2 <= m) continue;
+      used.add(j);
+      dfs(s2, [...path, deferred[j]], start, used, m2);
+      used.delete(j);
+    }
+  };
+  dfs(state, [], 0, new Set(), m0);
+  return best;
+}
+
+/** Métrica para o meu lado: margem do combate (acabar bem vale muito). */
+function boostMetric(s: GameState): number {
+  if (!s.combat) return endedWell(s) ? 1000 : -1000;
+  if (s.combat.stage === "badstuff") return -1000;
+  return marginOf(s) + (winningNow(s) ? 0.5 : 0);
+}
+function boostGoal(need = 0) {
+  return (s: GameState) => endedWell(s) || (winningNow(s) && marginOf(s) >= need);
+}
+/** Métrica para atrapalhar: quanto mais o lutador perde, melhor. */
+function hinderMetric(s: GameState): number {
+  if (!s.combat) return s.turn.lastResult === "won" ? -1000 : s.turn.lastResult === "ended" ? 300 : 1000;
+  return -marginOf(s) + (winningNow(s) ? 0 : 0.5);
+}
+function hinderGoal(need = 1) {
+  return (s: GameState) => (!s.combat ? s.turn.lastResult !== "won" : !winningNow(s) && -marginOf(s) >= need - 1);
 }
 
 // ----------------------------------------------------------------------------
@@ -496,12 +889,12 @@ function answerFor(state: GameState, me: PlayerState, pr: Prompt, ctx: Ctx): Act
   const data = pr.data;
   const answer = (a: Record<string, unknown>): Action => ({ type: "ANSWER", promptId: pr.id, answer: a });
   const arr = (x: unknown) => (Array.isArray(x) ? (x as string[]) : []);
-  const byValueAsc = (ids: string[]) => [...ids].sort((a, b) => cardValue(state, a) - cardValue(state, b));
+  const byValueAsc = (ids: string[]) => [...ids].sort((a, b) => cardValue(state, a, me) - cardValue(state, b, me));
   switch (pr.kind) {
     case "helpRequest": {
       const fighter = P(state, String(data.fighterId));
       const deal = data.deal as { count: number };
-      return answer({ accept: shouldAcceptHelpRequest(state, me, fighter, deal.count, !!data.threat) });
+      return answer({ accept: shouldAcceptHelpRequest(state, me, fighter, deal.count, !!data.threat, Number(data.threatLevels ?? 1)) });
     }
     case "threat": {
       return answer({ accept: shouldPayThreat(state, me, String(data.threatenerId), Number(data.count), ctx) });
@@ -512,7 +905,7 @@ function answerFor(state: GameState, me: PlayerState, pr: Prompt, ctx: Ctx): Act
       return answer({ accept: shouldAcceptHelpOffer(state, me, helper, Number(deal.count ?? 1)) });
     }
     case "fairySwap": {
-      const gain = cardValue(state, String(data.mine)) - cardValue(state, String(data.theirs));
+      const gain = cardValue(state, String(data.mine), me) - cardValue(state, String(data.theirs), me);
       const block = gain < 0 && me.hand.length >= 2;
       return answer({ block, discard: block ? cheapest(state, me, 2) ?? [] : [] });
     }
@@ -528,8 +921,8 @@ function answerFor(state: GameState, me: PlayerState, pr: Prompt, ctx: Ctx): Act
       const bigs = arr(data.bigs);
       const worst = byValueAsc(bigs)[0];
       const levels = Number(data.levels);
-      const itemCost = cardValue(state, worst) * 1.5;
-      return answer(itemCost < levels * 100 ? { choice: "item", cardId: worst } : { choice: "levels" });
+      const itemCost = cardValue(state, worst, me) * 1.5;
+      return answer(itemCost < levelValue(me.level) - levelValue(Math.max(1, me.level - levels)) ? { choice: "item", cardId: worst } : { choice: "levels" });
     }
     case "distribute": {
       const cards = arr(data.cards);
@@ -544,7 +937,7 @@ function answerFor(state: GameState, me: PlayerState, pr: Prompt, ctx: Ctx): Act
     case "loot": {
       const items = arr(data.items);
       const usable = items.filter((id) => !itemDefOf(state, id) || !equipCheck(state, me, id).error);
-      const best = [...(usable.length ? usable : items)].sort((a, b) => cardValue(state, b) - cardValue(state, a))[0];
+      const best = [...(usable.length ? usable : items)].sort((a, b) => cardValue(state, b, me) - cardValue(state, a, me))[0];
       return answer({ cardId: best ?? null });
     }
     case "charity": {
@@ -557,11 +950,11 @@ function answerFor(state: GameState, me: PlayerState, pr: Prompt, ctx: Ctx): Act
       const get = arr(data.give); // o que eu recebo
       const valueToMe = (ids: string[], mine: boolean) =>
         ids.reduce((a, id) => {
-          const base = cardValue(state, id);
+          const base = cardValue(state, id, me);
           const usable = itemDefOf(state, id) ? !equipCheck(state, me, id).error || me.equipped.includes(id) : true;
           return a + base * (usable ? 1 : 0.6) * (mine && me.equipped.includes(id) ? 1.3 : 1);
         }, 0);
-      const ratio = from.bot ? (isAlly(state, me.id, from) ? 0.9 : 1.1) : 1.2;
+      const ratio = from.bot ? (isAlly(state, me.id, from) ? 0.9 : 1.1) : 1.25;
       const accept = valueToMe(get, false) >= valueToMe(give, true) * ratio && weight(state, me.id, from) < 1.5;
       return answer({ accept });
     }
@@ -572,7 +965,7 @@ function answerFor(state: GameState, me: PlayerState, pr: Prompt, ctx: Ctx): Act
       for (const a of me.equipped)
         for (const b of victim.equipped) {
           if (slotOf(state, a) !== slotOf(state, b)) continue;
-          const g = cardValue(state, b) - cardValue(state, a);
+          const g = cardValue(state, b, me) - cardValue(state, a, me);
           if (g > bestGain) {
             bestGain = g;
             best = [a, b];
@@ -581,7 +974,7 @@ function answerFor(state: GameState, me: PlayerState, pr: Prompt, ctx: Ctx): Act
       return answer(best ? { myItem: best[0], theirItem: best[1] } : {});
     }
     case "possession": {
-      const best = [...arr(data.candidates)].sort((a, b) => cardValue(state, b) - cardValue(state, a))[0];
+      const best = [...arr(data.candidates)].sort((a, b) => cardValue(state, b, me) - cardValue(state, a, me))[0];
       return answer({ cardId: best ?? null });
     }
     case "debt":
@@ -592,99 +985,148 @@ function answerFor(state: GameState, me: PlayerState, pr: Prompt, ctx: Ctx): Act
   }
 }
 
-function decideBadStuff(state: GameState, me: PlayerState): Action | null {
+function decideBadStuff(state: GameState, me: PlayerState, ctx: Ctx): Action | null {
   const c = state.combat!;
   const flee = c.flee!;
+  // Paladino: assume as Coisas Ruins de um aliado (ou do lutador que eu ajudo)
+  for (const ab of abilityInfos(state, me)) {
+    if (!ab.available || ab.acao !== "assumirCoisasRuins") continue;
+    for (const r of flee.results) {
+      if (r.success || r.playerId === me.id || flee.substitutes[r.playerId]) continue;
+      const victim = P(state, r.playerId);
+      if (!isAlly(state, me.id, victim)) continue;
+      const md = d(state, r.monsterCardId) as MonsterCard;
+      if (badStuffCost(state, victim, md) > 250 && badStuffCost(state, me, md) < 120) {
+        const a: Action = { type: "ABILITY", key: ab.key, discard: [], params: { player: victim.id } };
+        if (simulate(state, me.id, a, ctx)) return a;
+      }
+    }
+  }
   const victims = new Set<string>();
   for (const r of flee.results) if (!r.success) victims.add(flee.substitutes[r.playerId] ?? r.playerId);
   if (!victims.has(me.id) || flee.confirmed.includes(me.id)) return null;
   const mine = flee.results.map((r, i) => ({ r, i })).filter(({ r }) => r.playerId === me.id && !r.success);
-  const severe = mine.some(({ r }) => {
-    const md = d(state, r.monsterCardId) as MonsterCard;
-    return md.badStuff.some((e) => e.t === "death" || (e.t === "levels" && e.n >= 2));
-  });
+  const cost = mine.reduce((a, { r }) => a + badStuffCost(state, me, d(state, r.monsterCardId) as MonsterCard), 0);
+  const severe = cost >= 150;
   if (severe && me.equipped.some((id) => fxIs(state, id, "desejos"))) return { type: "WISH_RING" };
   const rolled = mine.find(({ r }) => r.roll > 0);
   if (rolled) {
     if (me.equipped.some((id) => fxIs(state, id, "rerrolarFuga")) && !c.rerolled.includes(`${me.id}:cajado`))
       return { type: "REROLL", index: rolled.i, source: "cajado" };
     const dado = [...me.hand, ...me.carried].find((id) => fxIs(state, id, "rerrolarFuga"));
-    if (dado && severe) return { type: "REROLL", index: rolled.i, source: "dado", cardId: dado };
+    if (dado && cost > cardValue(state, dado, me) * 2) return { type: "REROLL", index: rolled.i, source: "dado", cardId: dado };
   }
   if (severe) {
     const escape = [...me.hand, ...me.carried].find((id) => fxIs(state, id, "teletransporte") || fxIs(state, id, "fugaAutomatica"));
-    if (escape) return { type: "USE_CARD", cardId: escape, targetId: me.id };
+    if (escape && cost > cardValue(state, escape, me) * 1.5) return { type: "USE_CARD", cardId: escape, targetId: me.id };
   }
   return { type: "ACCEPT_BAD_STUFF" };
+}
+
+/** Escolhe a quem pedir ajuda (ou usar o Tridente / Canto da Sereia). */
+function helpPlan(state: GameState, me: PlayerState, ctx: Ctx): Action | null {
+  const c = state.combat!;
+  if (c.helperId || combatHas(state, c, "semPedirAjuda") || c.desafio) return null;
+  const calc = computeCombat(state)!;
+  const m = mem(state);
+  const { levels, treasures } = monsterStake(state);
+  const benefit = levelGain(me.level, levels) * 0.9 + treasures * 15 + expectedFleeLoss(state, me) * 0.6;
+  const flips = (o: PlayerState) => calc.playerTotal + playerPower(state, o) > calc.monsterTotal;
+  // Tridente (Tritão): "me ajude ou perca níveis" — para o mais forte que vira o combate
+  for (const ab of abilityInfos(state, me)) {
+    if (!ab.available || ab.acao !== "ameacarAjuda") continue;
+    const target = state.players
+      .filter((o) => o.id !== me.id && flips(o) && !m[`ask:${c.id}:${me.id}:${o.id}`])
+      .sort((a, b) => playerPower(state, b) - playerPower(state, a))[0];
+    if (target) {
+      m[`ask:${c.id}:${me.id}:${target.id}`] = 1;
+      return { type: "ABILITY", key: ab.key, discard: [], params: { player: target.id, dealCount: 1, dealMode: "fighter" } };
+    }
+  }
+  // quanto custa fortalecer cada candidato (tesouros que ele leva + quão forte ele já está), com peso baixo
+  const countFor = (o: PlayerState) => (isAlly(state, me.id, o) ? 1 : Math.max(1, Math.ceil(treasures / 2)));
+  const cost = (o: PlayerState) => {
+    const w = isAlly(state, me.id, o) ? 0.3 : weight(state, me.id, o);
+    return w * (countFor(o) * 30 + (hasPassive(state, o, "nivelAoAjudar") ? 100 : 0)) + STRENGTH_PENALTY * strengthOf(state, o);
+  };
+  const candidates = state.players
+    .filter((o) => o.id !== me.id && !m[`ask:${c.id}:${me.id}:${o.id}`])
+    .filter((o) => flips(o))
+    .filter((o) => cost(o) < benefit)
+    .filter((o) => o.level + 1 < MAX() || isAlly(state, me.id, o))
+    .sort((a, b) => Number(isAlly(state, me.id, b)) - Number(isAlly(state, me.id, a)) || cost(a) - cost(b));
+  const pick = candidates.find((o) => isAlly(state, me.id, o)) ?? candidates.find((o) => !o.bot && weight(state, me.id, o) <= 1.2) ?? candidates[0];
+  if (!pick) return null;
+  m[`ask:${c.id}:${me.id}:${pick.id}`] = 1;
+  void ctx;
+  return { type: "ASK_HELP", targetId: pick.id, count: countFor(pick), mode: isAlly(state, me.id, pick) ? "random" : "fighter" };
 }
 
 function decideFighter(state: GameState, me: PlayerState, ctx: Ctx): Action | null {
   const c = state.combat!;
   if (c.stage === "resolving") return null;
   const calc = computeCombat(state)!;
-  const winning = (s: GameState) => !!s.combat && !!computeCombat(s)?.winning;
   if (calc.winning) {
-    // Antes de atacar: Mapa do Tesouro e desejo do Glabrezu se continuar vencendo
+    // Antes de atacar: Mapa do Tesouro e desejo do Glabrezu se continuar vencendo com folga
     const extras: Action[] = [{ type: "ACCEPT_WISH" }];
     for (const id of [...me.hand, ...me.carried]) if (fxIs(state, id, "mapa")) extras.push({ type: "USE_CARD", cardId: id });
     for (const a of extras) {
       const s = simulate(state, me.id, a, ctx);
-      if (s && winning(s) && computeCombat(s)!.playerTotal - computeCombat(s)!.monsterTotal >= 3) return a;
+      if (s && winningNow(s) && marginOf(s) >= 3) return a;
     }
     return { type: "RESOLVE" };
   }
-  // Tenta virar o combate com o que tem
-  const p = plan(state, me.id, (s) => (s.combat ? boostCandidates(s, P(s, me.id)) : []), (s) => !s.combat || winning(s), ctx, 4);
-  if (p) return p;
-  // Pede ajuda (prefere bots aliados)
-  const m = mem(state);
-  if (!c.helperId && !combatHas(state, c, "semPedirAjuda")) {
-    if (state.prompts.some((pr) => pr.kind === "helpRequest" && pr.data.fighterId === me.id)) return null;
-    const treasures = c.monsters.reduce((a, x) => a + (d(state, x.cardId) as MonsterCard).treasures, 0);
-    const stake = monsterStake(state);
-    // quanto custa fortalecer cada candidato (tesouros que ele leva + quão forte ele já está), com peso baixo
-    const cost = (o: PlayerState) => {
-      const count = o.bot ? 1 : Math.max(1, Math.ceil(treasures / 2));
-      const w = isAlly(state, me.id, o) ? 0.3 : weight(state, me.id, o);
-      return w * (count * 30 + (hasPassive(state, o, "nivelAoAjudar") ? 100 : 0)) + STRENGTH_PENALTY * strengthOf(state, o);
-    };
-    const benefit = stake.levels * 90 + treasures * 15;
-    const candidates = state.players
-      .filter((o) => o.id !== me.id && !m[`ask:${c.id}:${me.id}:${o.id}`])
-      .filter((o) => calc.playerTotal + playerPower(state, o) > calc.monsterTotal)
-      .filter((o) => cost(o) < benefit)
-      .sort((a, b) => Number(isAlly(state, me.id, b)) - Number(isAlly(state, me.id, a)) || cost(a) - cost(b));
-    const pick = candidates.find((o) => isAlly(state, me.id, o)) ?? candidates.find((o) => !o.bot && weight(state, me.id, o) <= 1);
-    if (pick) {
-      m[`ask:${c.id}:${me.id}:${pick.id}`] = 1;
-      const count = pick.bot ? 1 : Math.max(1, Math.ceil(treasures / 2));
-      return { type: "ASK_HELP", targetId: pick.id, count, mode: "random" };
-    }
-  }
-  if (state.prompts.some((pr) => pr.kind === "helpOffer" && pr.playerId === me.id)) return null;
+  if (state.prompts.some((pr) => (pr.kind === "helpRequest" && pr.data.fighterId === me.id) || (pr.kind === "helpOffer" && pr.playerId === me.id))) return null;
+  // Perdendo: quanto vale virar? (o que ganho vencendo + as Coisas Ruins que evito)
+  const fleeLoss = expectedFleeLoss(state, me);
+  const winValue = stakeFor(state, me.id) + fleeLoss;
+  // monstro que volta ao topo se eu fugir: fugir só adia — vale gastar o que for preciso
+  const returning = c.monsters.filter((m) => !m.defeated && fxIs(state, m.cardId, "voltaAoFugir")).map((m) => m.cardId);
+  const combo = findCombo(state, me.id, boostCandidates(state, me), boostGoal(0), boostMetric, ctx, { budget: returning.length ? Infinity : winValue * 1.05 });
+  // combo barato: joga já; caro: tenta antes um ajudante
+  if (combo && combo.cost <= 50) return combo.actions[0];
+  const ask = helpPlan(state, me, ctx);
+  if (ask) return ask;
+  if (combo) return combo.actions[0];
   // Fuga difícil e Coisas Ruins pesadas? Tenta escapar de outro jeito
-  const danger = c.monsters.some((x) => {
-    const md = d(state, x.cardId) as MonsterCard;
-    const info = fleeInfo(state, me, x);
-    const hard = info.impossible || (!info.auto && info.bonus < 1);
-    return hard && md.badStuff.some((e) => e.t === "death" || (e.t === "levels" && e.n >= 3));
-  });
-  if (danger) {
-    const escapes: Action[] = [];
+  if (fleeLoss >= 90) {
+    const escapes: { a: Action; cost: number }[] = [];
     for (const ab of abilityInfos(state, me)) {
       if (!ab.available || !["encerrarCombate", "mandarMonstroEmbora"].includes(ab.acao)) continue;
       const disc = ab.wholeHand ? [] : cheapest(state, me, ab.discard);
       if (!disc) continue;
-      const params = ab.fields.some((f) => f.kind === "monster") ? { monster: c.monsters[0].cardId } : {};
-      escapes.push({ type: "ABILITY", key: ab.key, discard: disc, params });
+      const params = ab.fields.some((f) => f.kind === "monster") ? { monster: c.monsters.find((m) => !m.defeated)?.cardId } : {};
+      escapes.push({ a: { type: "ABILITY", key: ab.key, discard: disc, params }, cost: ab.wholeHand ? me.hand.reduce((x, id) => x + cardValue(state, id, me), 0) : disc.reduce((x, id) => x + cardValue(state, id, me), 0) });
     }
     for (const id of [...me.hand, ...me.carried]) {
-      if (fxIs(state, id, "teletransporte")) escapes.push({ type: "USE_CARD", cardId: id });
-      if (fxIs(state, id, "fugaAutomatica")) escapes.push({ type: "USE_CARD", cardId: id, targetId: me.id });
+      if (fxIs(state, id, "teletransporte")) escapes.push({ a: { type: "USE_CARD", cardId: id }, cost: cardValue(state, id, me) });
+      if (fxIs(state, id, "fugaAutomatica")) escapes.push({ a: { type: "USE_CARD", cardId: id, targetId: me.id }, cost: cardValue(state, id, me) });
+      if (fxIs(state, id, "bonusFugir") && !c.fleeMods.some((m) => m.label.includes(d(state, id).name))) escapes.push({ a: { type: "USE_CARD", cardId: id, targetId: me.id }, cost: cardValue(state, id, me) + 20 });
     }
-    for (const a of escapes) if (simulate(state, me.id, a, ctx)) return a;
+    escapes.sort((a, b) => a.cost - b.cost);
+    for (const e of escapes) {
+      if (e.cost > fleeLoss) continue;
+      const s = simulate(state, me.id, e.a, ctx);
+      if (s && (endedWell(s) || !s.combat || expectedFleeLoss(s, P(s, me.id)) < fleeLoss - 20)) return e.a;
+    }
   }
+  const m = mem(state);
+  for (const id of returning) m[`fled:${id}`] = (m[`fled:${id}`] ?? 0) + 1;
   return { type: "FLEE" };
+}
+
+/** Valor, para mim, de impedir que o lado dos jogadores vença o combate atual. */
+function hinderValue(state: GameState, me: string): number {
+  const c = state.combat!;
+  let v = 0;
+  for (const pid of playerSide(state, c)) {
+    if (pid === me) return 0;
+    const p = P(state, pid);
+    const st = stakeFor(state, pid);
+    if (st >= 100_000) return 100_000;
+    v += (isAlly(state, me, p) ? -0.5 : threat(state, me, p)) * st;
+  }
+  return v;
 }
 
 function decideOtherCombat(state: GameState, me: PlayerState, ctx: Ctx): Action | null {
@@ -692,12 +1134,13 @@ function decideOtherCombat(state: GameState, me: PlayerState, ctx: Ctx): Action 
   const calc = computeCombat(state)!;
   const fighter = P(state, c.fighterId);
   const onSide = calc.side.includes(me.id);
-  const friendly = onSide || isAlly(state, me.id, fighter);
-  const winning = (s: GameState) => !!s.combat && !!computeCombat(s)?.winning;
+  const friendly = onSide || (isAlly(state, me.id, fighter) && hinderValue(state, me.id) <= 0);
   if (friendly) {
     if (!calc.winning) {
-      const p = plan(state, me.id, (s) => (s.combat ? boostCandidates(s, P(s, me.id)) : []), (s) => !s.combat || winning(s), ctx, 3);
-      if (p) return p;
+      // ajudante: vale gastar até o que vou ganhar; aliado de fora: só o que for barato
+      const budget = onSide ? stakeFor(state, me.id) + expectedFleeLoss(state, me) : 45;
+      const combo = findCombo(state, me.id, boostCandidates(state, me), boostGoal(0), boostMetric, ctx, { maxDepth: 3, budget, simCap: 250 });
+      if (combo) return combo.actions[0];
       // Oferece ajuda a bots aliados
       const m = mem(state);
       const key = `offer:${c.id}:${me.id}`;
@@ -715,21 +1158,26 @@ function decideOtherCombat(state: GameState, me: PlayerState, ctx: Ctx): Action 
   // Adversário: ameaça (pede tesouros para não atrapalhar) se consegue virar o combate
   const m = mem(state);
   const threatKey = `threat:${c.id}:${me.id}`;
-  if (calc.winning && !m[threatKey] && !c.used.includes(`${me.id}:threat`) && !c.desafio) {
-    const fw = weight(state, me.id, fighter);
+  const value = hinderValue(state, me.id);
+  if (calc.winning && !m[threatKey] && !c.used.includes(`${me.id}:threat`) && !c.desafio && value < 100_000) {
     const free = freeTreasures(state, c);
-    if (fw < 1.5 && free > 0 && canFlip(state, me.id, ctx)) {
-      m[threatKey] = 1;
+    m[threatKey] = 1;
+    // quem está perto de ganhar não é chantageado: é derrubado
+    if (threat(state, me.id, fighter) < 1.5 && free > 0 && canFlip(state, me.id, ctx)) {
       const stake = monsterStake(state);
       return { type: "THREATEN", count: Math.min(free, Math.max(1, Math.ceil(stake.treasures / 2))) };
     }
-    m[threatKey] = 1;
   }
   // Só atrapalha quando ele já decidiu atacar (janela de ataque)
   if (c.stage !== "resolving") return null;
-  if (calc.winning) {
-    const p = plan(state, me.id, (s) => (s.combat ? hinderCandidates(s, P(s, me.id)) : []), (s) => !s.combat || !winning(s), ctx, 4);
-    if (p) return p;
+  if (calc.winning && value > 20) {
+    // Atrapalha com folga quando o lutador ainda tem mão para reagir; senão, o mínimo que basta
+    const deep = 1 + Math.min(4, Math.floor(fighter.hand.length / 2));
+    const budget = value >= 100_000 ? Infinity : value * 0.85;
+    const cands = hinderCandidates(state, me);
+    const strong = deep > 1 ? findCombo(state, me.id, cands, hinderGoal(deep), hinderMetric, ctx, { budget, simCap: 300 }) : null;
+    const combo = strong ?? findCombo(state, me.id, cands, hinderGoal(1), hinderMetric, ctx, { budget, simCap: 300 });
+    if (combo) return combo.actions[0];
   }
   if (!c.passed.includes(me.id)) return { type: "PASS" };
   return null;
@@ -753,8 +1201,8 @@ function tradeIdea(state: GameState, me: PlayerState): Action | null {
       if (m[key] && state.turnSerial - m[key] < state.players.length * 3) continue;
       if (unbreakable(state, it)) continue;
       // Precisa ser melhor que o que já uso no slot
-      const current = me.equipped.filter((e) => slotOf(state, e) === df.slot).map((e) => cardValue(state, e));
-      if (current.length && Math.max(...current) >= cardValue(state, it)) continue;
+      const current = me.equipped.filter((e) => slotOf(state, e) === df.slot).map((e) => cardValue(state, e, me));
+      if (current.length && Math.max(...current) >= cardValue(state, it, me)) continue;
       // Oferta justa: item meu (fora de uso de preferência) com preço parecido
       const offer = [...me.carried, ...me.equipped.filter((e) => slotOf(state, e) !== df.slot)]
         .filter((id) => itemDefOf(state, id) && !unbreakable(state, id))
@@ -769,51 +1217,147 @@ function tradeIdea(state: GameState, me: PlayerState): Action | null {
   return null;
 }
 
+/** Vende o que não usa (itens piores que os equipados, itens que não pode usar) para subir de nível. */
 function sellIdea(state: GameState, me: PlayerState): Action | null {
-  if (me.level >= RULES.nivelMaximo - 1) return null;
+  if (me.level >= MAX() - 1 || hasCurseFx(me, "naoPodeNegociar")) return null;
   const junk = [...me.hand, ...me.carried].filter((id) => {
     const df = itemDefOf(state, id);
     if (!df) return false;
     if (!equipCheck(state, me, id).error) return false;
     const sameSlot = me.equipped.filter((e) => slotOf(state, e) === df.slot);
-    return sameSlot.some((e) => cardValue(state, e) >= cardValue(state, id)) || !!df.requires || !!df.forbids;
+    return sameSlot.some((e) => cardValue(state, e, me) >= cardValue(state, id, me)) || !!df.requires || !!df.forbids;
   });
   junk.sort((a, b) => itemDefOf(state, b)!.price - itemDefOf(state, a)!.price);
+  const mult = [...me.carried, ...me.equipped].reduce((a, id) => Math.max(a, fxVal(state, id, "vendaMultiplicador") || 1), 1);
   let gold = 0;
   const pick: string[] = [];
   for (const id of junk) {
     pick.push(id);
-    gold += itemDefOf(state, id)!.price;
+    gold += itemDefOf(state, id)!.price * mult;
+    if (gold >= RULES.ouroPorNivel) return { type: "SELL", cardIds: pick };
+  }
+  // quase lá: completa com poções e diversos que valem menos que o nível
+  const extras = me.hand
+    .filter((id) => !pick.includes(id) && (d(state, id).kind === "potion" || d(state, id).kind === "misc") && "price" in d(state, id))
+    .sort((a, b) => cardValue(state, a, me) - cardValue(state, b, me));
+  let spent = pick.reduce((a, id) => a + cardValue(state, id, me), 0);
+  for (const id of extras) {
+    const df = d(state, id) as { price: number };
+    pick.push(id);
+    gold += df.price * mult;
+    spent += cardValue(state, id, me);
+    if (spent > levelGain(me.level, 1) * 0.8) return null;
     if (gold >= RULES.ouroPorNivel) return { type: "SELL", cardIds: pick };
   }
   return null;
 }
 
+/** Procurar encrenca: luta com um monstro da mão quando um combo garante a vitória com folga. */
+function troubleIdea(state: GameState, me: PlayerState, ctx: Ctx): Action | null {
+  const monsters = me.hand.filter((id) => d(state, id).kind === "monster");
+  if (!monsters.length) return null;
+  const hostile = hostileHinder(state, me.id);
+  let best: { id: string; value: number } | null = null;
+  for (const id of monsters) {
+    const s1 = simulate(state, me.id, { type: "LOOK_FOR_TROUBLE", cardId: id }, ctx);
+    if (!s1?.combat) continue;
+    const me1 = P(s1, me.id);
+    const stake = stakeFor(s1, me.id);
+    const fleeLoss = expectedFleeLoss(s1, me1);
+    // folga desejada contra o que os adversários podem jogar
+    const need = Math.min(6, Math.round(hostile * 0.6));
+    let end: GameState = s1;
+    let cost = 0;
+    if (!(winningNow(s1) && marginOf(s1) >= need)) {
+      const combo =
+        findCombo(s1, me.id, boostCandidates(s1, me1), boostGoal(need), boostMetric, ctx, { maxDepth: 3, budget: stake * 0.6, simCap: 160 }) ??
+        findCombo(s1, me.id, boostCandidates(s1, me1), boostGoal(0), boostMetric, ctx, { maxDepth: 3, budget: stake * 0.5, simCap: 120 });
+      if (!combo) continue;
+      end = combo.end;
+      cost = combo.cost;
+    }
+    const margin = end.combat ? marginOf(end) : 99;
+    const reserve = reserveBoost(end, P(end, me.id));
+    const pHindered = hostile <= 0 ? 0.03 : Math.max(0.05, Math.min(0.9, (hostile - margin - reserve) / (hostile + 2)));
+    const value = (stake >= 100_000 ? 3000 : stake) - cost - pHindered * (fleeLoss + stake * 0.3);
+    if (value > 45 && (!best || value > best.value)) best = { id, value };
+  }
+  return best ? { type: "LOOK_FOR_TROUBLE", cardId: best.id } : null;
+}
+
+/** Fim do turno com mão acima do limite: usa o que iria para a Caridade em vez de dar para alguém. */
+function overflowIdea(state: GameState, me: PlayerState, ctx: Ctx): Action | null {
+  const excess = me.hand.length - handLimit(state, me);
+  if (excess <= 0) return null;
+  // itens vão para a mesa (não contam no limite da mão)
+  const item = me.hand
+    .filter((id) => itemDefOf(state, id) || d(state, id).kind === "rune" || (d(state, id).kind === "misc" && "price" in d(state, id)))
+    .sort((a, b) => cardValue(state, b, me) - cardValue(state, a, me))[0];
+  if (item) {
+    const a: Action = { type: "PLACE", cardId: item };
+    if (simulate(state, me.id, a, ctx)) return a;
+  }
+  // maldições e cartas soltas: qualquer uso que não piore muito vale mais que doar
+  const lowest = Math.min(...state.players.map((x) => x.level));
+  const losing = me.level === lowest ? 1 : 0.6; // se eu for o mais baixo, a carta só é descartada
+  const cheapestLoss = cheapest(state, me, excess)?.reduce((a, id) => a + cardValue(state, id, me), 0) ?? 0;
+  const fromHand = manageCandidates(state, me, true).filter((a) => {
+    const id = "cardId" in a ? a.cardId : a.type === "SOCKET_RUNE" ? a.runeId : null;
+    return !!id && me.hand.includes(id);
+  });
+  const use = bestOf(state, me.id, fromHand, ctx, -cheapestLoss * losing);
+  return use ? use.action : null;
+}
+
+/**
+ * Um monstro que "não desiste" voltou ao topo das Portas (todos viram): antes de chutar a porta,
+ * o bot troca qualquer carta por força (poções, itens) para não ficar preso fugindo dele para sempre.
+ */
+function prepareFor(state: GameState, me: PlayerState, ctx: Ctx): Action | null {
+  const top = state.decks.door[0];
+  if (!top || !(mem(state)[`fled:${top}`] >= 1)) return null;
+  const strength = (s: GameState) => playerPower(s, P(s, me.id)) + reserveBoost(s, P(s, me.id));
+  const base = strength(state);
+  let best: { a: Action; gain: number } | null = null;
+  for (const a of manageCandidates(state, me, true)) {
+    const s2 = simulate(state, me.id, a, ctx);
+    if (!s2) continue;
+    const gain = strength(s2) - base;
+    if (gain > 0 && (!best || gain > best.gain)) best = { a, gain };
+  }
+  return best ? noteGear(state, me.id, best.a) : null;
+}
+
 function decideOwnTurn(state: GameState, me: PlayerState, ctx: Ctx): Action | null {
-  const improve = bestOf(state, me.id, manageCandidates(state, me, true), ctx, 6);
-  if (improve) return improve.action;
+  // melhora a mesa; maldições só quando doem de verdade (as boas ficam para a hora do combate)
+  const cands = manageCandidates(state, me, true);
+  const improve =
+    bestOf(state, me.id, cands.filter((a) => a.type !== "PLAY_CURSE"), ctx, 6) ?? bestOf(state, me.id, cands.filter((a) => a.type === "PLAY_CURSE"), ctx, 35);
+  if (improve) return noteGear(state, me.id, improve.action);
   const sell = sellIdea(state, me);
   if (sell) return sell;
   if (state.turnPhase === "KICK") {
     if (state.prompts.some((p) => p.blocking)) return null;
+    const prep = prepareFor(state, me, ctx);
+    if (prep) return prep;
     return { type: "KICK_DOOR" };
   }
   if (state.turnPhase === "AFTER_DOOR") {
-    // Procura encrenca com um monstro que consiga vencer com folga
-    let bestM: { id: string; margin: number } | null = null;
-    for (const id of me.hand) {
-      if (d(state, id).kind !== "monster") continue;
-      const s = simulate(state, me.id, { type: "LOOK_FOR_TROUBLE", cardId: id }, ctx);
-      const calc = s && computeCombat(s);
-      if (!calc) continue;
-      const margin = calc.playerTotal - calc.monsterTotal;
-      if (calc.winning && margin >= 2 && (!bestM || margin > bestM.margin)) bestM = { id, margin };
-    }
-    if (bestM) return { type: "LOOK_FOR_TROUBLE", cardId: bestM.id };
+    const trouble = troubleIdea(state, me, ctx);
+    if (trouble) return trouble;
     return { type: "LOOT_ROOM" };
   }
   if (state.turnPhase === "END") {
     if (state.reward || state.prompts.some((p) => p.blocking) || state.turn.ending) return null;
+    // Galope (Centauro): mais uma porta enquanto estiver forte
+    for (const ab of abilityInfos(state, me)) {
+      if (!ab.available || ab.acao !== "abrirOutraPorta") continue;
+      const disc = cheapest(state, me, ab.discard);
+      if (!disc || playerPower(state, me) < me.level + 4 || disc.some((id) => cardValue(state, id, me) > 40)) continue;
+      return { type: "ABILITY", key: ab.key, discard: disc, params: {} };
+    }
+    const over = overflowIdea(state, me, ctx);
+    if (over) return over;
     const trade = tradeIdea(state, me);
     if (trade) return trade;
     return { type: "END_TURN" };
@@ -829,19 +1373,19 @@ export function decide(state: GameState, botId: string, ctx: Ctx): Action | null
   if (pr) return answerFor(state, me, pr, ctx);
   if (me.owlPeek) {
     const top = state.decks.door[0];
-    const bad = top ? ["monster", "curse"].includes(d(state, top).kind) && (d(state, top).kind === "curse" || (d(state, top) as MonsterCard).level > me.level + 4) : false;
+    const bad = top ? ["monster", "curse"].includes(d(state, top).kind) && (d(state, top).kind === "curse" || (d(state, top) as MonsterCard).level > playerPower(state, me)) : false;
     return { type: "OWL_DECIDE", bottom: bad };
   }
   const notice = state.notices.find((n) => n.playerId === botId);
   if (notice) return { type: "DISMISS_NOTICE", id: notice.id };
   if (state.phase === "SETUP") {
     const improve = bestOf(state, botId, manageCandidates(state, me, true), ctx, 4);
-    if (improve) return improve.action;
+    if (improve) return noteGear(state, botId, improve.action);
     return me.ready ? null : { type: "READY" };
   }
   const c = state.combat;
   if (c) {
-    if (c.stage === "badstuff") return decideBadStuff(state, me);
+    if (c.stage === "badstuff") return decideBadStuff(state, me, ctx);
     if (c.fighterId === botId) return decideFighter(state, me, ctx);
     return decideOtherCombat(state, me, ctx);
   }
@@ -927,3 +1471,4 @@ function fallbackAction(state: GameState, botId: string): Action | null {
 export function hasBots(state: GameState): boolean {
   return state.players.some((p) => p.bot);
 }
+
