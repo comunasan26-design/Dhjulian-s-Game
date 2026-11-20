@@ -30,6 +30,7 @@ const KIND_TITLE: Record<string, string> = {
   fairyCurse: "Troca Feérica",
   possession: "Possessão",
   debt: "Dívida com o Diabo",
+  threat: "Ameaça",
 };
 
 function arr(x: unknown): string[] {
@@ -170,7 +171,7 @@ function MyPrompt({ pr }: { pr: PromptV }) {
       body = (
         <>
           <p>
-            Pegue 1 item do corpo de <b>{api.playerName(String(d.deadId))}</b>.
+            Pegue 1 item de <b>{String(d.deadName ?? api.playerName(String(d.deadId)))}</b>.
           </p>
           <div className="mt-2 flex gap-2">
             <Button
@@ -255,6 +256,22 @@ function MyPrompt({ pr }: { pr: PromptV }) {
           >
             Escolher
           </Button>
+        </>
+      );
+      break;
+    case "threat":
+      body = (
+        <>
+          <p>
+            <b>{api.playerName(String(d.threatenerId))}</b> ameaça atrapalhar seu combate. Pede <b>{String(d.count)} tesouro(s)</b>{" "}
+            (pagos só se você vencer). Se aceitar, ele não pode atrapalhar você nesta rodada.
+          </p>
+          <div className="mt-2 flex gap-2">
+            <Button variant="success" onClick={() => answer({ accept: true })}>
+              Pagar
+            </Button>
+            <Button onClick={() => answer({ accept: false })}>Recusar</Button>
+          </div>
         </>
       );
       break;

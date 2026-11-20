@@ -203,7 +203,7 @@ function resolvePrompt(state: GameState, ctx: Ctx, pr: Prompt, ans: PromptAnswer
       const rest = items.filter((i) => i !== take);
       if (take) {
         me.carried.push(take);
-        log(state, ctx, `${me.name} pegou ${nameOf(state, take)} do corpo de ${player(state, String(d.deadId)).name}.`);
+        log(state, ctx, `${me.name} pegou ${nameOf(state, take)} de ${String(d.deadName ?? tryPlayer(state, String(d.deadId))?.name ?? "quem saiu")}.`);
       }
       nextLoot(state, ctx, String(d.deadId), rest, queue);
       return;
@@ -284,6 +284,21 @@ function resolvePrompt(state: GameState, ctx: Ctx, pr: Prompt, ans: PromptAnswer
       }
       giveItem(state, victim, me, id);
       log(state, ctx, `👻 Possessão: ${me.name} ficou com ${nameOf(state, id)} de ${victim.name}.`);
+      return;
+    }
+    case "threat": {
+      const combat = state.combat;
+      const valid = combat && combat.id === d.combatId && combat.stage !== "badstuff";
+      removePrompt(state, pr.id);
+      const threatener = tryPlayer(state, String(d.threatenerId));
+      if (!valid || !threatener) return;
+      if (ans.accept && !timeout) {
+        combat.bribes.push({ playerId: threatener.id, count: Number(d.count) });
+        state.truces = [...(state.truces ?? []), { by: threatener.id, protects: me.id, round: state.round }];
+        log(state, ctx, `🤝 ${me.name} aceitou pagar ${String(d.count)} tesouro(s) a ${threatener.name} (se vencer). ${threatener.name} não pode atrapalhar ${me.name} nesta rodada.`, "combat");
+      } else {
+        log(state, ctx, `${me.name} recusou a ameaça de ${threatener.name}.`, "combat");
+      }
       return;
     }
     case "debt": {

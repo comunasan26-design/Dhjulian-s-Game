@@ -140,7 +140,11 @@ export function useRoom(code: string) {
     async (action: Action): Promise<boolean> => {
       setBusy(true);
       try {
-        const p = await api<RoomPayload>(`/api/rooms/${code}/action`, { method: "POST", body: JSON.stringify({ action }) });
+        const p = await api<RoomPayload | { left: true }>(`/api/rooms/${code}/action`, { method: "POST", body: JSON.stringify({ action }) });
+        if ("left" in p) {
+          router.replace("/lobby");
+          return true;
+        }
         accept(p);
         return true;
       } catch (e) {
@@ -150,7 +154,7 @@ export function useRoom(code: string) {
         setBusy(false);
       }
     },
-    [code, accept],
+    [code, accept, router],
   );
 
   const roomCall = useCallback(

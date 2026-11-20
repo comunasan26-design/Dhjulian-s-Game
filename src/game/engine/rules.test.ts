@@ -232,4 +232,60 @@ describe("regras", () => {
     applyAction(state, "p1", { type: "TICK" }, ctx);
     expect(state.combat).toBeNull();
   });
+
+  it("ameaça aceita: quem ameaçou recebe tesouros e não pode atrapalhar nesta rodada", () => {
+    const { state, ctx } = setup();
+    P(state, "p0").level = 10;
+    topDoor(state, "monster.gosma"); // 2 tesouros
+    applyAction(state, "p0", { type: "KICK_DOOR" }, ctx);
+    applyAction(state, "p1", { type: "THREATEN", count: 1 }, ctx);
+    const pr = state.prompts.find((p) => p.kind === "threat")!;
+    expect(pr.playerId).toBe("p0");
+    applyAction(state, "p0", { type: "ANSWER", promptId: pr.id, answer: { accept: true } }, ctx);
+    const bonus = give(state, "p1", "bonus.anciao");
+    expect(() =>
+      applyAction(state, "p1", { type: "PLAY_MONSTER_BONUS", cardId: bonus, monsterId: state.combat!.monsters[0].cardId }, ctx),
+    ).toThrow(/não atrapalhar/);
+    const curse = give(state, "p1", "curse.azar");
+    expect(() => applyAction(state, "p1", { type: "PLAY_CURSE", cardId: curse, targetId: "p0" }, ctx)).toThrow(/não atrapalhar/);
+    applyAction(state, "p0", { type: "RESOLVE" }, ctx);
+    applyAction(state, "p2", { type: "PASS" }, ctx);
+    applyAction(state, "p1", { type: "PASS" }, ctx);
+    expect(state.combat).toBeNull();
+    // 2 tesouros: 1 para quem ameaçou, 1 para quem lutou
+    expect(P(state, "p1").hand.length).toBe(1 + 2);
+    expect(P(state, "p0").hand.length).toBe(1);
+  });
+
+  it("desistência: conta como morte, o jogador sai da mesa e o turno passa", () => {
+    const { state, ctx } = setup();
+    const sword = give(state, "p0", "item.espada-vorpal", "equipped");
+    give(state, "p0", "levelup.critico");
+    applyAction(state, "p0", { type: "SURRENDER" }, ctx);
+    expect(state.players.map((p) => p.id)).toEqual(["p1", "p2"]);
+    expect(state.order).toEqual(["p1", "p2"]);
+    expect(state.order[state.currentIdx]).toBe("p1");
+    const loot = state.prompts.find((p) => p.kind === "loot")!;
+    applyAction(state, loot.playerId, { type: "ANSWER", promptId: loot.id, answer: { cardId: sword } }, ctx);
+    expect(P(state, loot.playerId).carried).toContain(sword);
+    // Último humano desistindo fecha a sala; sobrando 1 jogador ele vence
+    applyAction(state, "p1", { type: "SURRENDER" }, ctx);
+    expect(state.winnerId).toBe("p2");
+  });
+
+  it("se todos os humanos desistem, a sala fecha", () => {
+    const ctx = makeCtx();
+    const state = createGame(
+      [
+        { id: "h", name: "H" },
+        { id: "b1", name: "B1", bot: true },
+        { id: "b2", name: "B2", bot: true },
+      ],
+      "h",
+      ctx,
+    );
+    applyAction(state, "h", { type: "SURRENDER" }, ctx);
+    expect(state.closed).toBe(true);
+    expect(state.phase).toBe("FINISHED");
+  });
 });

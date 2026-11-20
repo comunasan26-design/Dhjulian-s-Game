@@ -92,17 +92,43 @@ function maxOtherLevel(state: GameState, me: string): number {
   return Math.max(0, ...state.players.filter((p) => p.id !== me).map((p) => p.level));
 }
 
-/** Peso de um adversário: humanos e o líder pesam muito; bots aliados pouco (a não ser que estejam quase ganhando). */
+/**
+ * Peso de um adversário: humanos pesam um pouco mais que bots (preferência, não obsessão),
+ * e quem está liderando ou perto de ganhar pesa muito — mesmo que seja outro bot.
+ */
 function weight(state: GameState, me: string, other: PlayerState): number {
   const leaderLevel = maxOtherLevel(state, me);
-  const nearWin = other.level >= 16 || (other.level === leaderLevel && other.level >= 13);
-  let w = other.bot ? (nearWin ? 1 : 0.25) : 1;
-  if (other.level === leaderLevel && other.level >= P(state, me).level) w *= 1.5;
+  let w = other.bot ? 0.6 : 1;
+  if (other.level === leaderLevel && other.level >= P(state, me).level && other.level > 1) w *= 1.8;
+  if (other.level >= 16) w = Math.max(w, 1.6);
   return w;
 }
 
 function isAlly(state: GameState, me: string, other: PlayerState): boolean {
-  return !!other.bot && weight(state, me, other) < 0.5;
+  return !!other.bot && weight(state, me, other) < 0.8;
+}
+
+function monsterStake(state: GameState): { levels: number; treasures: number } {
+  const c = state.combat;
+  if (!c) return { levels: 0, treasures: 0 };
+  let levels = 0;
+  let treasures = 0;
+  for (const m of c.monsters) {
+    const md = d(state, m.cardId) as MonsterCard;
+    levels += md.levels;
+    treasures += md.treasures;
+  }
+  return { levels, treasures };
+}
+
+/** O jogador `who` consegue fazer o lutador perder com as cartas que tem? */
+function canFlip(state: GameState, who: string, ctx: Ctx): boolean {
+  if (!state.combat) return false;
+  const winning = (s: GameState) => !!s.combat && !!computeCombat(s)?.winning;
+  if (!winning(state)) return false;
+  const w = P(state, who);
+  if (!w) return false;
+  return !!plan(state, who, (s) => (s.combat ? hinderCandidates(s, P(s, who)) : []), (s) => !s.combat || !winning(s), ctx, 4);
 }
 
 function handValue(state: GameState, p: PlayerState): number {
@@ -393,15 +419,27 @@ function answerFor(state: GameState, me: PlayerState, pr: Prompt, ctx: Ctx): Act
     case "helpRequest": {
       const fighter = P(state, String(data.fighterId));
       const deal = data.deal as { count: number };
-      const c = state.combat;
       const calc = computeCombat(state);
       const wouldWin = !!calc && calc.playerTotal + playerPower(state, me) > calc.monsterTotal;
-      let accept: boolean;
-      if (fighter.bot) accept = isAlly(state, me.id, fighter) && wouldWin;
-      else accept = wouldWin && deal.count >= 2 && fighter.level < 15 && weight(state, me.id, fighter) <= 1;
-      if (data.threat && !accept && wouldWin && me.level > 1) accept = true;
-      void c;
+      const stake = monsterStake(state);
+      // Ganho para mim (tesouros + nível do Elfo) contra o quanto o lutador avança
+      const myGain = deal.count * 40 + (me.race && state.cards[me.race]?.defId === "race.elfo" ? 100 : 0);
+      const theirGain = weight(state, me.id, fighter) * stake.levels * 60;
+      let accept = wouldWin && (isAlly(state, me.id, fighter) || myGain >= theirGain);
+      if (fighter.level >= 18 && !isAlly(state, me.id, fighter)) accept = false;
+      if (data.threat && !accept && wouldWin && me.level > 1 && fighter.level < 18) accept = true;
       return answer({ accept });
+    }
+    case "threat": {
+      // Pago se quem ameaça conseguiria mesmo virar o combate
+      const threatener = String(data.threatenerId);
+      const count = Number(data.count);
+      const stake = monsterStake(state);
+      const calc = computeCombat(state);
+      const winningNow = !!calc?.winning;
+      const real = canFlip(state, threatener, ctx) || P(state, threatener).hand.length >= 4;
+      const worth = stake.levels * 100 + (stake.treasures - count) * 25 > 0 && count < stake.treasures + 1;
+      return answer({ accept: real && worth && (winningNow || count <= Math.ceil(stake.treasures / 2)) });
     }
     case "helpOffer": {
       const helper = P(state, String(data.helperId));
@@ -599,7 +637,19 @@ function decideOtherCombat(state: GameState, me: PlayerState, ctx: Ctx): Action 
     if (c.stage === "resolving" && !onSide && !c.passed.includes(me.id)) return { type: "PASS" };
     return null;
   }
-  // Adversário: só interfere quando ele já decidiu atacar (janela de ataque)
+  // Adversário: ameaça (pede tesouros para não atrapalhar) se consegue virar o combate
+  const m = mem(state);
+  const threatKey = `threat:${c.id}:${me.id}`;
+  if (calc.winning && !m[threatKey] && !c.used.includes(`${me.id}:threat`) && !c.desafio) {
+    const fw = weight(state, me.id, fighter);
+    if (fw < 1.5 && canFlip(state, me.id, ctx)) {
+      m[threatKey] = 1;
+      const stake = monsterStake(state);
+      return { type: "THREATEN", count: Math.max(1, Math.ceil(stake.treasures / 2)) };
+    }
+    m[threatKey] = 1;
+  }
+  // Só atrapalha quando ele já decidiu atacar (janela de ataque)
   if (c.stage !== "resolving") return null;
   if (calc.winning) {
     const p = plan(state, me.id, (s) => (s.combat ? hinderCandidates(s, P(s, me.id)) : []), (s) => !s.combat || !winning(s), ctx, 4);

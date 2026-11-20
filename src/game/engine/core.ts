@@ -261,6 +261,7 @@ export function advanceTurn(state: GameState, ctx: Ctx, depth = 0) {
   if (next >= state.order.length) {
     next = 0;
     state.round += 1;
+    state.truces = (state.truces ?? []).filter((t) => t.round === state.round);
     log(state, ctx, `══ Rodada ${state.round} ══`, "system");
   }
   beginTurn(state, ctx, state.order[next], depth);
@@ -388,6 +389,7 @@ export function startCombat(state: GameState, ctx: Ctx, fighterId: string, monst
     levelsLost: {},
     rerolled: [],
     othersPenaltyApplied: false,
+    bribes: [],
   };
   state.combat = combat;
   state.turnPhase = "COMBAT";
@@ -671,6 +673,7 @@ export function resolveVictory(state: GameState, ctx: Ctx) {
   }
   const tarrasque = beaten.some((m) => inst(state, m.cardId).defId === "monster.tarrasque");
   const deal = combat.helperForced ? null : combat.helperDeal;
+  const bribes = (combat.bribes ?? []).filter((b) => state.players.some((p) => p.id === b.playerId));
   endCombat(state, ctx, "won");
 
   const pool: string[] = [];
@@ -686,6 +689,7 @@ export function resolveVictory(state: GameState, ctx: Ctx) {
     faceUp: !!helper,
     bardo: bardo && pool.length > 0,
     helperExtra: tarrasque && helper ? 1 : 0,
+    bribes,
   };
   if (helper && tarrasque) {
     const got = drawTo(state, helper, "treasure", 1, ctx);
@@ -718,6 +722,16 @@ export function continueReward(state: GameState, ctx: Ctx) {
       return;
     }
   }
+  // Paga as ameaças aceitas
+  for (const b of r.bribes ?? []) {
+    if (r.cards.length === 0) break;
+    const taker = tryPlayer(state, b.playerId);
+    if (!taker) continue;
+    const chosen = shuffle([...r.cards], ctx).slice(0, Math.min(b.count, r.cards.length));
+    log(state, ctx, `😈 ${fighter.name} pagou a ameaça de ${taker.name}.`);
+    giveRewardTo(state, ctx, taker, chosen);
+  }
+  r.bribes = [];
   if (r.cards.length > 0) {
     if (r.faceUp) {
       log(state, ctx, `💰 ${fighter.name} ficou com: ${r.cards.map((c) => nameOf(state, c)).join(", ")}.`);
@@ -1109,11 +1123,13 @@ export function killPlayer(state: GameState, ctx: Ctx, p: PlayerState, reason: s
 export function nextLoot(state: GameState, ctx: Ctx, deadId: string, items: string[], queue: string[]) {
   if (items.length === 0 || queue.length === 0) {
     for (const id of items) discardCard(state, id);
-    if (items.length) log(state, ctx, `${items.length} item(ns) do corpo de ${player(state, deadId).name} foram descartados.`);
+    const dead = tryPlayer(state, deadId);
+    if (items.length) log(state, ctx, `${items.length} item(ns) do corpo de ${dead?.name ?? "quem desistiu"} foram descartados.`);
     return;
   }
   const [next, ...rest] = queue;
-  createPrompt(state, ctx, "loot", next, { deadId, items, queue: rest });
+  const deadName = tryPlayer(state, deadId)?.name ?? state.leftPlayers?.find((l) => l.id === deadId)?.name ?? "quem saiu";
+  createPrompt(state, ctx, "loot", next, { deadId, deadName, items, queue: rest });
 }
 
 // ============================================================================
@@ -1433,3 +1449,118 @@ export function revalidateEquipment(state: GameState, ctx: Ctx, p: PlayerState) 
 }
 
 export { classesOf, giveItem };
+
+// ============================================================================
+// Desistência
+// ============================================================================
+
+/**
+ * O jogador desiste: conta como morte (os outros saqueiam os itens), mas ele sai do jogo.
+ * Se não sobrar nenhum humano, a partida é encerrada (closed). Se sobrar um só jogador, ele vence.
+ */
+export function surrender(state: GameState, ctx: Ctx, p: PlayerState) {
+  if (state.phase === "FINISHED") fail("A partida já terminou.");
+  log(state, ctx, `🏳️ ${p.name} desistiu da partida.`, "system", p.id);
+  const wasCurrent = state.phase === "PLAYING" && isCurrent(state, p.id);
+  // Combate e recompensas
+  const combat = state.combat;
+  if (combat) {
+    if (combat.fighterId === p.id) endCombat(state, ctx, "ended");
+    else {
+      if (combat.helperId === p.id) removeHelper(state, ctx, "desistiu");
+      combat.bribes = combat.bribes.filter((b) => b.playerId !== p.id);
+    }
+  }
+  const r = state.reward;
+  if (r) {
+    if (r.fighterId === p.id) {
+      for (const c of r.cards) discardCard(state, c);
+      state.reward = null;
+    } else {
+      if (r.helperId === p.id) {
+        r.helperId = null;
+        r.deal = null;
+      }
+      r.bribes = (r.bribes ?? []).filter((b) => b.playerId !== p.id);
+    }
+  }
+  // Prompts que dependem dele
+  const refs = ["fighterId", "helperId", "fromId", "victimId", "fairyId", "threatenerId"];
+  const stale = state.prompts.filter((pr) => pr.playerId === p.id || refs.some((k) => pr.data[k] === p.id));
+  for (const pr of stale) {
+    if (pr.kind === "loot") {
+      // passa a vez do saque para o próximo da fila
+      removePrompt(state, pr.id);
+      nextLoot(state, ctx, String(pr.data.deadId), pr.data.items as string[], pr.data.queue as string[]);
+    } else if (pr.kind === "distribute" || pr.kind === "bardo") {
+      removePrompt(state, pr.id);
+      if (state.reward) {
+        state.reward.deal = null;
+        state.reward.bardo = false;
+      }
+    } else if (pr.kind === "charity") {
+      removePrompt(state, pr.id);
+    } else {
+      removePrompt(state, pr.id);
+    }
+  }
+  for (const pr of state.prompts) {
+    if (pr.kind === "loot") pr.data.queue = (pr.data.queue as string[]).filter((id) => id !== p.id);
+  }
+  // "Morte": itens para o saque, mão e maldições descartadas
+  const items = [...p.equipped, ...p.carried];
+  p.equipped = [];
+  p.carried = [];
+  for (const c of [...p.hand]) discardFromPlayer(state, p, c);
+  for (const cu of [...p.curses]) removeCurse(state, p, cu.id);
+  for (const pc of p.pendingCombatCurses.splice(0)) discardCard(state, pc.cardId);
+  for (const m of p.ambush.splice(0)) discardCard(state, m);
+  if (p.race) discardCard(state, p.race);
+  for (const c of p.classes) discardCard(state, c);
+  p.race = null;
+  p.classes = [];
+  for (const id of items) delete state.cards[id]?.artificeSecond;
+  // Sai da mesa
+  const idx = state.order.indexOf(p.id);
+  state.order.splice(idx, 1);
+  state.players = state.players.filter((x) => x.id !== p.id);
+  state.leftPlayers = [...(state.leftPlayers ?? []), { id: p.id, name: p.name }];
+  state.truces = (state.truces ?? []).filter((t) => t.by !== p.id && t.protects !== p.id);
+  if (state.lastFaceUp?.ownerId === p.id) state.lastFaceUp = null;
+  if (state.hostId === p.id) state.hostId = state.players.find((x) => !x.bot)?.id ?? state.players[0]?.id ?? state.hostId;
+  if (items.length > 0 && state.players.length > 0) {
+    const queue = [...state.players].sort((a, b) => b.level - a.level || a.seat - b.seat).map((x) => x.id);
+    nextLoot(state, ctx, p.id, items, queue);
+  } else {
+    for (const id of items) discardCard(state, id);
+  }
+  // Fim de jogo?
+  if (!state.players.some((x) => !x.bot)) {
+    state.closed = true;
+    state.phase = "FINISHED";
+    log(state, ctx, "Todos os jogadores humanos desistiram. A sala foi encerrada.", "system");
+    return;
+  }
+  if (state.players.length === 1) {
+    state.winnerId = state.players[0].id;
+    state.phase = "FINISHED";
+    log(state, ctx, `🏆 ${state.players[0].name} venceu: é o último na mesa!`, "system");
+    return;
+  }
+  if (state.phase === "SETUP") {
+    if (state.players.every((x) => x.ready)) startPlaying(state, ctx);
+    return;
+  }
+  // Ajusta a vez
+  if (idx < state.currentIdx) state.currentIdx -= 1;
+  if (wasCurrent) {
+    let next = idx;
+    if (next >= state.order.length) {
+      next = 0;
+      state.round += 1;
+      log(state, ctx, `══ Rodada ${state.round} ══`, "system");
+    }
+    state.combat = null;
+    beginTurn(state, ctx, state.order[next], 0);
+  }
+}

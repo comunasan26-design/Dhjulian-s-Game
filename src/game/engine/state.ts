@@ -155,6 +155,8 @@ export interface CombatState {
   /** Fontes de rerrolagem já usadas (Cajado do Arquimago). */
   rerolled: string[];
   othersPenaltyApplied: boolean;
+  /** Ameaças aceitas: quem ameaçou recebe tesouros se o lutador vencer. */
+  bribes: { playerId: string; count: number }[];
 }
 
 export interface RewardState {
@@ -165,6 +167,7 @@ export interface RewardState {
   faceUp: boolean;
   bardo: boolean;
   helperExtra: number;
+  bribes?: { playerId: string; count: number }[];
 }
 
 export type PromptKind =
@@ -181,7 +184,8 @@ export type PromptKind =
   | "fairyCurse"
   | "possession"
   | "slipperyFingers"
-  | "debt";
+  | "debt"
+  | "threat";
 
 export interface Prompt {
   id: string;
@@ -252,6 +256,12 @@ export interface GameState {
   lastActionAt: number;
   /** Próximo momento em que um bot pode agir (ritmo dos bots). */
   botNextAt?: number;
+  /** Tréguas: quem aceitou suborno não pode atrapalhar o protegido nesta rodada. */
+  truces?: { by: string; protects: string; round: number }[];
+  /** Jogadores que desistiram. */
+  leftPlayers?: { id: string; name: string }[];
+  /** Todos os humanos desistiram: a sala deve ser fechada. */
+  closed?: boolean;
   /** Memória dos bots (pedidos já feitos, trocas tentadas…). */
   botMemory?: Record<string, number>;
 }

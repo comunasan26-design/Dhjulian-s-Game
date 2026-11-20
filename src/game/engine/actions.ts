@@ -19,6 +19,7 @@ import {
   startFlee,
   startPlaying,
   joinHelper,
+  surrender,
 } from "./core";
 import { answerPrompt, type PromptAnswer, timeoutPrompt } from "./prompts";
 import { type Ctx, type GameState, type HelpDeal, type PlayerState, TIMERS, fail } from "./state";
@@ -100,6 +101,8 @@ export type Action =
   | { type: "SOPRO" }
   | { type: "ABILITY"; key: AbilityKey; discard: string[]; params: Params }
   | { type: "ANSWER"; promptId: string; answer: PromptAnswer }
+  | { type: "THREATEN"; count: number }
+  | { type: "SURRENDER" }
   | { type: "TICK" };
 
 // ============================================================================
@@ -170,6 +173,16 @@ function canInterfere(state: GameState, p: PlayerState) {
   if (!side.includes(p.id) && specialIds(state, combat).has("monster.planetar") && p.curseCastRound === state.round)
     fail("Planetar: quem lançou maldição nesta rodada não pode ajudar nem atrapalhar.");
   return combat;
+}
+
+/** Quem aceitou suborno não pode atrapalhar o protegido nesta rodada. */
+function truceBlocks(state: GameState, actor: PlayerState, targetId: string | null | undefined): boolean {
+  return !!targetId && (state.truces ?? []).some((t) => t.by === actor.id && t.protects === targetId && t.round === state.round);
+}
+
+function assertMayHinder(state: GameState, actor: PlayerState, targetId: string | null | undefined) {
+  if (truceBlocks(state, actor, targetId))
+    fail("Você aceitou não atrapalhar esse jogador nesta rodada (foi pago pela ameaça).");
 }
 
 function inHand(p: PlayerState, cardId: string) {
@@ -472,6 +485,8 @@ function dispatch(state: GameState, p: PlayerState, a: Action, ctx: Ctx) {
       if (d.kind !== "curse") fail("Isso não é uma maldição.");
       const target = player(state, a.targetId);
       const combat = state.combat;
+      assertMayHinder(state, p, target.id);
+      if (combat && (target.id === combat.helperId || (d as CurseCard).curseType === "combat")) assertMayHinder(state, p, combat.fighterId);
       if (combat && combat.desafio && p.id !== combat.fighterId && (target.id === combat.fighterId || (d as CurseCard).curseType === "combat"))
         fail("Desafio: ninguém mais pode jogar cartas neste combate.");
       if (combat && (target.id === combat.fighterId || target.id === combat.helperId)) {
@@ -510,6 +525,7 @@ function dispatch(state: GameState, p: PlayerState, a: Action, ctx: Ctx) {
         value *= 2;
         log(state, ctx, "O Oni dobra o primeiro bônus jogado a favor dele!", "combat");
       }
+      if (value > 0) assertMayHinder(state, p, combat.fighterId);
       cm.mods.push({ id: uid(state, "m"), value, by: p.id, label: d.name });
       discardFromPlayer(state, p, a.cardId);
       log(state, ctx, `${p.name} jogou ${d.name} (${value > 0 ? "+" : ""}${value}) em ${nameOf(state, cm.cardId)}.`, "combat", p.id);
@@ -523,6 +539,7 @@ function dispatch(state: GameState, p: PlayerState, a: Action, ctx: Ctx) {
       if (defOf(state, a.cardId).kind !== "wandering") fail("Use uma carta de Monstro Errante.");
       if (defOf(state, a.monsterCardId).kind !== "monster") fail("Escolha um monstro da mão.");
       const fighter = player(state, combat.fighterId);
+      assertMayHinder(state, p, fighter.id);
       if (fighter.equipped.some((id) => state.cards[id]?.defId === "item.anel-invisibilidade"))
         fail("Anel da Invisibilidade: ninguém pode jogar Monstros Errantes neste combate.");
       discardFromPlayer(state, p, a.cardId);
@@ -533,6 +550,7 @@ function dispatch(state: GameState, p: PlayerState, a: Action, ctx: Ctx) {
     case "SCREAMER_ADD": {
       const combat = combatFor(state);
       if (combat.screamerFor !== p.id) fail("O grito não é para você.");
+      assertMayHinder(state, p, combat.fighterId);
       inHand(p, a.monsterCardId);
       if (defOf(state, a.monsterCardId).kind !== "monster") fail("Escolha um monstro da mão.");
       combat.screamerFor = null;
@@ -773,7 +791,28 @@ function dispatch(state: GameState, p: PlayerState, a: Action, ctx: Ctx) {
       log(state, ctx, `🔮 ${p.name} leu os pensamentos de ${target.name}.`);
       return;
     }
-    case "ABILITY":
+    case "THREATEN": {
+      const combat = combatFor(state);
+      if (combat.stage === "badstuff") fail("O combate já foi decidido.");
+      if (combat.desafio) fail("Desafio: ninguém mais pode jogar neste combate.");
+      if (playerSide(state, combat).includes(p.id)) fail("Você está no combate.");
+      if (truceBlocks(state, p, combat.fighterId)) fail("Você já tem um acordo com esse jogador nesta rodada.");
+      if (combat.used.includes(`${p.id}:threat`)) fail("Você já fez uma ameaça neste combate.");
+      const count = Math.max(1, Math.min(10, Math.floor(Number(a.count) || 1)));
+      combat.used.push(`${p.id}:threat`);
+      createPrompt(state, ctx, "threat", combat.fighterId, { threatenerId: p.id, count, combatId: combat.id }, { blocking: false, ms: TIMERS.help });
+      log(state, ctx, `😈 ${p.name} ameaça atrapalhar ${player(state, combat.fighterId).name} se não receber ${count} tesouro(s).`, "combat", p.id);
+      return;
+    }
+    case "SURRENDER":
+      surrender(state, ctx, p);
+      return;
+    case "ABILITY": {
+      const params = a.params ?? {};
+      if (state.combat && params.side === "monster") assertMayHinder(state, p, state.combat.fighterId);
+      if (["maldicaoSombria", "roubo", "truqueFeerico", "mordida", "pactoDiabolico"].includes(a.key) && typeof params.player === "string")
+        assertMayHinder(state, p, params.player);
+    }
       activateAbility(state, ctx, p, a.key, Array.isArray(a.discard) ? a.discard : [], a.params ?? {});
       return;
     default:
@@ -880,6 +919,8 @@ function playConsumable(state: GameState, ctx: Ctx, p: PlayerState, a: Extract<A
   const combat = state.combat;
   const label = (txt: string) => `${d.name}${mult > 1 ? " x2" : ""} (${txt})`;
 
+  if (combat && (a.side === "monster" || d.id === "misc.isca" || (d.id === "potion.acido" && a.targetId)))
+    assertMayHinder(state, p, combat.fighterId);
   const finishPotion = () => {
     if (hasRace(state, p, "gnomo")) {
       const r = rollD6(state, p, ctx, "Gambiarra");

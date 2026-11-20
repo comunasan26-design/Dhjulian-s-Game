@@ -220,6 +220,22 @@ export function CombatPanel() {
             🤚 Oferecer ajuda
           </Button>
         )}
+        {!onSide && c.stage !== "badstuff" && !c.desafio && !c.used.includes(`${me.id}:threat`) && (
+          <Button
+            onClick={async () => {
+              const treasures = c.monsters.reduce((a, m) => a + ((api.def(m.cardId) as { treasures?: number })?.treasures ?? 0), 0);
+              const v = await picker.pick({
+                title: `Ameaçar atrapalhar ${fighter.name}`,
+                description: "Peça tesouros para não atrapalhar. Se ele aceitar, você recebe os tesouros quando ele vencer e não pode atrapalhá-lo nesta rodada.",
+                options: Array.from({ length: Math.max(1, Math.min(10, treasures)) }, (_, i) => ({ value: String(i + 1), label: `${i + 1} tesouro(s)` })),
+              });
+              if (v) await api.act({ type: "THREATEN", count: Number(v) });
+            }}
+            disabled={api.busy}
+          >
+            😈 Ameaçar atrapalhar
+          </Button>
+        )}
         {!onSide && c.stage === "resolving" && !c.passed.includes(me.id) && (
           <Button variant="primary" onClick={() => api.act({ type: "PASS" })}>
             ✅ Deixar passar
@@ -262,6 +278,12 @@ export function CombatPanel() {
       </div>
       {c.screamerFor === me.id && (
         <p className="mt-2 text-sm text-gold-2">📣 O Cogumelo gritou para você: clique em um monstro da sua mão para colocá-lo no combate.</p>
+      )}
+      {c.bribes.length > 0 && (
+        <p className="mt-2 text-sm text-gold-2">
+          🤝 Acordos:{" "}
+          {c.bribes.map((b) => `${api.playerName(b.playerId)} recebe ${b.count} tesouro(s) se ${fighter.name} vencer e não atrapalha`).join("; ")}
+        </p>
       )}
       {c.desafio && <p className="mt-2 text-sm text-gold-2">⚔️ Desafio! Ninguém mais pode jogar cartas neste combate.</p>}
     </section>

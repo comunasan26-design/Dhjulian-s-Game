@@ -92,6 +92,14 @@ export function LocalGame() {
         if (a.type !== "TICK") setToast((e as Error).message);
         return false;
       }
+      if (clone.closed) {
+        stateRef.current = null;
+        save(null);
+        setSaved(null);
+        setView(null);
+        setToast("Você desistiu da partida.");
+        return true;
+      }
       stateRef.current = clone;
       commit();
       return true;
