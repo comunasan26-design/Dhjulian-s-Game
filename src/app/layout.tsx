@@ -1,4 +1,6 @@
 import type { Metadata, Viewport } from "next";
+import { CardArtDefs } from "@/components/art/CardArt";
+import { CardZoomHost } from "@/components/art/zoom";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -15,7 +17,11 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="pt-BR" className="h-full antialiased">
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        <CardArtDefs />
+        {children}
+        <CardZoomHost />
+      </body>
     </html>
   );
 }

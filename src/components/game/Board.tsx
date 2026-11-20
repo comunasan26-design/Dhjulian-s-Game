@@ -5,7 +5,9 @@ import { useEffect, useRef, useState } from "react";
 import type { Action, GameView } from "@/game/engine";
 import type { ConnState } from "../room/useRoom";
 import { Button } from "../ui/Button";
+import { GameFx, SoundToggle } from "../fx/GameFx";
 import { CardInspector } from "./CardInspector";
+import { CardBackside } from "../art/CardArt";
 import { CardView } from "./CardView";
 import { CombatPanel } from "./CombatPanel";
 import { GameProvider } from "./GameContext";
@@ -112,6 +114,7 @@ export function Board({
               · Nível {me.level} · ⚔️ {me.power}
             </span>
             <span className={`ml-auto text-xs ${conn === "online" ? "text-emerald-400" : "text-amber-400"}`}>● {CONN_LABEL[conn]}</span>
+            <SoundToggle />
             <Link href="/regras" target="_blank" className="hidden text-xs text-muted underline hover:text-ink sm:inline">
               Regras
             </Link>
@@ -165,6 +168,7 @@ export function Board({
           ))}
         </nav>
         <PromptLayer />
+        <GameFx view={view} />
         <CardInspector cardId={inspect} onClose={() => setInspect(null)} />
         {winner && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
@@ -189,17 +193,9 @@ function TableArea({ view, me, act }: { view: GameView; me: GameView["players"][
   const topTreasure = view.decks.treasureDiscard[view.decks.treasureDiscard.length - 1];
   return (
     <section className="flex flex-wrap items-start gap-3 rounded-xl border border-edge bg-panel p-3 sm:gap-4">
-      <div className="flex gap-2">
-        <div className="flex h-[5.5rem] w-[4.2rem] items-center justify-center rounded-lg border-2 border-red-900 bg-red-950/60 text-center font-display text-sm text-red-200 sm:h-[7.5rem] sm:w-[5.5rem] sm:text-base">
-          Portas
-          <br />
-          {view.decks.door}
-        </div>
-        <div className="flex h-[5.5rem] w-[4.2rem] items-center justify-center rounded-lg border-2 border-amber-800 bg-amber-950/50 text-center font-display text-sm text-amber-200 sm:h-[7.5rem] sm:w-[5.5rem] sm:text-base">
-          Tesouros
-          <br />
-          {view.decks.treasure}
-        </div>
+      <div className="flex gap-3">
+        <DeckPile deck="door" label="Portas" count={view.decks.door} />
+        <DeckPile deck="treasure" label="Tesouros" count={view.decks.treasure} />
       </div>
       {view.turn.revealed && view.cards[view.turn.revealed] && (
         <div>
@@ -232,6 +228,31 @@ function TableArea({ view, me, act }: { view: GameView; me: GameView["players"][
         </div>
       )}
     </section>
+  );
+}
+
+/** Pilha de cartas viradas (baralho) com contador. */
+function DeckPile({ deck, label, count }: { deck: "door" | "treasure"; label: string; count: number }) {
+  const layers = Math.min(3, Math.ceil(count / 30));
+  return (
+    <div className="flex flex-col items-center">
+      <p className="mb-1 text-xs text-muted">{label}</p>
+      <div className="relative">
+        {Array.from({ length: layers }, (_, i) => (
+          <div key={i} className="absolute inset-0" style={{ transform: `translate(${(layers - i) * 2}px, ${(layers - i) * 2}px)` }}>
+            <div className="game-card relative aspect-[5/7] w-[5.25rem] opacity-80 sm:w-[6rem]">
+              <CardBackside deck={deck} />
+            </div>
+          </div>
+        ))}
+        <div className="game-card relative aspect-[5/7] w-[5.25rem] sm:w-[6rem]">
+          <CardBackside deck={deck} />
+          <span className="absolute bottom-[8%] left-1/2 z-10 -translate-x-1/2 rounded-full border border-gold/60 bg-black/80 px-2 font-display text-sm text-gold-2">
+            {count}
+          </span>
+        </div>
+      </div>
+    </div>
   );
 }
 

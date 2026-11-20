@@ -14,12 +14,14 @@
     "db:deploy": "prisma migrate deploy",
     "postinstall": "prisma generate",
     "cartas:validar": "tsx scripts/cartas.mts validar",
-    "cartas:docs": "tsx scripts/cartas.mts docs"
+    "cartas:docs": "tsx scripts/cartas.mts docs",
+    "animacoes": "tsx scripts/animacoes.mts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.10.1",
     "@prisma/client": "^7.10.1",
     "bcryptjs": "^3.0.3",
+    "lottie-web": "^5.12.2",
     "next": "16.4.6",
     "pg": "^8.23.1",
     "react": "19.3.0",

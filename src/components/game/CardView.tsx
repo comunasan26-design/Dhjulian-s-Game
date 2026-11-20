@@ -1,8 +1,21 @@
 "use client";
 
-import { KIND_ICON, KIND_LABEL, KIND_STYLE, cardDef, shortInfo } from "@/game/display";
+import { CardBackside, CardFront } from "../art/CardArt";
+import { RuneHalo } from "../art/RuneHalo";
+import { METAL_OF, rarityOf } from "../art/metals";
+import { instLines, openZoom, useHold } from "../art/zoom";
+import { cardDef } from "@/game/display";
 import { useGameOptional } from "./GameContext";
 
+const WIDTH = {
+  sm: "w-[5.25rem] sm:w-[6rem]",
+  md: "w-[7rem] sm:w-[8.5rem]",
+};
+
+/**
+ * Carta do jogo: moldura de metal (raridade) + gema (tipo).
+ * Toque/clique abre as ações; segurar (ou botão direito) ergue a carta para ver de perto e virar.
+ */
 export function CardView({
   id,
   defId,
@@ -11,6 +24,7 @@ export function CardView({
   size = "md",
   badge,
   dim,
+  deck,
 }: {
   id?: string;
   defId?: string;
@@ -19,58 +33,50 @@ export function CardView({
   size?: "sm" | "md";
   badge?: string;
   dim?: boolean;
+  /** Para cartas ocultas: de qual baralho é o verso. */
+  deck?: "door" | "treasure";
 }) {
   const game = useGameOptional();
   const inst = id ? game?.view.cards[id] : undefined;
   const d = defId ? cardDef(defId) : inst ? cardDef(inst.defId) : null;
-  const w = size === "sm" ? "w-[5.75rem] sm:w-[6.5rem]" : "w-[7rem] sm:w-[8.5rem]";
-  const h = size === "sm" ? "min-h-[4.25rem] sm:min-h-[4.5rem]" : "min-h-[6.5rem] sm:min-h-[7.5rem]";
   const click = onClick ?? (id && game ? () => game.inspect(id) : undefined);
+  const hold = useHold(
+    d
+      ? () =>
+          openZoom({
+            defId: d.id,
+            inst: inst ? { reforged: inst.reforged, runes: inst.runes, charges: inst.charges, tamed: inst.tamed, artificeSecond: inst.artificeSecond } : undefined,
+            extra: instLines(inst, (r) => game?.name(r) ?? r),
+          })
+      : null,
+  );
+  const runes = inst?.runes?.length ?? 0;
+  const metal = METAL_OF[rarityOf(d)];
 
-  if (!d) {
-    return (
-      <div className={`${w} ${h} rounded-lg border border-edge bg-[repeating-linear-gradient(45deg,#2a221c,#2a221c_6px,#221b16_6px,#221b16_12px)]`} />
-    );
-  }
-  const bonus =
-    d.kind === "item"
-      ? (inst?.tamed ? 0 : d.bonus) + (inst?.reforged ? 1 : 0)
-      : d.kind === "monster" && inst?.tamed
-        ? d.treasures
-        : null;
   return (
     <button
       type="button"
-      onClick={click}
-      title={d.name}
-      className={`relative flex shrink-0 ${w} ${h} flex-col rounded-lg border-2 p-1.5 text-left transition hover:-translate-y-0.5 hover:shadow-lg ${KIND_STYLE[d.kind]} ${
-        selected ? "ring-2 ring-gold-2 ring-offset-2 ring-offset-bg" : ""
-      } ${dim ? "opacity-50" : ""}`}
+      {...hold.handlers}
+      onClick={() => {
+        if (hold.consumed()) return;
+        click?.();
+      }}
+      title={d ? `${d.name} — segure para ver de perto` : "Carta oculta"}
+      aria-label={d ? d.name : "Carta oculta"}
+      className={`game-card relative block aspect-[5/7] shrink-0 rounded-[7%/5%] text-left ${WIDTH[size]} ${click ? "interactive cursor-pointer" : "cursor-default"} ${
+        d ? `metal-${metal}` : ""
+      } ${hold.holding ? "holding" : ""} ${selected ? "ring-[3px] ring-gold-2 ring-offset-2 ring-offset-bg" : ""} ${dim ? "opacity-50 grayscale" : ""}`}
     >
-      <div className="flex items-start justify-between gap-1">
-        <span className="text-[10px] uppercase tracking-wide text-muted">
-          {KIND_ICON[d.kind]} {inst?.tamed ? "Montaria domada" : KIND_LABEL[d.kind]}
-        </span>
-        {d.kind === "monster" && !inst?.tamed && (
-          <span className="rounded bg-red-700 px-1 text-[11px] font-bold text-white">{d.level}</span>
-        )}
-        {bonus !== null && bonus !== 0 && (
-          <span className="rounded bg-amber-600 px-1 text-[11px] font-bold text-black">+{bonus}</span>
-        )}
-        {d.kind === "monsterBonus" && (
-          <span className={`rounded px-1 text-[11px] font-bold ${d.value > 0 ? "bg-red-700 text-white" : "bg-emerald-700 text-white"}`}>
-            {d.value > 0 ? "+" : ""}
-            {d.value}
-          </span>
-        )}
-      </div>
-      <div className={`mt-0.5 font-display leading-tight text-ink ${size === "sm" ? "text-[11px] sm:text-[12px]" : "text-[12px] sm:text-[13px]"}`}>{d.name}</div>
-      {size === "md" && <div className="mt-auto pt-1 text-[10px] leading-tight text-muted">{inst?.tamed ? "Monstro domado" : shortInfo(d)}</div>}
-      {(inst?.runes?.length ?? 0) > 0 && (
-        <span className="absolute -right-1 -top-1 rounded-full bg-cyan-500 px-1 text-[10px] font-bold text-black">ᚱ{inst!.runes!.length}</span>
+      {d ? <CardFront d={d} inst={inst} size={size} /> : <CardBackside deck={deck} />}
+      {runes > 0 && <RuneHalo count={runes} />}
+      {inst?.artificeSecond && (
+        <span className="absolute -left-1 -top-1 z-20 rounded-full border border-sky-900 bg-sky-400 px-1.5 text-[10px] font-bold text-black">½</span>
       )}
-      {inst?.artificeSecond && <span className="absolute -left-1 -top-1 rounded-full bg-sky-500 px-1 text-[10px] text-black">½</span>}
-      {badge && <span className="absolute -bottom-1 right-1 rounded bg-black/70 px-1 text-[10px] text-gold-2">{badge}</span>}
+      {badge && (
+        <span className="absolute -left-1 -top-2 z-20 whitespace-nowrap rounded border border-gold/50 bg-black/85 px-1.5 text-[10px] text-gold-2">
+          {badge}
+        </span>
+      )}
     </button>
   );
 }
