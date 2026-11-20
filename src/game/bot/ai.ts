@@ -114,6 +114,56 @@ function isAlly(state: GameState, me: string, other: PlayerState): boolean {
   return !!other.bot && weight(state, me, other) < 0.8;
 }
 
+/**
+ * O quanto um jogador já está forte em relação à mesa (0 a 1): nível acima da média, liderança,
+ * proximidade da vitória e poder de combate. Usado (com peso baixo) antes de ajudar alguém.
+ */
+export function strengthOf(state: GameState, p: PlayerState): number {
+  const others = state.players.filter((x) => x.id !== p.id);
+  if (others.length === 0) return 0;
+  const avg = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
+  const clamp = (v: number) => Math.max(0, Math.min(1, v));
+  const lead = clamp((p.level - avg(others.map((o) => o.level))) / 5);
+  const ahead = p.level >= Math.max(...others.map((o) => o.level)) && p.level > 1 ? 0.25 : 0;
+  const nearWin = clamp((p.level - (RULES.nivelMaximo - 8)) / 7);
+  const pow = clamp((playerPower(state, p) - avg(others.map((o) => playerPower(state, o)))) / 12);
+  return clamp(0.35 * lead + ahead + 0.25 * nearWin + 0.15 * pow);
+}
+
+/** Peso (baixo) de fortalecer alguém que já está forte, em "pontos" comparáveis a tesouros/níveis. */
+const STRENGTH_PENALTY = 50;
+
+/** Aceito um pedido de ajuda de `fighter` em troca de `count` tesouros? */
+export function shouldAcceptHelpRequest(state: GameState, me: PlayerState, fighter: PlayerState, count: number, threat = false): boolean {
+  const calc = computeCombat(state);
+  const wouldWin = !!calc && calc.playerTotal + playerPower(state, me) > calc.monsterTotal;
+  if (!wouldWin) return false;
+  const stake = monsterStake(state);
+  const ally = isAlly(state, me.id, fighter);
+  if (fighter.level >= RULES.nivelMaximo - 2 && !ally) return false;
+  // Ganho para mim (tesouros + nível do Elfo) contra o quanto o lutador avança
+  const myGain = count * 40 + (hasPassive(state, me, "nivelAoAjudar") ? 100 : 0);
+  const theirGain = weight(state, me.id, fighter) * stake.levels * 60;
+  // mesmo quando vale a pena, fortalecer quem já está forte pesa um pouco contra
+  const score = myGain - theirGain - STRENGTH_PENALTY * strengthOf(state, fighter) + (ally ? 80 : 0);
+  if (score > 0) return true;
+  // ameaçado pelo lutador: às vezes é melhor ajudar do que sofrer
+  return threat && me.level > 1 && fighter.level < RULES.nivelMaximo - 2;
+}
+
+/** Aceito a oferta de `helper` (que leva `count` tesouros) para me ajudar? */
+export function shouldAcceptHelpOffer(state: GameState, me: PlayerState, helper: PlayerState, count: number): boolean {
+  const calc = computeCombat(state);
+  if (!calc || calc.winning) return false;
+  if (calc.playerTotal + playerPower(state, helper) <= calc.monsterTotal) return false;
+  if (!helper.bot && helper.level >= RULES.nivelMaximo - 3) return false;
+  const stake = monsterStake(state);
+  const benefit = stake.levels * 90 + Math.max(0, stake.treasures - count) * 25;
+  const w = isAlly(state, me.id, helper) ? 0.3 : weight(state, me.id, helper);
+  const helperGain = w * (count * 30 + (hasPassive(state, helper, "nivelAoAjudar") ? 100 : 0));
+  return benefit - helperGain - STRENGTH_PENALTY * strengthOf(state, helper) > 0;
+}
+
 function monsterStake(state: GameState): { levels: number; treasures: number } {
   const c = state.combat;
   if (!c) return { levels: 0, treasures: 0 };
@@ -451,26 +501,15 @@ function answerFor(state: GameState, me: PlayerState, pr: Prompt, ctx: Ctx): Act
     case "helpRequest": {
       const fighter = P(state, String(data.fighterId));
       const deal = data.deal as { count: number };
-      const calc = computeCombat(state);
-      const wouldWin = !!calc && calc.playerTotal + playerPower(state, me) > calc.monsterTotal;
-      const stake = monsterStake(state);
-      // Ganho para mim (tesouros + nível do Elfo) contra o quanto o lutador avança
-      const myGain = deal.count * 40 + (hasPassive(state, me, "nivelAoAjudar") ? 100 : 0);
-      const theirGain = weight(state, me.id, fighter) * stake.levels * 60;
-      let accept = wouldWin && (isAlly(state, me.id, fighter) || myGain >= theirGain);
-      if (fighter.level >= RULES.nivelMaximo - 2 && !isAlly(state, me.id, fighter)) accept = false;
-      if (data.threat && !accept && wouldWin && me.level > 1 && fighter.level < RULES.nivelMaximo - 2) accept = true;
-      return answer({ accept });
+      return answer({ accept: shouldAcceptHelpRequest(state, me, fighter, deal.count, !!data.threat) });
     }
     case "threat": {
       return answer({ accept: shouldPayThreat(state, me, String(data.threatenerId), Number(data.count), ctx) });
     }
     case "helpOffer": {
       const helper = P(state, String(data.helperId));
-      const calc = computeCombat(state);
-      const wouldWin = !!calc && calc.playerTotal + playerPower(state, helper) > calc.monsterTotal;
-      const accept = !!calc && !calc.winning && wouldWin && (helper.bot || helper.level < 17);
-      return answer({ accept });
+      const deal = (data.deal as { count?: number } | undefined) ?? {};
+      return answer({ accept: shouldAcceptHelpOffer(state, me, helper, Number(deal.count ?? 1)) });
     }
     case "fairySwap": {
       const gain = cardValue(state, String(data.mine)) - cardValue(state, String(data.theirs));
@@ -602,10 +641,19 @@ function decideFighter(state: GameState, me: PlayerState, ctx: Ctx): Action | nu
   if (!c.helperId && !combatHas(state, c, "semPedirAjuda")) {
     if (state.prompts.some((pr) => pr.kind === "helpRequest" && pr.data.fighterId === me.id)) return null;
     const treasures = c.monsters.reduce((a, x) => a + (d(state, x.cardId) as MonsterCard).treasures, 0);
+    const stake = monsterStake(state);
+    // quanto custa fortalecer cada candidato (tesouros que ele leva + quão forte ele já está), com peso baixo
+    const cost = (o: PlayerState) => {
+      const count = o.bot ? 1 : Math.max(1, Math.ceil(treasures / 2));
+      const w = isAlly(state, me.id, o) ? 0.3 : weight(state, me.id, o);
+      return w * (count * 30 + (hasPassive(state, o, "nivelAoAjudar") ? 100 : 0)) + STRENGTH_PENALTY * strengthOf(state, o);
+    };
+    const benefit = stake.levels * 90 + treasures * 15;
     const candidates = state.players
       .filter((o) => o.id !== me.id && !m[`ask:${c.id}:${me.id}:${o.id}`])
       .filter((o) => calc.playerTotal + playerPower(state, o) > calc.monsterTotal)
-      .sort((a, b) => Number(isAlly(state, me.id, b)) - Number(isAlly(state, me.id, a)) || weight(state, me.id, a) - weight(state, me.id, b));
+      .filter((o) => cost(o) < benefit)
+      .sort((a, b) => Number(isAlly(state, me.id, b)) - Number(isAlly(state, me.id, a)) || cost(a) - cost(b));
     const pick = candidates.find((o) => isAlly(state, me.id, o)) ?? candidates.find((o) => !o.bot && weight(state, me.id, o) <= 1);
     if (pick) {
       m[`ask:${c.id}:${me.id}:${pick.id}`] = 1;
@@ -653,7 +701,10 @@ function decideOtherCombat(state: GameState, me: PlayerState, ctx: Ctx): Action 
       // Oferece ajuda a bots aliados
       const m = mem(state);
       const key = `offer:${c.id}:${me.id}`;
-      if (!onSide && !c.helperId && fighter.bot && !m[key] && calc.playerTotal + playerPower(state, me) > calc.monsterTotal) {
+      const stake = monsterStake(state);
+      const worth =
+        40 + (hasPassive(state, me, "nivelAoAjudar") ? 100 : 0) + 80 - weight(state, me.id, fighter) * stake.levels * 60 - STRENGTH_PENALTY * strengthOf(state, fighter) > 0;
+      if (!onSide && !c.helperId && fighter.bot && !m[key] && worth && calc.playerTotal + playerPower(state, me) > calc.monsterTotal) {
         m[key] = 1;
         return { type: "OFFER_HELP", count: 1, mode: "random" };
       }

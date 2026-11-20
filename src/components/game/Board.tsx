@@ -7,6 +7,7 @@ import type { ConnState } from "../room/useRoom";
 import { Button } from "../ui/Button";
 import { GameFx, SoundToggle } from "../fx/GameFx";
 import { CardInspector } from "./CardInspector";
+import { type CurseRef, CurseInspector } from "./CurseInspector";
 import { CardBackside } from "../art/CardArt";
 import { DragDiscardZone, setDropHandler } from "../art/drag";
 import { CardView } from "./CardView";
@@ -52,6 +53,7 @@ export function Board({
   backHref?: string;
 }) {
   const [inspect, setInspect] = useState<string | null>(null);
+  const [curseRef, setCurseRef] = useState<CurseRef | null>(null);
   const [tab, setTab] = useState<MobileTab>("mesa");
   const [seenLog, setSeenLog] = useState(0);
   const lastCombat = useRef<number | null>(null);
@@ -101,7 +103,7 @@ export function Board({
 
   return (
     <GameProvider
-      value={{ view, me, isHost: view.hostId === view.me, busy, act, inspect: setInspect, serverOffset: offset }}
+      value={{ view, me, isHost: view.hostId === view.me, busy, act, inspect: setInspect, inspectCurse: (playerId, curseId) => setCurseRef({ playerId, curseId }), serverOffset: offset }}
     >
       <PickerProvider>
         <div className="mx-auto flex w-full max-w-[1600px] flex-1 flex-col gap-3 p-2 pb-20 sm:p-3 lg:pb-3">
@@ -174,6 +176,7 @@ export function Board({
         <DragDiscardZone />
         <GameFx view={view} />
         <CardInspector cardId={inspect} onClose={() => setInspect(null)} />
+        <CurseInspector target={curseRef} onClose={() => setCurseRef(null)} />
         {winner && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
             <div className="max-w-md rounded-2xl border-2 border-gold bg-panel p-8 text-center">

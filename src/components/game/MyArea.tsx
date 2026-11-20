@@ -43,15 +43,27 @@ export function MyArea() {
         </div>
         <div className="ml-auto flex flex-wrap gap-1">
           {me.curses.map((c) => (
-            <span key={c.id} className="rounded bg-purple-900/80 px-2 py-0.5 text-xs text-purple-100">
+            <button
+              key={c.id}
+              type="button"
+              onClick={() => api.inspectCurse(me.id, c.id)}
+              title="Ver o que esta maldição faz"
+              className="rounded bg-purple-900/80 px-2 py-0.5 text-xs text-purple-100 underline-offset-2 hover:bg-purple-800 hover:underline"
+            >
               🕯️ {c.name}
               {c.remaining !== undefined ? ` (${c.remaining} turno(s))` : ""}
-            </span>
+            </button>
           ))}
           {me.pendingCombatCurses.map((id) => (
-            <span key={id} className="rounded bg-purple-900/50 px-2 py-0.5 text-xs">
+            <button
+              key={id}
+              type="button"
+              onClick={() => api.inspect(id)}
+              title="Ver o que esta maldição faz"
+              className="rounded bg-purple-900/50 px-2 py-0.5 text-xs hover:bg-purple-800/70 hover:underline"
+            >
               ⏳ {api.name(id)} (próximo combate)
-            </span>
+            </button>
           ))}
         </div>
       </div>

@@ -667,7 +667,7 @@ const SPECS: Spec[] = [
         run: () => {
           target.curses = target.curses.filter((c) => c.id !== cid);
           if (cu.cardId) discardCard(state, cu.cardId);
-          log(state, ctx, `💚 ${p.name} removeu uma maldição de ${target.name}.`, "curse");
+          log(state, ctx, target.id === p.id ? `💚 ${p.name} removeu uma das próprias maldições.` : `💚 ${p.name} removeu uma maldição de ${target.name}.`, "curse");
         },
       };
     },

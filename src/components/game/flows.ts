@@ -143,9 +143,9 @@ export async function flowSell(api: GameApi, picker: Picker) {
 // Habilidades
 // ----------------------------------------------------------------------------
 
-export async function flowAbility(api: GameApi, picker: Picker, info: AbilityInfo) {
+export async function flowAbility(api: GameApi, picker: Picker, info: AbilityInfo, preset: Record<string, unknown> = {}) {
   const { view, me } = api;
-  const params: Record<string, unknown> = {};
+  const params: Record<string, unknown> = { ...preset };
   const reserved: string[] = [];
   const pickCard = async (field: string, title: string, ids: string[]) => {
     if (ids.length === 0) throw new Error("Não há opções para: " + title);
@@ -159,12 +159,14 @@ export async function flowAbility(api: GameApi, picker: Picker, info: AbilityInf
   try {
     for (const f of info.fields) {
       let ok = true;
+      if (f.name in preset) continue;
       switch (f.kind) {
         case "player": {
           const v = await picker.pick({
             title: `${info.name}: ${f.label}`,
             description: info.text,
-            options: playerOptions(view, (id) => (info.key === "cura" ? true : id !== me.id)),
+            // "curar" pode ter você mesmo como alvo
+            options: playerOptions(view, (id) => (info.acao === "curar" ? true : id !== me.id)),
           });
           if (v === null) ok = false;
           else params[f.name] = v;

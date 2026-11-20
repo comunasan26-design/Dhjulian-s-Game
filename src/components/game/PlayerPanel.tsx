@@ -47,10 +47,16 @@ export function PlayerPanel({ p }: { p: PlayerView }) {
       </div>
       <div className="mt-1 flex flex-wrap gap-1">
         {p.curses.map((c) => (
-          <span key={c.id} className="rounded bg-purple-900/80 px-1.5 text-[10px] text-purple-100" title={c.name}>
+          <button
+            key={c.id}
+            type="button"
+            onClick={() => api.inspectCurse(p.id, c.id)}
+            className="rounded bg-purple-900/80 px-1.5 text-[10px] text-purple-100 hover:bg-purple-800 hover:underline"
+            title="Ver o que esta maldição faz"
+          >
             🕯️ {c.name}
             {c.remaining !== undefined ? ` (${c.remaining})` : ""}
-          </span>
+          </button>
         ))}
         {p.pendingCombatCurses.length > 0 && (
           <span className="rounded bg-purple-900/50 px-1.5 text-[10px]">+{p.pendingCombatCurses.length} no próximo combate</span>
