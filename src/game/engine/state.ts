@@ -6,7 +6,7 @@ export const START_HAND = 4;
 
 /** Tempos (ms) das janelas de reação. */
 export const TIMERS = {
-  resolve: 12_000,
+  resolve: 60_000,
   badStuff: 25_000,
   prompt: 45_000,
   help: 35_000,
@@ -70,6 +70,8 @@ export interface PlayerState {
   /** Monstros que este jogador deve enfrentar no próximo turno (Espelho de Prata). */
   ambush: string[];
   ready: boolean;
+  /** Jogador controlado pela IA. */
+  bot?: boolean;
   /** Carta vista pelos Olhos da Noite (Owlin), aguardando decisão. */
   owlPeek: string | null;
 }
@@ -248,6 +250,10 @@ export interface GameState {
   lastItemDiscard: { cardId: string; by: string; tried: string[] } | null;
   hostId: string;
   lastActionAt: number;
+  /** Próximo momento em que um bot pode agir (ritmo dos bots). */
+  botNextAt?: number;
+  /** Memória dos bots (pedidos já feitos, trocas tentadas…). */
+  botMemory?: Record<string, number>;
 }
 
 export interface Rng {

@@ -33,6 +33,7 @@ export interface PlayerView {
   needsNewHand: boolean;
   hibernating: boolean;
   ready: boolean;
+  bot: boolean;
   power: number;
   handLimit: number;
   ambushCount: number;
@@ -115,10 +116,11 @@ export function viewFor(state: GameState, me: string, now: number, online: Set<s
       needsNewHand: p.needsNewHand,
       hibernating: p.hibernating,
       ready: p.ready,
+      bot: !!p.bot,
       power: playerPower(state, p),
       handLimit: handLimit(state, p),
       ambushCount: p.ambush.length,
-      online: online.has(p.id),
+      online: !!p.bot || online.has(p.id),
       runeSockets: sockets,
     };
   });

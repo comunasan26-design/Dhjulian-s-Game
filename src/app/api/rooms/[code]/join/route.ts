@@ -17,7 +17,7 @@ export const POST = handle(async (_req: Request, ctx: { params: Promise<{ code: 
     return NextResponse.json(payloadFor(await loadRoom(code), user.id));
   }
   if (room.status !== "LOBBY") throw new HttpError(400, "Essa partida já começou.");
-  if (room.players.length >= room.maxPlayers) throw new HttpError(400, "A sala está cheia.");
+  if (room.players.length + room.bots >= room.maxPlayers) throw new HttpError(400, "A sala está cheia.");
   const seat = Math.max(-1, ...room.players.map((p) => p.seat)) + 1;
   try {
     await db().roomPlayer.create({ data: { roomId: room.id, userId: user.id, seat } });

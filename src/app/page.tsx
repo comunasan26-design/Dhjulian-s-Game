@@ -17,6 +17,12 @@ export default async function Home() {
             Chute portas, enfrente monstros, roube tesouros dos amigos e seja o primeiro a chegar ao{" "}
             <span className="text-gold-2">nível 20</span>. De 3 a 9 jogadores, em tempo real.
           </p>
+          <a
+            href="/local"
+            className="mt-5 inline-flex items-center gap-2 rounded-md border border-gold/60 px-4 py-2 text-sm text-gold-2 hover:bg-gold/10"
+          >
+            🤖 Jogar local contra bots (sem conta)
+          </a>
           <ul className="mt-6 space-y-2 text-sm text-muted">
             <li>⚔️ 60 monstros, 17 raças e 16 classes com habilidades únicas</li>
             <li>🧪 Itens, runas, poções e 33 maldições</li>

@@ -8,6 +8,9 @@ raças, classes, itens, runas, poções e maldições, e seja o primeiro a chega
 - Contas só com **usuário e senha** (bcrypt + sessão em cookie httpOnly guardada no banco)
 - **Salas** com código de convite, sala de espera e **reconexão** (o estado da partida fica no banco)
 - **Tempo real** com Server-Sent Events: funciona na Vercel sem serviço externo
+- **Bots** com IA nas salas online (o anfitrião adiciona na sala de espera)
+- **Modo local** (`/local`): partida contra bots rodando só no navegador, sem conta e sem banco (salva no aparelho)
+- Layout para celular com abas (Mesa, Você, Jogadores, Histórico)
 
 ## Rodando localmente
 
@@ -53,6 +56,7 @@ recebe o novo estado na hora e os outros jogadores em menos de 1 s.
 src/
   game/catalog/     # todas as cartas do livro (raças, classes, itens, poções, runas, maldições, bestiário)
   game/engine/      # motor de regras puro (sem banco): estado, combate, habilidades, prompts, visão por jogador
+  game/bot/         # IA dos bots
   lib/              # Prisma, autenticação, salas (concorrência otimista por versão)
   app/api/          # rotas: auth, salas, ações e stream SSE
   components/       # lobby, sala de espera e mesa de jogo
@@ -63,6 +67,12 @@ src/
 - Janelas de reação (tempo para interferir antes da vitória, Coisas Ruins, pedidos de ajuda, escolhas) têm prazo; quando
   vencem, o servidor aplica a escolha padrão, então um jogador ausente não trava a mesa. Se o jogador da vez ficar offline por
   mais de 45 s, qualquer um pode pular o turno dele.
+- **Janela de ataque**: quando alguém clica em “Atacar”, os outros têm 60 s para interferir ou “Deixar passar”; qualquer
+  ação que mude o combate reinicia o contador.
+- **Bots** (`src/game/bot/ai.ts`): decidem simulando ações no próprio motor e escolhem a que mais aumenta o ganho deles
+  (níveis, poder, vencer monstros), dando peso maior a prejudicar humanos e o líder. Preferem alianças com outros bots
+  (menos os que estão quase ganhando) e propõem trocas justas por itens exclusivos da sua raça/classe. Nas salas online,
+  o servidor faz os bots agirem pelo mesmo stream de eventos (um passo a cada ~0,9 s); no modo local, o navegador.
 - **Reconexão**: basta voltar à sala (o lobby lista “Suas salas”). Recarregar a página ou perder a internet não perde nada.
 
 ## Regras e interpretações

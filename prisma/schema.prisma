@@ -44,6 +44,8 @@ model Room {
   host       User         @relation("RoomHost", fields: [hostId], references: [id], onDelete: Cascade)
   status     RoomStatus   @default(LOBBY)
   maxPlayers Int          @default(6)
+  // Quantidade de bots (controlados pelo servidor) na sala
+  bots       Int          @default(0)
   version    Int          @default(0)
   // Estado completo do jogo (JSON). Só é enviado aos clientes depois de filtrado por jogador.
   state      Json?

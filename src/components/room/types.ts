@@ -6,6 +6,7 @@ export interface RoomInfo {
   status: "LOBBY" | "PLAYING" | "FINISHED";
   hostId: string;
   maxPlayers: number;
+  bots: number;
   version: number;
   players: { id: string; username: string; seat: number; online: boolean }[];
 }

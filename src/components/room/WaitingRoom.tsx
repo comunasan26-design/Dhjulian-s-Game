@@ -15,7 +15,7 @@ export function WaitingRoom({
   room: RoomInfo;
   meId: string;
   busy: boolean;
-  roomCall: (path: "join" | "leave" | "start" | "kick", body?: unknown) => Promise<boolean>;
+  roomCall: (path: "join" | "leave" | "start" | "kick" | "bots", body?: unknown) => Promise<boolean>;
 }) {
   const router = useRouter();
   const [copied, setCopied] = useState(false);
@@ -43,7 +43,7 @@ export function WaitingRoom({
           </Button>
         </div>
         <h2 className="mt-6 text-sm text-muted">
-          Jogadores ({room.players.length}/{room.maxPlayers}) — recomendado de 3 a 9
+          Jogadores ({room.players.length + room.bots}/{room.maxPlayers}) — recomendado de 3 a 9
         </h2>
         <ul className="mt-2 space-y-2">
           {room.players.map((p) => (
@@ -61,10 +61,29 @@ export function WaitingRoom({
               )}
             </li>
           ))}
+          {Array.from({ length: room.bots }, (_, i) => (
+            <li key={`bot${i}`} className="flex items-center justify-between rounded-lg border border-dashed border-edge bg-panel-2/60 px-3 py-2">
+              <span>
+                <span className="mr-2 inline-block h-2 w-2 rounded-full bg-sky-400" />
+                Bot {i + 1} <span className="text-xs text-muted">(controlado pelo computador)</span>
+              </span>
+            </li>
+          ))}
         </ul>
+        {isHost && (
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <Button size="sm" disabled={busy || room.players.length + room.bots >= room.maxPlayers} onClick={() => roomCall("bots", { delta: 1 })}>
+              🤖 Adicionar bot
+            </Button>
+            <Button size="sm" variant="ghost" disabled={busy || room.bots === 0} onClick={() => roomCall("bots", { delta: -1 })}>
+              Remover bot
+            </Button>
+            <span className="text-xs text-muted">Bots jogam para vencer: sobem de nível, atrapalham humanos e o líder.</span>
+          </div>
+        )}
         <div className="mt-6 flex flex-wrap gap-2">
           {isHost ? (
-            <Button variant="primary" size="lg" disabled={busy || room.players.length < 2} onClick={() => roomCall("start")}>
+            <Button variant="primary" size="lg" disabled={busy || room.players.length + room.bots < 2} onClick={() => roomCall("start")}>
               ▶ Começar partida
             </Button>
           ) : (

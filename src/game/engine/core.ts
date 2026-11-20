@@ -65,7 +65,7 @@ import {
 // ============================================================================
 
 export function createGame(
-  players: { id: string; name: string }[],
+  players: { id: string; name: string; bot?: boolean }[],
   hostId: string,
   ctx: Ctx,
 ): GameState {
@@ -131,6 +131,7 @@ export function createGame(
       ambush: [],
       ready: false,
       owlPeek: null,
+      ...(pl.bot ? { bot: true } : {}),
     });
   });
 

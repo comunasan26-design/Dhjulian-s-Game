@@ -45,8 +45,8 @@ export function TurnControls() {
   if (view.phase === "FINISHED") return null;
 
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-xl border border-edge bg-panel p-3">
-      <div className="mr-auto">
+    <div className="flex flex-wrap items-center gap-2 rounded-xl border border-edge bg-panel/95 p-2 shadow-lg backdrop-blur sm:p-3 lg:shadow-none">
+      <div className="mr-auto min-w-0">
         <p className="text-sm">
           {myTurn ? <span className="font-display text-gold-2">Seu turno</span> : <span>Turno de {current?.name}</span>}
           <span className="text-muted"> · {PHASE_LABEL[view.turnPhase]}</span>

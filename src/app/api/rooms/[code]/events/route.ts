@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
-import { ONLINE_WINDOW_MS, deadlineOf, loadRoom, payloadFor, tickRoom } from "@/lib/rooms";
+import { ONLINE_WINDOW_MS, botInfo, botStepRoom, deadlineOf, loadRoom, payloadFor, tickRoom } from "@/lib/rooms";
 
 export const dynamic = "force-dynamic";
 // Cada conexão SSE vive no máximo ~55s; o EventSource do navegador reconecta sozinho.
@@ -50,6 +50,8 @@ export async function GET(req: Request, ctx: { params: Promise<{ code: string }>
       let lastTouch = 0;
       let lastPing = Date.now();
       let deadline: number | null = null;
+      let bots = { hasBots: false, nextAt: 0, finished: false };
+      let botCheckedVersion = -1;
 
       send("hello", { retry: 1500 });
       while (!closed && Date.now() - started < LIFETIME_MS) {
@@ -81,6 +83,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ code: string }>
             lastVersion = full.version;
             lastPresence = presence;
             deadline = deadlineOf(full.state);
+            bots = botInfo(full.state);
             send("state", payloadFor(full, user.id));
           } else if (presence !== lastPresence) {
             lastPresence = presence;
@@ -88,6 +91,16 @@ export async function GET(req: Request, ctx: { params: Promise<{ code: string }>
           } else if (now - lastPing > 15_000) {
             lastPing = now;
             controller.enqueue(encoder.encode(`: ping\n\n`));
+          }
+          // Bots agem aqui (no máximo uma ação por vez, com um pequeno intervalo)
+          if (bots.hasBots && !bots.finished && lastVersion !== botCheckedVersion && Date.now() >= bots.nextAt) {
+            const full = await loadRoom(code);
+            if (full.version === lastVersion) {
+              const online = new Set(presence ? presence.split(",") : []);
+              const offline = new Set(full.players.map((p) => p.userId).filter((id) => !online.has(id)));
+              const changed = await botStepRoom(full.id, full.version, full.state, offline);
+              if (!changed) botCheckedVersion = lastVersion;
+            }
           }
           // Prazos vencidos (janela de reação, prompts) são processados aqui
           if (deadline !== null && deadline <= Date.now()) {
