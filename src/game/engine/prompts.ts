@@ -1,6 +1,7 @@
 // Respostas (e tempo esgotado) dos prompts pendentes.
 import {
   continueReward,
+  freeTreasures,
   doCharity,
   giveRewardTo,
   joinHelper,
@@ -289,8 +290,14 @@ function resolvePrompt(state: GameState, ctx: Ctx, pr: Prompt, ans: PromptAnswer
     case "threat": {
       const combat = state.combat;
       const valid = combat && combat.id === d.combatId && combat.stage !== "badstuff";
-      removePrompt(state, pr.id);
       const threatener = tryPlayer(state, String(d.threatenerId));
+      if (valid && threatener && ans.accept && !timeout) {
+        const free = freeTreasures(state, combat);
+        // Os tesouros já foram prometidos: a ameaça não pode mais ser paga
+        if (Number(d.count) > free)
+          fail(free > 0 ? `Você só tem ${free} tesouro(s) livre(s) para prometer.` : "Todos os seus tesouros já foram prometidos.");
+      }
+      removePrompt(state, pr.id);
       if (!valid || !threatener) return;
       if (ans.accept && !timeout) {
         combat.bribes.push({ playerId: threatener.id, count: Number(d.count) });

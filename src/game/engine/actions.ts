@@ -31,6 +31,7 @@ import {
   startCombat,
   startFlee,
   startPlaying,
+  freeTreasures,
   joinHelper,
   surrender,
 } from "./core";
@@ -816,7 +817,10 @@ function dispatch(state: GameState, p: PlayerState, a: Action, ctx: Ctx) {
       if (playerSide(state, combat).includes(p.id)) fail("Você está no combate.");
       if (truceBlocks(state, p, combat.fighterId)) fail("Você já tem um acordo com esse jogador nesta rodada.");
       if (combat.used.includes(`${p.id}:threat`)) fail("Você já fez uma ameaça neste combate.");
-      const count = Math.max(1, Math.min(10, Math.floor(Number(a.count) || 1)));
+      const free = freeTreasures(state, combat);
+      if (free <= 0) fail(`${player(state, combat.fighterId).name} não vai ganhar mais tesouros neste combate: não há o que pedir.`);
+      const count = Math.floor(Number(a.count) || 0);
+      if (count < 1 || count > free) fail(`Você pode pedir de 1 a ${free} tesouro(s).`);
       combat.used.push(`${p.id}:threat`);
       createPrompt(state, ctx, "threat", combat.fighterId, { threatenerId: p.id, count, combatId: combat.id }, { blocking: false, ms: TIMERS.help });
       log(state, ctx, `😈 ${p.name} ameaça atrapalhar ${player(state, combat.fighterId).name} se não receber ${count} tesouro(s).`, "combat", p.id);

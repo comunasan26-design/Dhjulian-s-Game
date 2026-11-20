@@ -259,15 +259,22 @@ function MyPrompt({ pr }: { pr: PromptV }) {
         </>
       );
       break;
-    case "threat":
+    case "threat": {
+      const free = api.view.combat?.freeTreasures ?? 0;
+      const tooMuch = Number(d.count) > free;
       body = (
         <>
           <p>
             <b>{api.playerName(String(d.threatenerId))}</b> ameaça atrapalhar seu combate. Pede <b>{String(d.count)} tesouro(s)</b>{" "}
             (pagos só se você vencer). Se aceitar, ele não pode atrapalhar você nesta rodada.
           </p>
+          {tooMuch && (
+            <p className="mt-1 text-red-300">
+              {free > 0 ? `Você só tem ${free} tesouro(s) livre(s): não dá para aceitar.` : "Todos os seus tesouros já foram prometidos."}
+            </p>
+          )}
           <div className="mt-2 flex gap-2">
-            <Button variant="success" onClick={() => answer({ accept: true })}>
+            <Button variant="success" disabled={tooMuch} onClick={() => answer({ accept: true })}>
               Pagar
             </Button>
             <Button onClick={() => answer({ accept: false })}>Recusar</Button>
@@ -275,6 +282,7 @@ function MyPrompt({ pr }: { pr: PromptV }) {
         </>
       );
       break;
+    }
     case "debt":
       body = (
         <>

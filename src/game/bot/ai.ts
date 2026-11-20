@@ -5,6 +5,7 @@ import { CARD_DEFS, type CardDef, findFx, type ItemCard, type MonsterCard } from
 import { abilityInfos } from "../engine/abilities";
 import { type Action, applyAction } from "../engine/actions";
 import { type Ctx, type GameState, GameError, MAX_LEVEL, type PlayerState, type Prompt } from "../engine/state";
+import { freeTreasures } from "../engine/core";
 import { combatHas } from "../engine/fx";
 import { computeCombat, equipCheck, fleeInfo, playerPower, playerSide, slotOf } from "../engine/stats";
 import { isCurrent } from "../engine/util";
@@ -438,6 +439,8 @@ function answerFor(state: GameState, me: PlayerState, pr: Prompt, ctx: Ctx): Act
       const stake = monsterStake(state);
       const calc = computeCombat(state);
       const winningNow = !!calc?.winning;
+      const free = state.combat ? freeTreasures(state, state.combat) : 0;
+      if (count > free) return answer({ accept: false });
       const real = canFlip(state, threatener, ctx) || P(state, threatener).hand.length >= 4;
       const worth = stake.levels * 100 + (stake.treasures - count) * 25 > 0 && count < stake.treasures + 1;
       return answer({ accept: real && worth && (winningNow || count <= Math.ceil(stake.treasures / 2)) });
@@ -643,10 +646,11 @@ function decideOtherCombat(state: GameState, me: PlayerState, ctx: Ctx): Action 
   const threatKey = `threat:${c.id}:${me.id}`;
   if (calc.winning && !m[threatKey] && !c.used.includes(`${me.id}:threat`) && !c.desafio) {
     const fw = weight(state, me.id, fighter);
-    if (fw < 1.5 && canFlip(state, me.id, ctx)) {
+    const free = freeTreasures(state, c);
+    if (fw < 1.5 && free > 0 && canFlip(state, me.id, ctx)) {
       m[threatKey] = 1;
       const stake = monsterStake(state);
-      return { type: "THREATEN", count: Math.max(1, Math.ceil(stake.treasures / 2)) };
+      return { type: "THREATEN", count: Math.min(free, Math.max(1, Math.ceil(stake.treasures / 2))) };
     }
     m[threatKey] = 1;
   }

@@ -597,15 +597,8 @@ export function resolveVictory(state: GameState, ctx: Ctx) {
   const beaten = combat.monsters;
   const fighterLevelBefore = fighter.level;
   let levels = 0;
-  let treasures = 0;
-  const elmo = !!equippedFx(state, fighter, "metadeErrantes");
-  for (const cm of beaten) {
-    const d = monsterDef(state, cm);
-    levels += d.levels;
-    let t = d.treasures;
-    if (cm.wandering && elmo && cm.addedBy !== fighter.id) t = Math.floor(t / 2);
-    treasures += t;
-  }
+  for (const cm of beaten) levels += monsterDef(state, cm).levels;
+  let treasures = rewardTreasures(state, combat);
   if (combat.desafio) levels *= 2;
   log(
     state,
@@ -613,15 +606,6 @@ export function resolveVictory(state: GameState, ctx: Ctx) {
     `🏅 ${fighter.name}${helper ? ` e ${helper.name}` : ""} derrotaram ${beaten.map((m) => nameOf(state, m.cardId)).join(" + ")}!`,
     "combat",
   );
-  if (side.some((p) => hasClass(state, p, "patrulheiro")) && beaten.some((m) => {
-    const t = monsterDef(state, m).tags;
-    return t.includes("animal") || t.includes("voador");
-  }))
-    treasures += 1;
-  treasures += Number(combat.mapa) || 0;
-  for (const fx of curseFx(fighter, "menosTesouros")) treasures -= num(fx, "quantidade", 1);
-  if (hasCurseFx(fighter, "metadeTesouros")) treasures = Math.floor(treasures / 2);
-  treasures = Math.max(0, treasures);
   const bardo = hasClass(state, fighter, "bardo");
   if (bardo) treasures += 1;
 
@@ -708,6 +692,39 @@ export function resolveVictory(state: GameState, ctx: Ctx) {
     if (got.length) log(state, ctx, `${helper.name} comprou ${got.length} tesouro(s) extra(s) por ajudar.`);
   }
   continueReward(state, ctx);
+}
+
+/** Quantos tesouros o combate atual rende se for vencido agora (sem o extra do Bardo, que é descartado). */
+export function rewardTreasures(state: GameState, combat: CombatState): number {
+  const fighter = player(state, combat.fighterId);
+  const side = playerSide(state, combat).map((id) => player(state, id));
+  const elmo = !!equippedFx(state, fighter, "metadeErrantes");
+  let treasures = 0;
+  for (const cm of combat.monsters) {
+    let t = monsterDef(state, cm).treasures;
+    if (cm.wandering && elmo && cm.addedBy !== fighter.id) t = Math.floor(t / 2);
+    treasures += t;
+  }
+  const animalOrFlyer = combat.monsters.some((m) => {
+    const t = monsterDef(state, m).tags;
+    return t.includes("animal") || t.includes("voador");
+  });
+  if (side.some((p) => hasClass(state, p, "patrulheiro")) && animalOrFlyer) treasures += 1;
+  treasures += Number(combat.mapa) || 0;
+  for (const fx of curseFx(fighter, "menosTesouros")) treasures -= num(fx, "quantidade", 1);
+  if (hasCurseFx(fighter, "metadeTesouros")) treasures = Math.floor(treasures / 2);
+  return Math.max(0, treasures);
+}
+
+/**
+ * Tesouros que ainda são do lutador: o total da recompensa menos o que já foi prometido
+ * ao ajudante e às ameaças aceitas. É o máximo que se pode pedir numa ameaça.
+ */
+export function freeTreasures(state: GameState, combat: CombatState): number {
+  let free = rewardTreasures(state, combat);
+  if (combat.helperId && !combat.helperForced && combat.helperDeal) free -= combat.helperDeal.count;
+  for (const b of combat.bribes ?? []) free -= b.count;
+  return Math.max(0, free);
 }
 
 export function continueReward(state: GameState, ctx: Ctx) {

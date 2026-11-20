@@ -288,4 +288,27 @@ describe("regras", () => {
     expect(state.closed).toBe(true);
     expect(state.phase).toBe("FINISHED");
   });
+
+  it("ameaça só pode pedir os tesouros que ainda não foram prometidos", () => {
+    const { state, ctx } = setup(4);
+    P(state, "p0").level = 3;
+    P(state, "p1").level = 3;
+    topDoor(state, "monster.gosma"); // nível 5, 2 tesouros
+    applyAction(state, "p0", { type: "KICK_DOOR" }, ctx);
+    applyAction(state, "p0", { type: "ASK_HELP", targetId: "p1", count: 1, mode: "random" }, ctx);
+    const req = state.prompts.find((p) => p.kind === "helpRequest")!;
+    applyAction(state, "p1", { type: "ANSWER", promptId: req.id, answer: { accept: true } }, ctx);
+    // 2 tesouros - 1 do ajudante = 1 livre
+    expect(() => applyAction(state, "p2", { type: "THREATEN", count: 2 }, ctx)).toThrow(/de 1 a 1/);
+    applyAction(state, "p2", { type: "THREATEN", count: 1 }, ctx);
+    applyAction(state, "p3", { type: "THREATEN", count: 1 }, ctx);
+    const [t2, t3] = state.prompts.filter((p) => p.kind === "threat");
+    applyAction(state, "p0", { type: "ANSWER", promptId: t2.id, answer: { accept: true } }, ctx);
+    // Não sobrou nada: a segunda ameaça não pode ser aceita
+    expect(() => applyAction(state, "p0", { type: "ANSWER", promptId: t3.id, answer: { accept: true } }, ctx)).toThrow(/prometidos/);
+    applyAction(state, "p0", { type: "ANSWER", promptId: t3.id, answer: { accept: false } }, ctx);
+    // E ninguém mais consegue ameaçar
+    state.combat!.used = state.combat!.used.filter((u) => u !== "p3:threat");
+    expect(() => applyAction(state, "p3", { type: "THREATEN", count: 1 }, ctx)).toThrow(/não vai ganhar mais tesouros/);
+  });
 });

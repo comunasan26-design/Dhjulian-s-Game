@@ -1,6 +1,6 @@
 // Visão do estado filtrada para um jogador (nunca vaza mãos alheias nem a ordem dos baralhos).
 import { type AbilityInfo, abilityInfos } from "./abilities";
-import { badStuffVictims, curseName } from "./core";
+import { badStuffVictims, curseName, freeTreasures } from "./core";
 import type { ActiveCurse, CardInst, CombatState, GameState, LogEntry, Prompt } from "./state";
 import {
   type CalcLine,
@@ -63,7 +63,16 @@ export interface GameView {
   turn: GameState["turn"];
   decks: { door: number; treasure: number; doorDiscard: string[]; treasureDiscard: string[] };
   cards: Record<string, Pick<CardInst, "defId" | "reforged" | "runes" | "charges" | "tamed" | "artificeSecond">>;
-  combat: (CombatState & { calc: CombatCalc | null; flee: CombatState["flee"]; victims: string[]; fleePreview: FleePreview[] }) | null;
+  combat:
+    | (CombatState & {
+        calc: CombatCalc | null;
+        flee: CombatState["flee"];
+        victims: string[];
+        fleePreview: FleePreview[];
+        /** Tesouros do lutador ainda não prometidos (máximo de uma ameaça). */
+        freeTreasures: number;
+      })
+    | null;
   reward: { cards: string[] | null; count: number; fighterId: string; helperId: string | null; faceUp: boolean } | null;
   prompts: (Omit<Prompt, "data"> & { data: Record<string, unknown> | null })[];
   notices: { id: string; text: string; cards: string[]; kind?: string }[];
@@ -149,6 +158,7 @@ export function viewFor(state: GameState, me: string, now: number, online: Set<s
       calc: computeCombat(state),
       victims: badStuffVictims(state),
       fleePreview,
+      freeTreasures: freeTreasures(state, c),
     };
   }
 
