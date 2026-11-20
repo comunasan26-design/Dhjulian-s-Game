@@ -2,6 +2,7 @@
   {
     "id": "pedra",
     "nome": "Runa da Pedra",
+    "imagem": "runa",
     "raridade": "comum",
     "preco": 100,
     "texto": "O item não pode ser perdido por ácido nem ferrugem.",
@@ -14,6 +15,7 @@
   {
     "id": "vento",
     "nome": "Runa do Vento",
+    "imagem": "runa",
     "raridade": "incomum",
     "preco": 300,
     "texto": "+1 em Fugir (conta no limite de +2 dos anéis se estiver num anel).",
@@ -27,6 +29,7 @@
   {
     "id": "fogo",
     "nome": "Runa do Fogo",
+    "imagem": "runa",
     "raridade": "incomum",
     "preco": 400,
     "texto": "+1 no item; o dano dele conta como fogo.",
@@ -43,6 +46,7 @@
   {
     "id": "vinculo",
     "nome": "Runa do Vínculo",
+    "imagem": "runa",
     "raridade": "raro",
     "preco": 500,
     "texto": "O item não pode ser roubado nem trocado (Ladino, Fada, Goblin).",
@@ -55,6 +59,7 @@
   {
     "id": "sorte",
     "nome": "Runa da Sorte",
+    "imagem": "runa",
     "raridade": "raro",
     "preco": 600,
     "texto": "1x por rodada, refaça um resultado 1 no dado (automático).",
@@ -67,6 +72,7 @@
   {
     "id": "sangue",
     "nome": "Runa do Sangue",
+    "imagem": "runa",
     "raridade": "epico",
     "preco": 700,
     "texto": "+3 no item, mas se você perder um combate, perca 1 nível a mais.",
@@ -84,6 +90,7 @@
   {
     "id": "rei",
     "nome": "Runa do Rei",
+    "imagem": "runa",
     "raridade": "lendario",
     "preco": 1000,
     "texto": "Dobra o bônus do item. O item passa a contar como Lendário.",

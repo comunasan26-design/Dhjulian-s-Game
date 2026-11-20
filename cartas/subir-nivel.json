@@ -2,31 +2,37 @@
   {
     "id": "critico",
     "nome": "Rolagem Crítica",
+    "imagem": "subir-de-nivel",
     "texto": "Um 20 natural na hora certa."
   },
   {
     "id": "bajular",
     "nome": "Bajular o Mestre",
+    "imagem": "subir-de-nivel",
     "texto": "Elogie a narração com sinceridade duvidosa."
   },
   {
     "id": "treino",
     "nome": "Treino Intenso",
+    "imagem": "subir-de-nivel",
     "texto": "Mil flexões antes do café."
   },
   {
     "id": "heranca",
     "nome": "Herança Inesperada",
+    "imagem": "subir-de-nivel",
     "texto": "Um tio-avô aventureiro deixou tudo para você."
   },
   {
     "id": "licao",
     "nome": "Lição Aprendida",
+    "imagem": "subir-de-nivel",
     "texto": "Da próxima vez, não abra o baú."
   },
   {
     "id": "sabedoria",
     "nome": "Sabedoria Ancestral",
+    "imagem": "subir-de-nivel",
     "texto": "Os antigos sussurram conselhos úteis."
   }
 ]

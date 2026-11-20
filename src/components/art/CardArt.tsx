@@ -5,7 +5,7 @@
 import type { CSSProperties, ReactNode } from "react";
 import { type CardDef, RARITY_LABEL } from "@/game/catalog";
 import { KIND_LABEL, shortInfo } from "@/game/display";
-import { Emblem, SCENE } from "./emblems";
+import { Emblem, KIND_FILE, sceneOf } from "./emblems";
 import { GEM_LABEL, Gem, type GemKind, gemOf, gemOutline, offsetPoly, poly } from "./gems";
 import { METAL, METAL_LABEL, METAL_OF, type Metal, rarityOf } from "./metals";
 
@@ -48,10 +48,10 @@ export function CardArtDefs() {
             </g>
           );
         })}
-        {(Object.keys(SCENE) as CardDef["kind"][]).map((k) => (
+        {(Object.keys(KIND_FILE) as CardDef["kind"][]).map((k) => (
           <linearGradient key={k} id={`sky-${k}`} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={SCENE[k][0]} />
-            <stop offset="75%" stopColor={SCENE[k][1]} />
+            <stop offset="0%" stopColor={sceneOf(k)[0]} />
+            <stop offset="75%" stopColor={sceneOf(k)[1]} />
           </linearGradient>
         ))}
         <radialGradient id="art-glow" cx="50%" cy="45%" r="50%">
@@ -79,7 +79,7 @@ const ARCH = "M4 100 V38 C4 14 32 4 70 4 C108 4 136 14 136 38 V100 Z";
 
 /** Janela em arco com cenário (céu, brilho, colinas) e a ilustração da carta. */
 function ArtWindow({ d, compact = false }: { d: CardDef; compact?: boolean }) {
-  const [, , ground] = SCENE[d.kind];
+  const [, , ground] = sceneOf(d.kind);
   return (
     <div className={`absolute ${compact ? "inset-x-[10%] top-[43%] h-[38%]" : "inset-x-[12%] top-[34%] h-[37%]"}`}>
       <svg viewBox="0 0 140 100" className="h-full w-full" preserveAspectRatio="none" aria-hidden>

@@ -1,6 +1,6 @@
 import type { Fx } from "./effects";
 import { loadCatalog } from "./load";
-import type { CardDef, ClassCard, ClassId, CurseCard, GameRules, ItemCard, MonsterCard, RaceCard, RaceId } from "./types";
+import type { ArtConfig, CardDef, ClassCard, ClassId, CurseCard, GameRules, ItemCard, MonsterCard, RaceCard, RaceId } from "./types";
 
 export * from "./types";
 export type { Fx } from "./effects";
@@ -11,6 +11,7 @@ if (loaded.problems.length > 0) {
 }
 
 export const RULES: GameRules = loaded.rules;
+export const ART: ArtConfig = loaded.art;
 export const RACES = loaded.races;
 export const CLASSES = loaded.classes;
 export const ITEMS = loaded.items;

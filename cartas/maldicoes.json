@@ -2,6 +2,7 @@
   {
     "id": "azar",
     "nome": "Azar do Aventureiro",
+    "imagem": "relampago",
     "tipo": "instantanea",
     "texto": "Perca 1 nível.",
     "efeitos": [
@@ -14,6 +15,7 @@
   {
     "id": "lich",
     "nome": "Maldição do Lich",
+    "imagem": "relampago",
     "tipo": "instantanea",
     "texto": "Perca 2 níveis (3 se você for nível 15 ou mais).",
     "efeitos": [
@@ -28,6 +30,7 @@
   {
     "id": "vento",
     "nome": "Vento Traiçoeiro",
+    "imagem": "relampago",
     "tipo": "instantanea",
     "texto": "Perca o capacete.",
     "efeitos": [
@@ -40,6 +43,7 @@
   {
     "id": "ferrugem",
     "nome": "Ferrugem Súbita",
+    "imagem": "relampago",
     "tipo": "instantanea",
     "texto": "Perca o peitoral.",
     "efeitos": [
@@ -52,6 +56,7 @@
   {
     "id": "calcas",
     "nome": "Calças no Joelho",
+    "imagem": "relampago",
     "tipo": "instantanea",
     "texto": "Perca as calças.",
     "efeitos": [
@@ -64,6 +69,7 @@
   {
     "id": "botas",
     "nome": "Ladrão de Botas",
+    "imagem": "relampago",
     "tipo": "instantanea",
     "texto": "Perca as botas.",
     "efeitos": [
@@ -76,6 +82,7 @@
   {
     "id": "dedos",
     "nome": "Dedos Escorregadios",
+    "imagem": "relampago",
     "tipo": "instantanea",
     "texto": "Perca 2 anéis, à escolha de quem lançou a maldição.",
     "efeitos": [
@@ -88,6 +95,7 @@
   {
     "id": "montaria",
     "nome": "Montaria Fujona",
+    "imagem": "relampago",
     "tipo": "instantanea",
     "texto": "Perca a montaria.",
     "efeitos": [
@@ -100,6 +108,7 @@
   {
     "id": "mimico",
     "nome": "Mímico de Bolso",
+    "imagem": "mimico",
     "tipo": "instantanea",
     "texto": "Perca o item equipado de maior bônus.",
     "efeitos": [
@@ -111,6 +120,7 @@
   {
     "id": "mao-furada",
     "nome": "Mão Furada",
+    "imagem": "relampago",
     "tipo": "instantanea",
     "texto": "Descarte 2 cartas aleatórias da mão.",
     "efeitos": [
@@ -123,6 +133,7 @@
   {
     "id": "impostos",
     "nome": "Coleta de Impostos",
+    "imagem": "relampago",
     "tipo": "instantanea",
     "texto": "Dê 1 carta aleatória da mão a cada jogador de nível menor que o seu.",
     "efeitos": [
@@ -134,6 +145,7 @@
   {
     "id": "troca",
     "nome": "Troca Feérica",
+    "imagem": "relampago",
     "tipo": "instantanea",
     "texto": "Troque 1 item equipado com o jogador à sua esquerda (mesmo slot, escolha dele).",
     "efeitos": [
@@ -145,6 +157,7 @@
   {
     "id": "amnesia",
     "nome": "Amnésia Profissional",
+    "imagem": "relampago",
     "tipo": "instantanea",
     "texto": "Descarte sua classe.",
     "efeitos": [
@@ -156,6 +169,7 @@
   {
     "id": "identidade",
     "nome": "Crise de Identidade",
+    "imagem": "relampago",
     "tipo": "instantanea",
     "texto": "Descarte sua raça; você vira Humano.",
     "efeitos": [
@@ -168,6 +182,7 @@
   {
     "id": "fraqueza",
     "nome": "Fraqueza Súbita",
+    "imagem": "espada-quebrada",
     "tipo": "combate",
     "texto": "-3 em combate (-5 se o alvo for nível 11 ou mais).",
     "efeitos": [
@@ -181,6 +196,7 @@
   {
     "id": "chumbo",
     "nome": "Pés de Chumbo",
+    "imagem": "espada-quebrada",
     "tipo": "combate",
     "texto": "O alvo não pode fugir.",
     "efeitos": [
@@ -192,6 +208,7 @@
   {
     "id": "escuro",
     "nome": "Medo do Escuro",
+    "imagem": "espada-quebrada",
     "tipo": "combate",
     "texto": "O monstro ganha +5.",
     "efeitos": [
@@ -204,6 +221,7 @@
   {
     "id": "isolamento",
     "nome": "Isolamento",
+    "imagem": "espada-quebrada",
     "tipo": "combate",
     "texto": "Ninguém pode ajudar o alvo.",
     "efeitos": [
@@ -215,6 +233,7 @@
   {
     "id": "silencio",
     "nome": "Silêncio Arcano",
+    "imagem": "espada-quebrada",
     "tipo": "combate",
     "texto": "O alvo não pode usar habilidades ativas.",
     "efeitos": [
@@ -226,6 +245,7 @@
   {
     "id": "horda",
     "nome": "Chamado da Horda",
+    "imagem": "espada-quebrada",
     "tipo": "combate",
     "texto": "Compre cartas de Porta até achar um monstro: ele entra no combate como Monstro Errante.",
     "efeitos": [
@@ -237,6 +257,7 @@
   {
     "id": "ilusao-traidora",
     "nome": "Ilusão Traidora",
+    "imagem": "espada-quebrada",
     "tipo": "combate",
     "texto": "O ajudante de maior nível do alvo passa para o lado do monstro.",
     "efeitos": [
@@ -248,6 +269,7 @@
   {
     "id": "corvo",
     "nome": "Corvo Agourento no Ombro",
+    "imagem": "ampulheta",
     "tipo": "duracao",
     "duracao": 3,
     "texto": "-1 em todas as suas rolagens de dado.",
@@ -261,6 +283,7 @@
   {
     "id": "sapo",
     "nome": "Maldição do Sapo",
+    "imagem": "sapo",
     "tipo": "duracao",
     "duracao": 2,
     "texto": "-3 em combate e não pode usar itens de mão. Acaba antes se outro jogador descartar 1 carta para dar um beijo em você.",
@@ -280,6 +303,7 @@
   {
     "id": "licantropia",
     "nome": "Licantropia",
+    "imagem": "ampulheta",
     "tipo": "duracao",
     "duracao": 3,
     "texto": "+2 em combate, mas não pode usar armadura nem armas; conta como Animal.",
@@ -296,6 +320,7 @@
   {
     "id": "ganancia",
     "nome": "Ganância Dracônica",
+    "imagem": "ampulheta",
     "tipo": "duracao",
     "duracao": 3,
     "texto": "Você não pode vender, trocar nem dar itens.",
@@ -308,6 +333,7 @@
   {
     "id": "riqueza",
     "nome": "Ilusão de Riqueza",
+    "imagem": "ampulheta",
     "tipo": "duracao",
     "duracao": 2,
     "texto": "Você compra metade dos tesouros ao vencer (arredondado para baixo).",
@@ -320,6 +346,7 @@
   {
     "id": "sono",
     "nome": "Sono Encantado",
+    "imagem": "ampulheta",
     "tipo": "duracao",
     "duracao": 1,
     "texto": "Você pula o seu próximo turno.",
@@ -332,6 +359,7 @@
   {
     "id": "podridao",
     "nome": "Podridão Antiga",
+    "imagem": "grilhao",
     "tipo": "persistente",
     "texto": "-2 em combate. Água Benta também remove.",
     "efeitos": [
@@ -347,6 +375,7 @@
   {
     "id": "sombra",
     "nome": "Sombra Seguidora",
+    "imagem": "grilhao",
     "tipo": "persistente",
     "texto": "Sempre que vencer um combate, você compra 1 tesouro a menos.",
     "efeitos": [
@@ -359,6 +388,7 @@
   {
     "id": "divida",
     "nome": "Dívida com o Diabo",
+    "imagem": "grilhao",
     "tipo": "persistente",
     "texto": "No início de cada turno seu, descarte 1 carta da mão.",
     "efeitos": [
@@ -370,6 +400,7 @@
   {
     "id": "espada",
     "nome": "Espada Amaldiçoada",
+    "imagem": "grilhao",
     "tipo": "persistente",
     "texto": "Ocupa 1 slot de mão e dá -3 em combate; não pode ser desequipada nem vendida.",
     "efeitos": [
@@ -385,6 +416,7 @@
   {
     "id": "coroa-espinhos",
     "nome": "Coroa de Espinhos",
+    "imagem": "coroa",
     "tipo": "persistente",
     "texto": "Você não pode ter item Lendário equipado; se tiver, ele vai para a mão.",
     "efeitos": [
@@ -396,6 +428,7 @@
   {
     "id": "marca",
     "nome": "Marca do Caçador",
+    "imagem": "grilhao",
     "tipo": "persistente",
     "texto": "Todo monstro que você enfrentar ganha +2. Se você derrotar um monstro de nível 20 ou mais, a marca some.",
     "efeitos": [

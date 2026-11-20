@@ -8,6 +8,12 @@ Classes válidas (para `classes`): `guerreiro`, `mago`, `clerigo`, `ladino`, `dr
 
 Tags de monstro (para `tags`): `morto-vivo`, `demonio`, `dragao`, `fogo`, `aquatico`, `animal`, `voador`, `sagrado`.
 
+## Desenhos disponíveis (imagens.json)
+
+Use no campo `"imagem"` das cartas. Para criar novos, veja o LEIA-ME.
+
+`elmo`, `coroa`, `chapeu-de-mago`, `peitoral`, `grevas`, `bota`, `anel`, `amuleto`, `cavalo`, `escudo`, `machado`, `martelo`, `arco`, `cajado`, `adaga`, `lanca`, `espada`, `pocao`, `runa`, `bolsa-de-moedas`, `subir-de-nivel`, `garras`, `andarilho-encapuzado`, `cubo-gelatinoso`, `gosma`, `cogumelo`, `mimico`, `minotauro`, `dragao`, `demonio`, `caveira`, `tentaculos`, `espirito-de-fogo`, `anjo`, `morcego`, `lobo`, `ogro`, `sapo`, `relampago`, `espada-quebrada`, `ampulheta`, `grilhao`, `fada`, `coruja`, `tartaruga`, `centauro`, `tridente`, `redemoinho-elemental`, `rosto-draconato`, `rosto-anao`, `rosto-elfo`, `rosto-orc`, `rosto-goblin`, `rosto-gnomo`, `rosto-gigante`, `rosto-diabrete`, `rosto-vampiro`, `rosto-divino`, `rosto-humano`, `machados-duplos`, `escudo-e-espada`, `espada-e-escudo-sagrado`, `chapeu-e-cajado`, `simbolo-sagrado`, `mascara-e-adaga`, `cajado-de-folhas`, `alaude`, `orbe`, `grimorio`, `punho`, `mascara`, `engrenagem-e-martelo`, `frascos`, `espada-e-cajado`
+
 ## Passivas de raças e classes
 
 Usados em `racas.json / classes.json (campo "passiva.efeitos")`.

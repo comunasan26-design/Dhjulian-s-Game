@@ -1,14 +1,9 @@
-import type { CardDef, Rarity } from "@/game/catalog";
+import { ART, type CardDef, type Rarity } from "@/game/catalog";
 
 export type Metal = "cobre" | "bronze" | "prata" | "ouro" | "negro";
 
-export const METAL_OF: Record<Rarity, Metal> = {
-  comum: "cobre",
-  incomum: "bronze",
-  raro: "prata",
-  epico: "ouro",
-  lendario: "negro",
-};
+/** Metal da moldura de cada raridade (definido em cartas/imagens.json, bloco "molduras"). */
+export const METAL_OF = ART.molduras as Record<Rarity, Metal>;
 
 export const METAL_LABEL: Record<Metal, string> = {
   cobre: "Cobre",

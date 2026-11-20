@@ -31,6 +31,17 @@ interface CardBase {
   copies?: number;
   /** Efeitos (definidos nos arquivos JSON da pasta /cartas). */
   fx?: Fx[];
+  /** Imagem: nome de um desenho de cartas/imagens.json, endereço de imagem ou SVG. */
+  image?: string;
+}
+
+/** Configuração visual (cartas/imagens.json). Chaves por arquivo de carta: "racas", "itens"… */
+export interface ArtConfig {
+  desenhos: Record<string, string>;
+  padroes: Record<string, string>;
+  cenarios: Record<string, { ceu: string; horizonte: string; chao: string }>;
+  gemas: Record<string, string>;
+  molduras: Record<string, string>;
 }
 
 export interface AbilityText {

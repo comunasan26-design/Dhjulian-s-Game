@@ -2,6 +2,7 @@
   {
     "id": "divino",
     "nome": "Divino",
+    "imagem": "rosto-divino",
     "passiva": {
       "nome": "Proteção Celestial",
       "texto": "Ao ser alvo de uma maldição, role 1d6; com 5+ ela é anulada (4+ a partir do nível 11).",
@@ -39,6 +40,7 @@
   {
     "id": "anao",
     "nome": "Anão",
+    "imagem": "rosto-anao",
     "passiva": {
       "nome": "Teimosia Anã",
       "texto": "Coisas Ruins que fariam você perder itens tiram 1 item a menos; você pode carregar até 6 cartas na mão (7 a partir do nível 11), mas não pode segurar nem equipar itens Grandes.",
@@ -73,6 +75,7 @@
   {
     "id": "draconato",
     "nome": "Draconato",
+    "imagem": "rosto-draconato",
     "passiva": {
       "nome": "Escamas Dracônicas",
       "texto": "+1 em combate (+2 a partir do nível 11); imune às Coisas Ruins de monstros Fogo e Dragão, exceto Lendários.",
@@ -115,6 +118,7 @@
   {
     "id": "elfo",
     "nome": "Elfo",
+    "imagem": "rosto-elfo",
     "passiva": {
       "nome": "Graça Élfica",
       "texto": "+1 em Fugir; sobe 1 nível ao ajudar outro jogador a derrotar um monstro (máx. 1 por rodada).",
@@ -145,6 +149,7 @@
   {
     "id": "gnomo",
     "nome": "Gnomo",
+    "imagem": "rosto-gnomo",
     "passiva": {
       "nome": "Gambiarra",
       "texto": "+1 em Fugir; ao usar uma poção, role 1d6: com 6 ela não é descartada.",
@@ -172,6 +177,7 @@
   {
     "id": "gigante",
     "nome": "Gigante",
+    "imagem": "rosto-gigante",
     "passiva": {
       "nome": "Colosso",
       "texto": "+2 em combate (+3 a partir do nível 11) e pode usar 2 itens Grandes; -1 em Fugir.",
@@ -208,6 +214,7 @@
   {
     "id": "humano",
     "nome": "Humano",
+    "imagem": "rosto-humano",
     "passiva": {
       "nome": "Versátil",
       "texto": "Limite de mão +1. A partir do nível 11, pode ter 2 classes ao mesmo tempo.",
@@ -239,6 +246,7 @@
   {
     "id": "orc",
     "nome": "Orc",
+    "imagem": "rosto-orc",
     "passiva": {
       "nome": "Sede de Sangue",
       "texto": "Ao vencer sozinho um monstro de nível maior que o seu, sobe 1 nível extra (máx. 1 por rodada).",
@@ -266,6 +274,7 @@
   {
     "id": "diabrete",
     "nome": "Diabrete",
+    "imagem": "rosto-diabrete",
     "passiva": {
       "nome": "Malícia",
       "texto": "Ao lançar uma maldição em outro jogador, compre 2 cartas de Porta (máx. 1 por rodada).",
@@ -292,6 +301,7 @@
   {
     "id": "elemental",
     "nome": "Elemental",
+    "imagem": "redemoinho-elemental",
     "passiva": {
       "nome": "Afinidade Rúnica",
       "texto": "Cada item pode ter 1 runa a mais, e cada runa equipada dá +1 extra (máx. +4).",
@@ -328,6 +338,7 @@
   {
     "id": "goblin",
     "nome": "Goblin",
+    "imagem": "rosto-goblin",
     "passiva": {
       "nome": "Catador",
       "texto": "Quando outro jogador descarta um item, você pode rolar 1d6 com sucesso em 5+ (4+ a partir do nível 11) para pegá-lo antes. 1x por rodada.",
@@ -357,6 +368,7 @@
   {
     "id": "centauro",
     "nome": "Centauro",
+    "imagem": "centauro",
     "passiva": {
       "nome": "Quatro Patas",
       "texto": "+1 em Fugir; pode equipar 2 pares de botas; não pode usar montarias.",
@@ -392,6 +404,7 @@
   {
     "id": "torkle",
     "nome": "Torkle",
+    "imagem": "tartaruga",
     "passiva": {
       "nome": "Casco",
       "texto": "Conta como peitoral de +5 (+7 a partir do nível 11) que não pode ser perdido nem roubado; não pode equipar peitorais; -2 em Fugir.",
@@ -427,6 +440,7 @@
   {
     "id": "owlin",
     "nome": "Owlin",
+    "imagem": "coruja",
     "passiva": {
       "nome": "Olhos da Noite",
       "texto": "No início e no fim do seu turno, veja a carta do topo de Portas; deixe-a lá ou mande-a para o fundo.",
@@ -449,6 +463,7 @@
   {
     "id": "tritao",
     "nome": "Tritão/Sereia",
+    "imagem": "tridente",
     "passiva": {
       "nome": "Filho das Marés",
       "texto": "+2 em Fugir (foge automaticamente de monstros Aquáticos); +3 em combate contra monstros Aquáticos e imune às Coisas Ruins deles.",
@@ -502,6 +517,7 @@
   {
     "id": "fada",
     "nome": "Fada",
+    "imagem": "fada",
     "passiva": {
       "nome": "Asas Leves",
       "texto": "+2 em Fugir; -1 em combate; não pode usar itens Grandes.",
@@ -536,6 +552,7 @@
   {
     "id": "vampirico",
     "nome": "Vampírico",
+    "imagem": "rosto-vampiro",
     "passiva": {
       "nome": "Não-morto",
       "texto": "Ao morrer, role 1d6; com 5+ não morre (mantém itens, mas seu turno acaba).",

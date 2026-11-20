@@ -2,6 +2,7 @@
   {
     "id": "kobold",
     "nome": "Kobold Covarde",
+    "imagem": "ogro",
     "nivel": 1,
     "tesouros": 1,
     "niveis": 1,
@@ -24,6 +25,7 @@
   {
     "id": "estirge",
     "nome": "Estirge",
+    "imagem": "morcego",
     "nivel": 1,
     "tags": [
       "voador",
@@ -52,6 +54,7 @@
   {
     "id": "goblin",
     "nome": "Goblin Batedor de Carteira",
+    "imagem": "ogro",
     "nivel": 2,
     "tesouros": 1,
     "niveis": 1,
@@ -78,6 +81,7 @@
   {
     "id": "cogumelo",
     "nome": "Cogumelo Gritante",
+    "imagem": "cogumelo",
     "nivel": 2,
     "tesouros": 1,
     "niveis": 1,
@@ -98,6 +102,7 @@
   {
     "id": "esqueleto",
     "nome": "Esqueleto Desmontável",
+    "imagem": "caveira",
     "nivel": 3,
     "tags": [
       "morto-vivo"
@@ -127,6 +132,7 @@
   {
     "id": "zumbi",
     "nome": "Zumbi Lerdo",
+    "imagem": "caveira",
     "nivel": 4,
     "tags": [
       "morto-vivo"
@@ -151,6 +157,7 @@
   {
     "id": "gnoll",
     "nome": "Gnoll",
+    "imagem": "ogro",
     "nivel": 4,
     "tesouros": 1,
     "niveis": 1,
@@ -177,6 +184,7 @@
   {
     "id": "gosma",
     "nome": "Gosma Cinzenta",
+    "imagem": "gosma",
     "nivel": 5,
     "tesouros": 2,
     "niveis": 1,
@@ -199,6 +207,7 @@
   {
     "id": "harpia",
     "nome": "Harpia Desafinada",
+    "imagem": "morcego",
     "nivel": 6,
     "tags": [
       "voador"
@@ -230,6 +239,7 @@
   {
     "id": "bugbear",
     "nome": "Bugbear",
+    "imagem": "ogro",
     "nivel": 6,
     "tesouros": 2,
     "niveis": 1,
@@ -254,6 +264,7 @@
   {
     "id": "mimico",
     "nome": "Mímico",
+    "imagem": "mimico",
     "nivel": 7,
     "tesouros": 2,
     "niveis": 1,
@@ -269,6 +280,7 @@
   {
     "id": "urso-coruja",
     "nome": "Urso-Coruja",
+    "imagem": "lobo",
     "nivel": 8,
     "tags": [
       "animal"
@@ -303,6 +315,7 @@
   {
     "id": "ferrugem",
     "nome": "Monstro da Ferrugem",
+    "imagem": "lobo",
     "nivel": 9,
     "tags": [
       "animal"
@@ -337,6 +350,7 @@
   {
     "id": "ankheg",
     "nome": "Ankheg",
+    "imagem": "lobo",
     "nivel": 9,
     "tags": [
       "animal"
@@ -366,6 +380,7 @@
   {
     "id": "cubo",
     "nome": "Cubo Gelatinoso",
+    "imagem": "cubo-gelatinoso",
     "nivel": 10,
     "tesouros": 2,
     "niveis": 1,
@@ -387,6 +402,7 @@
   {
     "id": "ogro",
     "nome": "Ogro Faminto",
+    "imagem": "ogro",
     "nivel": 11,
     "tesouros": 3,
     "niveis": 1,
@@ -413,6 +429,7 @@
   {
     "id": "carnical",
     "nome": "Carniçal",
+    "imagem": "caveira",
     "nivel": 12,
     "tags": [
       "morto-vivo"
@@ -439,6 +456,7 @@
   {
     "id": "cao-infernal",
     "nome": "Cão Infernal",
+    "imagem": "demonio",
     "nivel": 12,
     "tags": [
       "demonio",
@@ -464,6 +482,7 @@
   {
     "id": "basilisco",
     "nome": "Basilisco",
+    "imagem": "lobo",
     "nivel": 13,
     "tags": [
       "animal"
@@ -493,6 +512,7 @@
   {
     "id": "corpo-seco",
     "nome": "Corpo-Seco",
+    "imagem": "caveira",
     "nivel": 13,
     "tags": [
       "morto-vivo"
@@ -516,6 +536,7 @@
   {
     "id": "mumia",
     "nome": "Múmia",
+    "imagem": "caveira",
     "nivel": 14,
     "tags": [
       "morto-vivo"
@@ -547,6 +568,7 @@
   {
     "id": "gargula",
     "nome": "Gárgula",
+    "imagem": "morcego",
     "nivel": 14,
     "tags": [
       "voador"
@@ -575,6 +597,7 @@
   {
     "id": "minotauro",
     "nome": "Minotauro",
+    "imagem": "minotauro",
     "nivel": 15,
     "tesouros": 3,
     "niveis": 2,
@@ -591,6 +614,7 @@
   {
     "id": "troll",
     "nome": "Troll",
+    "imagem": "ogro",
     "nivel": 16,
     "tesouros": 4,
     "niveis": 2,
@@ -613,6 +637,7 @@
   {
     "id": "manticora",
     "nome": "Mantícora",
+    "imagem": "morcego",
     "nivel": 17,
     "tags": [
       "voador"
@@ -652,6 +677,7 @@
   {
     "id": "ettin",
     "nome": "Ettin",
+    "imagem": "ogro",
     "nivel": 17,
     "tesouros": 4,
     "niveis": 2,
@@ -675,6 +701,7 @@
   {
     "id": "medusa",
     "nome": "Medusa",
+    "imagem": "ogro",
     "nivel": 18,
     "tesouros": 4,
     "niveis": 2,
@@ -695,6 +722,7 @@
   {
     "id": "gigante-colinas",
     "nome": "Gigante das Colinas",
+    "imagem": "ogro",
     "nivel": 19,
     "tesouros": 4,
     "niveis": 2,
@@ -721,6 +749,7 @@
   {
     "id": "oni",
     "nome": "Ogro Mago (Oni)",
+    "imagem": "ogro",
     "nivel": 19,
     "tesouros": 4,
     "niveis": 2,
@@ -745,6 +774,7 @@
   {
     "id": "serpe",
     "nome": "Serpe",
+    "imagem": "dragao",
     "nivel": 20,
     "tags": [
       "dragao",
@@ -776,6 +806,7 @@
   {
     "id": "fantasma",
     "nome": "Fantasma Choramingão",
+    "imagem": "caveira",
     "nivel": 21,
     "tags": [
       "morto-vivo"
@@ -804,6 +835,7 @@
   {
     "id": "elemental-fogo",
     "nome": "Elemental do Fogo",
+    "imagem": "espirito-de-fogo",
     "nivel": 21,
     "tags": [
       "fogo"
@@ -847,6 +879,7 @@
   {
     "id": "gigante-gelo",
     "nome": "Gigante do Gelo",
+    "imagem": "ogro",
     "nivel": 22,
     "tesouros": 5,
     "niveis": 2,
@@ -879,6 +912,7 @@
   {
     "id": "hidra",
     "nome": "Hidra",
+    "imagem": "tentaculos",
     "nivel": 23,
     "tags": [
       "aquatico",
@@ -910,6 +944,7 @@
   {
     "id": "naga",
     "nome": "Naga Espiritual",
+    "imagem": "ogro",
     "nivel": 23,
     "tesouros": 5,
     "niveis": 2,
@@ -935,6 +970,7 @@
   {
     "id": "golem",
     "nome": "Golem de Ferro",
+    "imagem": "ogro",
     "nivel": 24,
     "tesouros": 5,
     "niveis": 2,
@@ -964,6 +1000,7 @@
   {
     "id": "dragao-branco",
     "nome": "Dragão Branco Adulto",
+    "imagem": "dragao",
     "nivel": 24,
     "tags": [
       "dragao",
@@ -997,6 +1034,7 @@
   {
     "id": "quimera",
     "nome": "Quimera",
+    "imagem": "dragao",
     "nivel": 25,
     "tags": [
       "fogo",
@@ -1026,6 +1064,7 @@
   {
     "id": "vampiro",
     "nome": "Vampiro Ancestral",
+    "imagem": "caveira",
     "nivel": 26,
     "tags": [
       "morto-vivo"
@@ -1073,6 +1112,7 @@
   {
     "id": "gigante-fogo",
     "nome": "Gigante do Fogo",
+    "imagem": "espirito-de-fogo",
     "nivel": 27,
     "tags": [
       "fogo"
@@ -1110,6 +1150,7 @@
   {
     "id": "aboleth",
     "nome": "Aboleth",
+    "imagem": "tentaculos",
     "nivel": 27,
     "tags": [
       "aquatico"
@@ -1138,6 +1179,7 @@
   {
     "id": "verme",
     "nome": "Verme Púrpura",
+    "imagem": "ogro",
     "nivel": 28,
     "tesouros": 6,
     "niveis": 2,
@@ -1160,6 +1202,7 @@
   {
     "id": "dragao-vermelho-adulto",
     "nome": "Dragão Vermelho Adulto",
+    "imagem": "dragao",
     "nivel": 29,
     "tags": [
       "dragao",
@@ -1191,6 +1234,7 @@
   {
     "id": "gigante-tempestades",
     "nome": "Gigante das Tempestades",
+    "imagem": "ogro",
     "nivel": 29,
     "tesouros": 7,
     "niveis": 2,
@@ -1222,6 +1266,7 @@
   {
     "id": "glabrezu",
     "nome": "Glabrezu",
+    "imagem": "demonio",
     "nivel": 30,
     "tags": [
       "demonio"
@@ -1255,6 +1300,7 @@
   {
     "id": "senhor-mumias",
     "nome": "Senhor das Múmias",
+    "imagem": "caveira",
     "nivel": 31,
     "lendario": true,
     "tags": [
@@ -1287,6 +1333,7 @@
   {
     "id": "dragao-negro",
     "nome": "Dragão Negro Ancião",
+    "imagem": "dragao",
     "nivel": 31,
     "lendario": true,
     "tags": [
@@ -1318,6 +1365,7 @@
   {
     "id": "lich",
     "nome": "Lich",
+    "imagem": "caveira",
     "nivel": 32,
     "lendario": true,
     "tags": [
@@ -1354,6 +1402,7 @@
   {
     "id": "dragao-azul",
     "nome": "Dragão Azul Ancião",
+    "imagem": "dragao",
     "nivel": 33,
     "lendario": true,
     "tags": [
@@ -1384,6 +1433,7 @@
   {
     "id": "planetar",
     "nome": "Planetar",
+    "imagem": "anjo",
     "nivel": 33,
     "lendario": true,
     "tags": [
@@ -1414,6 +1464,7 @@
   {
     "id": "solar",
     "nome": "Solar",
+    "imagem": "anjo",
     "nivel": 34,
     "lendario": true,
     "tags": [
@@ -1462,6 +1513,7 @@
   {
     "id": "marilith",
     "nome": "Marilith",
+    "imagem": "demonio",
     "nivel": 34,
     "lendario": true,
     "tags": [
@@ -1491,6 +1543,7 @@
   {
     "id": "balor",
     "nome": "Balor",
+    "imagem": "demonio",
     "nivel": 35,
     "lendario": true,
     "tags": [
@@ -1520,6 +1573,7 @@
   {
     "id": "kraken",
     "nome": "Kraken",
+    "imagem": "tentaculos",
     "nivel": 36,
     "lendario": true,
     "tags": [
@@ -1556,6 +1610,7 @@
   {
     "id": "dragao-verde",
     "nome": "Dragão Verde Ancião",
+    "imagem": "dragao",
     "nivel": 36,
     "lendario": true,
     "tags": [
@@ -1585,6 +1640,7 @@
   {
     "id": "diabo",
     "nome": "Diabo das Profundezas",
+    "imagem": "demonio",
     "nivel": 37,
     "lendario": true,
     "tags": [
@@ -1626,6 +1682,7 @@
   {
     "id": "dragao-vermelho-anciao",
     "nome": "Dragão Vermelho Ancião",
+    "imagem": "dragao",
     "nivel": 38,
     "lendario": true,
     "tags": [
@@ -1657,6 +1714,7 @@
   {
     "id": "empireo",
     "nome": "Empíreo",
+    "imagem": "anjo",
     "nivel": 38,
     "lendario": true,
     "tags": [
@@ -1688,6 +1746,7 @@
   {
     "id": "dragao-dourado",
     "nome": "Dragão Dourado Ancião",
+    "imagem": "dragao",
     "nivel": 39,
     "lendario": true,
     "tags": [
@@ -1733,6 +1792,7 @@
   {
     "id": "tarrasque",
     "nome": "Tarrasque",
+    "imagem": "ogro",
     "nivel": 40,
     "lendario": true,
     "tesouros": 12,

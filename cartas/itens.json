@@ -2,6 +2,7 @@
   {
     "id": "panela",
     "nome": "Panela Amassada",
+    "imagem": "elmo",
     "slot": "capacete",
     "raridade": "comum",
     "bonus": 1,
@@ -11,6 +12,7 @@
   {
     "id": "elmo-couro",
     "nome": "Elmo de Couro",
+    "imagem": "elmo",
     "slot": "capacete",
     "raridade": "comum",
     "bonus": 2,
@@ -19,6 +21,7 @@
   {
     "id": "chapeu-arcano",
     "nome": "Chapéu Pontudo do Arcano",
+    "imagem": "chapeu-de-mago",
     "slot": "capacete",
     "raridade": "incomum",
     "bonus": 3,
@@ -36,6 +39,7 @@
   {
     "id": "elmo-chifres",
     "nome": "Elmo com Chifres",
+    "imagem": "elmo",
     "slot": "capacete",
     "raridade": "raro",
     "bonus": 4,
@@ -57,6 +61,7 @@
   {
     "id": "coroa-goblin",
     "nome": "Coroa do Rei Goblin",
+    "imagem": "coroa",
     "slot": "capacete",
     "raridade": "epico",
     "bonus": 5,
@@ -71,6 +76,7 @@
   {
     "id": "elmo-olho",
     "nome": "Elmo do Olho Vigilante",
+    "imagem": "elmo",
     "slot": "capacete",
     "raridade": "lendario",
     "bonus": 6,
@@ -85,6 +91,7 @@
   {
     "id": "gibao",
     "nome": "Gibão Acolchoado",
+    "imagem": "peitoral",
     "slot": "peitoral",
     "raridade": "comum",
     "bonus": 1,
@@ -93,6 +100,7 @@
   {
     "id": "cota-enferrujada",
     "nome": "Cota de Malha Enferrujada",
+    "imagem": "peitoral",
     "slot": "peitoral",
     "raridade": "comum",
     "bonus": 2,
@@ -102,6 +110,7 @@
   {
     "id": "couraca-kobold",
     "nome": "Couraça de Escamas de Kobold",
+    "imagem": "peitoral",
     "slot": "peitoral",
     "raridade": "incomum",
     "bonus": 3,
@@ -110,6 +119,7 @@
   {
     "id": "placas",
     "nome": "Armadura de Placas Brilhante",
+    "imagem": "peitoral",
     "slot": "peitoral",
     "raridade": "raro",
     "bonus": 4,
@@ -129,6 +139,7 @@
   {
     "id": "manto-elfico",
     "nome": "Manto Élfico",
+    "imagem": "peitoral",
     "slot": "peitoral",
     "raridade": "epico",
     "bonus": 5,
@@ -148,6 +159,7 @@
   {
     "id": "armadura-dragao",
     "nome": "Armadura de Escamas de Dragão Vermelho",
+    "imagem": "peitoral",
     "slot": "peitoral",
     "raridade": "lendario",
     "bonus": 6,
@@ -166,6 +178,7 @@
   {
     "id": "bermuda",
     "nome": "Bermuda de Aventureiro",
+    "imagem": "grevas",
     "slot": "calcas",
     "raridade": "comum",
     "bonus": 1,
@@ -174,6 +187,7 @@
   {
     "id": "calcas-couro",
     "nome": "Calças de Couro Batido",
+    "imagem": "grevas",
     "slot": "calcas",
     "raridade": "comum",
     "bonus": 2,
@@ -182,6 +196,7 @@
   {
     "id": "calcas-antichamas",
     "nome": "Calças Antichamas",
+    "imagem": "grevas",
     "slot": "calcas",
     "raridade": "incomum",
     "bonus": 3,
@@ -197,6 +212,7 @@
   {
     "id": "grevas-mithral",
     "nome": "Grevas de Mithral",
+    "imagem": "grevas",
     "slot": "calcas",
     "raridade": "raro",
     "bonus": 4,
@@ -212,6 +228,7 @@
   {
     "id": "calcas-dignidade",
     "nome": "Calças da Dignidade Eterna",
+    "imagem": "grevas",
     "slot": "calcas",
     "raridade": "epico",
     "bonus": 5,
@@ -227,6 +244,7 @@
   {
     "id": "saiote-tita",
     "nome": "Saiote do Titã",
+    "imagem": "grevas",
     "slot": "calcas",
     "raridade": "lendario",
     "bonus": 6,
@@ -251,6 +269,7 @@
   {
     "id": "sandalias",
     "nome": "Sandálias de Peregrino",
+    "imagem": "bota",
     "slot": "botas",
     "raridade": "comum",
     "bonus": 0,
@@ -261,6 +280,7 @@
   {
     "id": "botas-cravejadas",
     "nome": "Botas Cravejadas",
+    "imagem": "bota",
     "slot": "botas",
     "raridade": "comum",
     "bonus": 2,
@@ -269,6 +289,7 @@
   {
     "id": "botas-silenciosas",
     "nome": "Botas Silenciosas",
+    "imagem": "bota",
     "slot": "botas",
     "raridade": "incomum",
     "bonus": 2,
@@ -279,6 +300,7 @@
   {
     "id": "botas-velocidade",
     "nome": "Botas da Velocidade",
+    "imagem": "bota",
     "slot": "botas",
     "raridade": "raro",
     "bonus": 2,
@@ -289,6 +311,7 @@
   {
     "id": "botas-sete-leguas",
     "nome": "Botas das Sete Léguas",
+    "imagem": "bota",
     "slot": "botas",
     "raridade": "lendario",
     "bonus": 4,
@@ -304,6 +327,7 @@
   {
     "id": "adaga",
     "nome": "Adaga Enferrujada",
+    "imagem": "adaga",
     "slot": "mao",
     "maos": 1,
     "raridade": "comum",
@@ -323,6 +347,7 @@
   {
     "id": "clava",
     "nome": "Clava com Prego",
+    "imagem": "martelo",
     "slot": "mao",
     "maos": 1,
     "raridade": "comum",
@@ -334,6 +359,7 @@
   {
     "id": "escudo-barril",
     "nome": "Escudo de Tampa de Barril",
+    "imagem": "escudo",
     "slot": "mao",
     "maos": 1,
     "raridade": "comum",
@@ -343,6 +369,7 @@
   {
     "id": "lanca-pau",
     "nome": "Lança de Pau",
+    "imagem": "lanca",
     "slot": "mao",
     "maos": 2,
     "raridade": "comum",
@@ -354,6 +381,7 @@
   {
     "id": "cajado-aprendiz",
     "nome": "Cajado do Aprendiz",
+    "imagem": "cajado",
     "slot": "mao",
     "maos": 2,
     "raridade": "incomum",
@@ -372,6 +400,7 @@
   {
     "id": "arco-elfico",
     "nome": "Arco Élfico",
+    "imagem": "arco",
     "slot": "mao",
     "maos": 2,
     "raridade": "incomum",
@@ -398,6 +427,7 @@
   {
     "id": "martelo-anao",
     "nome": "Martelo de Guerra Anão",
+    "imagem": "martelo",
     "slot": "mao",
     "maos": 1,
     "raridade": "raro",
@@ -418,6 +448,7 @@
   {
     "id": "escudo-torre",
     "nome": "Escudo Torre",
+    "imagem": "escudo",
     "slot": "mao",
     "maos": 1,
     "raridade": "raro",
@@ -435,6 +466,7 @@
   {
     "id": "machado-carrasco",
     "nome": "Machado Duplo do Carrasco",
+    "imagem": "machado",
     "slot": "mao",
     "maos": 2,
     "raridade": "raro",
@@ -456,6 +488,7 @@
   {
     "id": "lanca-flamejante",
     "nome": "Lança Flamejante",
+    "imagem": "lanca",
     "slot": "mao",
     "maos": 2,
     "raridade": "epico",
@@ -467,6 +500,7 @@
   {
     "id": "martelo-trovao",
     "nome": "Martelo do Trovão",
+    "imagem": "martelo",
     "slot": "mao",
     "maos": 1,
     "raridade": "epico",
@@ -484,6 +518,7 @@
   {
     "id": "escudo-refletor",
     "nome": "Escudo Refletor",
+    "imagem": "escudo",
     "slot": "mao",
     "maos": 1,
     "raridade": "epico",
@@ -499,6 +534,7 @@
   {
     "id": "espada-vorpal",
     "nome": "Espada Vorpal",
+    "imagem": "espada",
     "slot": "mao",
     "maos": 1,
     "raridade": "lendario",
@@ -515,6 +551,7 @@
   {
     "id": "cajado-arquimago",
     "nome": "Cajado do Arquimago",
+    "imagem": "cajado",
     "slot": "mao",
     "maos": 2,
     "raridade": "lendario",
@@ -538,6 +575,7 @@
   {
     "id": "anel-lata",
     "nome": "Anel de Lata",
+    "imagem": "anel",
     "slot": "anel",
     "raridade": "comum",
     "bonus": 1,
@@ -547,6 +585,7 @@
   {
     "id": "anel-pe-ligeiro",
     "nome": "Anel do Pé Ligeiro",
+    "imagem": "anel",
     "slot": "anel",
     "raridade": "comum",
     "bonus": 0,
@@ -557,6 +596,7 @@
   {
     "id": "anel-protecao",
     "nome": "Anel de Proteção",
+    "imagem": "anel",
     "slot": "anel",
     "raridade": "incomum",
     "bonus": 1,
@@ -572,6 +612,7 @@
   {
     "id": "anel-fogo",
     "nome": "Anel de Fogo",
+    "imagem": "anel",
     "slot": "anel",
     "raridade": "raro",
     "bonus": 1,
@@ -582,6 +623,7 @@
   {
     "id": "anel-invisibilidade",
     "nome": "Anel da Invisibilidade",
+    "imagem": "anel",
     "slot": "anel",
     "raridade": "raro",
     "bonus": 1,
@@ -596,6 +638,7 @@
   {
     "id": "anel-regeneracao",
     "nome": "Anel da Regeneração",
+    "imagem": "anel",
     "slot": "anel",
     "raridade": "epico",
     "bonus": 2,
@@ -611,6 +654,7 @@
   {
     "id": "anel-desejos",
     "nome": "Anel dos Três Desejos",
+    "imagem": "anel",
     "slot": "anel",
     "raridade": "lendario",
     "bonus": 2,
@@ -627,6 +671,7 @@
   {
     "id": "colar-lobo",
     "nome": "Colar de Dente de Lobo",
+    "imagem": "amuleto",
     "slot": "colar",
     "raridade": "comum",
     "bonus": 1,
@@ -645,6 +690,7 @@
   {
     "id": "amuleto-alho",
     "nome": "Amuleto de Alho",
+    "imagem": "amuleto",
     "slot": "colar",
     "raridade": "incomum",
     "bonus": 3,
@@ -668,6 +714,7 @@
   {
     "id": "medalhao",
     "nome": "Medalhão dos Pensamentos",
+    "imagem": "amuleto",
     "slot": "colar",
     "raridade": "raro",
     "bonus": 4,
@@ -682,6 +729,7 @@
   {
     "id": "amuleto-saude",
     "nome": "Amuleto da Saúde",
+    "imagem": "amuleto",
     "slot": "colar",
     "raridade": "epico",
     "bonus": 5,
@@ -696,6 +744,7 @@
   {
     "id": "talisma",
     "nome": "Talismã do Bem Puro",
+    "imagem": "amuleto",
     "slot": "colar",
     "raridade": "lendario",
     "bonus": 6,
@@ -725,6 +774,7 @@
   {
     "id": "mula",
     "nome": "Mula Teimosa",
+    "imagem": "cavalo",
     "slot": "montaria",
     "raridade": "comum",
     "bonus": 1,
@@ -743,6 +793,7 @@
   {
     "id": "ponei",
     "nome": "Pônei de Carga",
+    "imagem": "cavalo",
     "slot": "montaria",
     "raridade": "comum",
     "bonus": 2,
@@ -761,6 +812,7 @@
   {
     "id": "lobo-atroz",
     "nome": "Lobo Atroz",
+    "imagem": "cavalo",
     "slot": "montaria",
     "raridade": "incomum",
     "bonus": 3,
@@ -773,6 +825,7 @@
   {
     "id": "cavalo-guerra",
     "nome": "Cavalo de Guerra",
+    "imagem": "cavalo",
     "slot": "montaria",
     "raridade": "raro",
     "bonus": 4,
@@ -795,6 +848,7 @@
   {
     "id": "grifo",
     "nome": "Grifo",
+    "imagem": "cavalo",
     "slot": "montaria",
     "raridade": "raro",
     "bonus": 4,
@@ -808,6 +862,7 @@
   {
     "id": "pesadelo",
     "nome": "Pesadelo",
+    "imagem": "cavalo",
     "slot": "montaria",
     "raridade": "epico",
     "bonus": 5,
@@ -831,6 +886,7 @@
   {
     "id": "dragao-bebe",
     "nome": "Dragão Bebê Rabugento",
+    "imagem": "cavalo",
     "slot": "montaria",
     "raridade": "lendario",
     "bonus": 6,

@@ -16,6 +16,8 @@ basta mudar os textos e números, ou copiar uma carta e alterar.
 | `maldicoes.json` | Maldições |
 | `bonus-monstro.json` | Bônus de monstro (+3, -5…) |
 | `monstro-errante.json` | Monstro Errante |
+| `imagens.json` | **Desenhos das cartas**, cores do cenário, gemas e molduras |
+| `regras.json` | Números gerais do jogo |
 | `EFEITOS.md` | **Lista de todos os efeitos** que você pode colocar nas cartas |
 
 ## Regras básicas do JSON
@@ -185,6 +187,45 @@ vale 2 até o nível 10 e 4 do nível 11 em diante.
 ```
 
 A lista completa de efeitos de passiva e de ações (com todos os parâmetros) está em `EFEITOS.md`.
+
+## Imagens das cartas (`imagens.json`)
+
+Cada carta tem um campo `"imagem"` dizendo qual desenho aparece na janela da carta:
+
+```json
+{ "id": "dragao-vermelho", "nome": "Dragão Vermelho", "imagem": "dragao", "nivel": 20 }
+```
+
+O valor de `"imagem"` pode ser:
+
+1. **O nome de um desenho** do bloco `"desenhos"` de `imagens.json` (ex.: `"dragao"`, `"espada"`, `"rosto-elfo"`).
+   A lista completa está no final de `EFEITOS.md`.
+2. **Uma imagem sua**: coloque o arquivo (PNG, JPG, SVG…) na pasta `public/imagens/` do projeto e escreva
+   `"imagem": "/imagens/meu-dragao.png"`. Também vale um link da internet (`"https://…"`).
+3. **Um desenho SVG escrito na própria carta**, começando com `<svg`.
+
+Se a carta não tiver `"imagem"`, ela usa o desenho padrão do tipo (bloco `"padroes"`).
+
+### Criar ou mudar um desenho
+
+No bloco `"desenhos"`, cada desenho é um texto com um SVG (o formato de imagem vetorial que programas como Inkscape,
+Figma e Illustrator exportam). O desenho ocupa uma caixa de 100 × 100:
+
+```json
+"desenhos": {
+  "meu-escudo": "<svg viewBox=\"0 0 100 100\"><circle cx=\"50\" cy=\"50\" r=\"40\" fill=\"#3f6fb8\" stroke=\"#24160b\" stroke-width=\"3\"/></svg>"
+}
+```
+
+Dentro do texto, as aspas do SVG precisam ser escritas como `\"` (ou use aspas simples `'` no SVG). Depois é só usar
+`"imagem": "meu-escudo"` nas cartas.
+
+### Outras partes visuais
+
+- `"cenarios"`: cores do fundo da janela de ilustração de cada tipo de carta (`"ceu"`, `"horizonte"`, `"chao"`).
+- `"gemas"`: gema no topo de cada tipo de carta. Opções: `quartzoBranco`, `quartzoMarrom`, `topazio`, `bismuto`,
+  `turmalina`, `safira`, `rubi`, `esmeralda`, `diamante`, `obsidiana`, `obsidianaRachada`.
+- `"molduras"`: metal da borda de cada raridade. Opções: `cobre`, `bronze`, `prata`, `ouro`, `negro`.
 
 ## Regras gerais (`regras.json`)
 

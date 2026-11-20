@@ -2,6 +2,7 @@
   {
     "id": "forca-menor",
     "nome": "Poção de Força Menor",
+    "imagem": "pocao",
     "raridade": "comum",
     "preco": 100,
     "copias": 2,
@@ -16,6 +17,7 @@
   {
     "id": "acido",
     "nome": "Frasco de Ácido",
+    "imagem": "pocao",
     "raridade": "comum",
     "preco": 200,
     "copias": 2,
@@ -30,6 +32,7 @@
   {
     "id": "fuga-rapida",
     "nome": "Poção de Fuga Rápida",
+    "imagem": "pocao",
     "raridade": "comum",
     "preco": 200,
     "copias": 2,
@@ -44,6 +47,7 @@
   {
     "id": "fogo-grego",
     "nome": "Óleo de Fogo Grego",
+    "imagem": "pocao",
     "raridade": "incomum",
     "preco": 300,
     "copias": 2,
@@ -59,6 +63,7 @@
   {
     "id": "agua-benta",
     "nome": "Água Benta",
+    "imagem": "pocao",
     "raridade": "incomum",
     "preco": 300,
     "copias": 2,
@@ -76,6 +81,7 @@
   {
     "id": "cura",
     "nome": "Poção de Cura",
+    "imagem": "pocao",
     "raridade": "incomum",
     "preco": 400,
     "copias": 2,
@@ -90,6 +96,7 @@
   {
     "id": "amizade",
     "nome": "Poção da Amizade Duvidosa",
+    "imagem": "pocao",
     "raridade": "raro",
     "preco": 500,
     "texto": "Um jogador escolhido é obrigado a ajudar você neste combate e não recebe tesouro.",
@@ -102,6 +109,7 @@
   {
     "id": "elixir-gigante",
     "nome": "Elixir de Gigante",
+    "imagem": "pocao",
     "raridade": "raro",
     "preco": 500,
     "texto": "+5 para um lado do combate, mas quem beber faz -1 em Fugir.",
@@ -116,6 +124,7 @@
   {
     "id": "invisibilidade",
     "nome": "Poção de Invisibilidade",
+    "imagem": "pocao",
     "raridade": "epico",
     "preco": 700,
     "texto": "Fuja automaticamente de um monstro que não seja Lendário.",
@@ -129,6 +138,7 @@
   {
     "id": "ascensao",
     "nome": "Elixir da Ascensão",
+    "imagem": "pocao",
     "raridade": "lendario",
     "preco": 1000,
     "texto": "Suba 1 nível (nunca para o nível 20).",
