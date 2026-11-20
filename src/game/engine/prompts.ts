@@ -1,6 +1,7 @@
 // Respostas (e tempo esgotado) dos prompts pendentes.
 import {
   continueReward,
+  freeTreasures,
   doCharity,
   giveRewardTo,
   joinHelper,
@@ -86,7 +87,7 @@ function resolvePrompt(state: GameState, ctx: Ctx, pr: Prompt, ans: PromptAnswer
         joinHelper(state, ctx, me.id, d.deal as HelpDeal, false);
       } else {
         log(state, ctx, `${me.name} recusou ajudar ${fighter.name}.`, "combat");
-        if (d.threat) loseLevels(state, me, 1, ctx, "recusou a ameaça do Tridente");
+        if (d.threat) loseLevels(state, me, Number(d.threatLevels ?? 1), ctx, `recusou ${String(d.threatName ?? "a ameaça")}`);
       }
       return;
     }
@@ -105,9 +106,10 @@ function resolvePrompt(state: GameState, ctx: Ctx, pr: Prompt, ans: PromptAnswer
       const mine = String(d.mine);
       const theirs = String(d.theirs);
       if (ans.block && !timeout) {
-        const cards = pickExact(me.hand, ans.discard, 2);
+        const cost = Number(d.blockCost ?? 2);
+        const cards = pickExact(me.hand, ans.discard, cost);
         for (const c of cards) discardFromPlayer(state, me, c);
-        log(state, ctx, `${me.name} descartou 2 cartas e impediu o Truque Feérico.`);
+        log(state, ctx, `${me.name} descartou ${cost} carta(s) e impediu ${String(d.abilityName ?? "a troca")}.`);
         removePrompt(state, pr.id);
         return;
       }
@@ -122,7 +124,7 @@ function resolvePrompt(state: GameState, ctx: Ctx, pr: Prompt, ans: PromptAnswer
       else fairy.equipped.push(theirs);
       if (equipCheck(state, me, mine).error) me.carried.push(mine);
       else me.equipped.push(mine);
-      log(state, ctx, `🧚 ${fairy.name} trocou ${nameOf(state, mine)} por ${nameOf(state, theirs)} de ${me.name}.`);
+      log(state, ctx, `🔁 ${fairy.name} trocou ${nameOf(state, mine)} por ${nameOf(state, theirs)} de ${me.name}.`);
       return;
     }
     case "chooseLoss": {
@@ -289,8 +291,14 @@ function resolvePrompt(state: GameState, ctx: Ctx, pr: Prompt, ans: PromptAnswer
     case "threat": {
       const combat = state.combat;
       const valid = combat && combat.id === d.combatId && combat.stage !== "badstuff";
-      removePrompt(state, pr.id);
       const threatener = tryPlayer(state, String(d.threatenerId));
+      if (valid && threatener && ans.accept && !timeout) {
+        const free = freeTreasures(state, combat);
+        // Os tesouros já foram prometidos: a ameaça não pode mais ser paga
+        if (Number(d.count) > free)
+          fail(free > 0 ? `Você só tem ${free} tesouro(s) livre(s) para prometer.` : "Todos os seus tesouros já foram prometidos.");
+      }
+      removePrompt(state, pr.id);
       if (!valid || !threatener) return;
       if (ans.accept && !timeout) {
         combat.bribes.push({ playerId: threatener.id, count: Number(d.count) });

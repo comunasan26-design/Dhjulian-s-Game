@@ -3,7 +3,9 @@
 //   npm run cartas:docs     → gera cartas/EFEITOS.md com todos os efeitos disponíveis
 import { readFileSync, readdirSync, writeFileSync } from "node:fs";
 import {
+  ACTIONS,
   BAD_STUFF_TYPES,
+  PLAYER_EFFECTS,
   CURSE_EFFECTS,
   type EffectSpec,
   ITEM_EFFECTS,
@@ -45,7 +47,7 @@ if (cmd === "validar" || cmd === "docs") {
     process.exit(1);
   }
 }
-const { CLASS_IDS, RACE_IDS, loadCatalog } = await import("../src/game/catalog/load.ts");
+const { loadCatalog } = await import("../src/game/catalog/load.ts");
 
 if (cmd === "validar") {
   const c = loadCatalog();
@@ -72,17 +74,23 @@ if (cmd === "validar") {
       const example: Record<string, unknown> = { tipo };
       for (const [k, p] of params) {
         if (!p.obrigatorio && params.length > 2) continue;
-        example[k] = p.opcoes ? p.opcoes[0] : p.tipo === "numero" ? 2 : p.tipo === "sim/nao" ? true : p.tipo === "lista" ? (k === "classes" ? ["mago"] : k === "tags" ? ["fogo"] : ["elfo"]) : "exemplo";
+        example[k] = p.opcoes ? p.opcoes[0] : p.tipo === "numero" ? 2 : p.tipo === "sim/nao" ? true : p.tipo === "lista" ? (k === "classes" ? ["mago"] : k === "tags" || k.endsWith("Tags") ? ["fogo"] : k === "slots" ? ["capacete"] : ["elfo"]) : "exemplo";
       }
       out += "```json\n" + JSON.stringify(example) + "\n```\n\n";
     }
     return out;
   };
+  const cat = loadCatalog();
+  const RACE_IDS: string[] = cat.raceIds;
+  const CLASS_IDS: string[] = cat.classIds;
   let md = "# Referência de efeitos\n\n";
   md += "> Arquivo gerado automaticamente por `npm run cartas:docs`. Não edite à mão.\n\n";
   md += `Raças válidas (para \`racas\`): ${RACE_IDS.map((r) => `\`${r}\``).join(", ")}.\n\n`;
   md += `Classes válidas (para \`classes\`): ${CLASS_IDS.map((r) => `\`${r}\``).join(", ")}.\n\n`;
   md += "Tags de monstro (para `tags`): `morto-vivo`, `demonio`, `dragao`, `fogo`, `aquatico`, `animal`, `voador`, `sagrado`.\n\n";
+  md += section("Passivas de raças e classes", "racas.json / classes.json (campo \"passiva.efeitos\")", PLAYER_EFFECTS);
+  md += "## Ativas de raças e classes\n\nCada ativa (lista `\"ativas\"` em racas.json/classes.json) tem `id`, `nome`, `texto`, `acao` (um dos tipos abaixo), `limite` (`combate`, `rodada`, `turno` ou `turnoProprio`), opcionalmente `custo` (`{ \"descartar\": 2 }` ou `{ \"descartarMao\": 4 }`) e os parâmetros da ação. Qualquer número pode variar com o nível usando `<parametro>PorNivel`, ex.: `\"valor\": 2, \"valorPorNivel\": { \"11\": 4 }`.\n\n";
+  md += section("Ações (tipos de ativa)", "racas.json / classes.json (campo \"ativas\", chave \"acao\")", ACTIONS).replace(/^## Ações[^\n]*\n\n[^\n]*\n\n/, "").replace(/"tipo":/g, '"acao":');
   md += section("Efeitos de itens", "itens.json", ITEM_EFFECTS);
   md += section("Efeitos de monstros", "monstros.json (campo \"efeitos\")", MONSTER_EFFECTS);
   md += section("Coisas Ruins de monstros", "monstros.json (campo \"coisasRuins\")", BAD_STUFF_TYPES);

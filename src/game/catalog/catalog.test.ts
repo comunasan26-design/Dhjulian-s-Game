@@ -4,7 +4,8 @@ import { createGame, startPlaying } from "../engine/core";
 import type { Ctx } from "../engine/state";
 import { computeCombat, fleeInfo } from "../engine/stats";
 import { newCard } from "../engine/util";
-import { CARD_DEFS, type ItemCard, type MonsterCard } from "./index";
+import { abilityInfos } from "../engine/abilities";
+import { CARD_DEFS, type ClassCard, type ItemCard, type MonsterCard } from "./index";
 import { loadCatalog } from "./load";
 
 describe("cartas em JSON", () => {
@@ -79,6 +80,62 @@ describe("cartas em JSON", () => {
     } finally {
       delete CARD_DEFS[monster.id];
       delete CARD_DEFS[item.id];
+    }
+  });
+
+  it("uma classe nova criada só com dados tem passiva e ativa funcionando", () => {
+    const cls: ClassCard = {
+      id: "class.teste-cavaleiro",
+      name: "Cavaleiro de Teste",
+      kind: "class",
+      deck: "door",
+      passive: { name: "Armadura Pesada", text: "" },
+      fx: [{ tipo: "forca", valor: 1, valorPorNivel: { "11": 3 } }],
+      actives: [
+        {
+          id: "investida",
+          name: "Investida",
+          text: "",
+          acao: "bonusCombate",
+          limite: "combate",
+          custo: { descartar: 1 },
+          params: { tipo: "bonusCombate", valor: 3, dobraContraTags: ["animal"] },
+        },
+      ],
+    };
+    CARD_DEFS[cls.id] = cls;
+    try {
+      const ctx: Ctx = { now: 1, rng: { int: () => 0 } };
+      const state = createGame(
+        [
+          { id: "a", name: "A" },
+          { id: "b", name: "B" },
+        ],
+        "a",
+        ctx,
+      );
+      state.order = ["a", "b"];
+      const a = state.players[0];
+      a.classes = [newCard(state, cls.id)];
+      a.level = 4;
+      a.equipped = [];
+      a.race = null;
+      startPlaying(state, ctx);
+      state.decks.door.unshift(newCard(state, "monster.estirge"));
+      applyAction(state, "a", { type: "KICK_DOOR" }, ctx);
+      const base = computeCombat(state)!.playerTotal;
+      expect(base).toBe(4 + 1); // nível + passiva
+      const info = abilityInfos(state, a).find((x) => x.key === "class.teste-cavaleiro#investida");
+      expect(info).toBeTruthy();
+      const discard = a.hand[0];
+      applyAction(state, "a", { type: "ABILITY", key: "class.teste-cavaleiro#investida", discard: [discard], params: {} }, ctx);
+      // Estirge é animal: +3 dobra para +6
+      expect(computeCombat(state)!.playerTotal).toBe(base + 6);
+      a.level = 11;
+      // nível 11: passiva vira +3 (valorPorNivel)
+      expect(computeCombat(state)!.playerTotal).toBe(11 + 3 + 6);
+    } finally {
+      delete CARD_DEFS[cls.id];
     }
   });
 });

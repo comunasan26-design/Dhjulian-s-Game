@@ -2,7 +2,7 @@
 // Cada efeito tem um "tipo" e alguns parâmetros. Este registro é usado para validar os arquivos
 // e para gerar a documentação (cartas/EFEITOS.md).
 
-export type ParamKind = "numero" | "sim/nao" | "texto" | "lista";
+export type ParamKind = "numero" | "sim/nao" | "texto" | "lista" | "porNivel";
 
 export interface EffectSpec {
   desc: string;
@@ -17,8 +17,125 @@ const cond = {
   [RACAS]: { tipo: "lista" as const, desc: "raças (ids) que contam, ex.: [\"elfo\", \"anao\"]" },
   [CLASSES]: { tipo: "lista" as const, desc: "classes (ids) que contam, ex.: [\"mago\"]" },
 };
+/** Parâmetro que muda com o nível: { "11": 4 } = vale 4 a partir do nível 11. */
+const porNivel = (base: string) => ({
+  [`${base}PorNivel`]: { tipo: "porNivel" as const, desc: `muda "${base}" a partir de certos níveis, ex.: { "11": 4 }` },
+});
 const valor = (desc = "quanto soma (use número negativo para tirar)") => ({ valor: { tipo: "numero" as const, desc, obrigatorio: true } });
 const qtd = (desc = "quantidade") => ({ quantidade: { tipo: "numero" as const, desc, obrigatorio: true } });
+
+// ============================================================================
+// Passivas de raças e classes (campo "passiva.efeitos")
+// ============================================================================
+
+export const PLAYER_EFFECTS: Record<string, EffectSpec> = {
+  forca: {
+    desc: "Bônus (ou penalidade) de combate sempre.",
+    params: { ...valor(), ...porNivel("valor"), seMaosLivres: { tipo: "sim/nao", desc: "só sem itens nas mãos" } },
+  },
+  fugir: {
+    desc: "Bônus (ou penalidade) em Fugir.",
+    params: { ...valor(), ...porNivel("valor"), seMaosLivres: { tipo: "sim/nao", desc: "só sem itens nas mãos" } },
+  },
+  bonusContra: { desc: "Bônus de combate contra monstros com certas tags.", params: { tags: { tipo: "lista", desc: "tags", obrigatorio: true }, ...valor(), ...porNivel("valor") } },
+  fugirContra: { desc: "Bônus em Fugir contra monstros com certas tags.", params: { tags: { tipo: "lista", desc: "tags", obrigatorio: true }, ...valor() } },
+  fugaAutomaticaContra: { desc: "Foge automaticamente de monstros com certas tags.", params: { tags: { tipo: "lista", desc: "tags", obrigatorio: true } } },
+  imuneCoisasRuins: {
+    desc: "Imune às Coisas Ruins de monstros com certas tags.",
+    params: { tags: { tipo: "lista", desc: "tags", obrigatorio: true }, excetoLendarios: { tipo: "sim/nao", desc: "não vale contra Lendários" } },
+  },
+  limiteMao: { desc: "Soma ao limite de cartas na mão.", params: { ...valor(), ...porNivel("valor") } },
+  semItensGrandes: { desc: "Não pode equipar itens Grandes." },
+  grandesExtras: { desc: "Pode equipar mais itens Grandes.", params: qtd() },
+  slotExtra: { desc: "Ganha espaços a mais num slot.", params: { slot: { tipo: "texto", desc: "capacete, peitoral, calcas, botas, maos, anel, colar ou montaria", obrigatorio: true }, ...qtd() } },
+  semSlot: { desc: "Não pode usar um slot.", params: { slot: { tipo: "texto", desc: "capacete, peitoral, calcas, botas, maos, anel, colar ou montaria", obrigatorio: true } } },
+  casco: { desc: "Conta como um peitoral com esse bônus, que não pode ser perdido nem roubado.", params: { ...valor(), ...porNivel("valor") } },
+  encaixesExtras: { desc: "Cada item tem encaixes de runa a mais.", params: qtd() },
+  bonusPorRuna: { desc: "Bônus para cada runa engastada em itens equipados.", params: { ...valor(), maximo: { tipo: "numero", desc: "bônus máximo" } } },
+  bonusPorItem: { desc: "Bônus para cada item equipado num slot.", params: { slot: { tipo: "texto", desc: "slot (ex.: anel, montaria)", obrigatorio: true }, ...valor() } },
+  bonusPorSlotVazio: { desc: "Bônus para cada slot de armadura vazio (capacete, peitoral, calças, botas).", params: { ...valor(), ...porNivel("valor") } },
+  furia: { desc: "Bônus acumulado por combate vencido em sequência (zera ao perder ou morrer).", params: { ...valor(), ...porNivel("valor") } },
+  naoPodeFugir: { desc: "Nunca pode fugir de um combate." },
+  aura: { desc: "Cada jogador do seu lado no combate ganha o valor.", params: { ...valor(), ...porNivel("valor") } },
+  venceEmpates: { desc: "Vence empates em combate." },
+  perdeMenosItens: { desc: "Coisas Ruins que tiram itens tiram menos.", params: qtd() },
+  anulaMaldicaoNoDado: { desc: "Ao ser alvo de maldição, role 1d6: com o valor ou mais ela é anulada.", params: { dado: { tipo: "numero", desc: "resultado mínimo", obrigatorio: true }, ...porNivel("dado") } },
+  refleteNoDado: { desc: "Quando outro jogador usa ativa ou maldição contra você, role 1d6: com o valor ou mais ela volta para ele.", params: { dado: { tipo: "numero", desc: "resultado mínimo", obrigatorio: true }, ...porNivel("dado") } },
+  naoMorreNoDado: { desc: "Ao morrer, role 1d6: com o valor ou mais não morre (mas o turno acaba).", params: { dado: { tipo: "numero", desc: "resultado mínimo", obrigatorio: true } } },
+  nivelAoAjudar: { desc: "Sobe níveis ao ajudar outro jogador a vencer (1x por rodada).", params: qtd() },
+  nivelExtraSozinhoContraMaior: { desc: "Ao vencer sozinho um monstro de nível maior que o seu, sobe níveis extras (1x por rodada).", params: qtd() },
+  comprarAoAmaldicoar: { desc: "Ao lançar maldição em outro jogador, compra cartas de Porta (1x por rodada).", params: { portas: { tipo: "numero", desc: "quantas", obrigatorio: true } } },
+  catador: { desc: "Quando outro jogador descarta um item, pode rolar 1d6 para pegá-lo (1x por rodada).", params: { dado: { tipo: "numero", desc: "resultado mínimo", obrigatorio: true }, ...porNivel("dado") } },
+  olhosDaNoite: { desc: "No início e no fim do seu turno, vê a carta do topo de Portas e pode mandá-la para o fundo." },
+  guardaPocao: { desc: "Ao usar uma poção, role 1d6: com o valor ou mais ela não é descartada.", params: { dado: { tipo: "numero", desc: "resultado mínimo", obrigatorio: true } } },
+  pocoesDobradas: { desc: "Poções que você usa têm efeito dobrado." },
+  tesouroExtraEscolhe: { desc: "Ao vencer, compra 1 tesouro extra e descarta 1 dos tesouros comprados." },
+  tesouroExtraContra: { desc: "Ao derrotar monstros com certas tags, compra tesouros extras.", params: { tags: { tipo: "lista", desc: "tags", obrigatorio: true }, ...qtd() } },
+  magiaSelvagem: { desc: "Ao usar uma ativa, role 1d6: com o valor ou mais ela não conta no limite de uso.", params: { dado: { tipo: "numero", desc: "resultado mínimo", obrigatorio: true } } },
+  maldicoesFortes: { desc: "Suas maldições não podem ser anuladas nem refletidas por passivas e duram mais.", params: { duracaoExtra: { tipo: "numero", desc: "rodadas a mais" } } },
+  itensNaoRoubaveis: { desc: "Seus itens equipados não podem ser roubados." },
+  classesExtras: { desc: "Pode ter mais classes ao mesmo tempo.", params: { ...qtd(), nivelMinimo: { tipo: "numero", desc: "a partir de qual nível" } } },
+  slotExtraMetade: {
+    desc: "Escolha slots onde pode equipar um segundo item, que dá metade do bônus.",
+    params: { slots: { tipo: "lista", desc: "slots permitidos", obrigatorio: true }, ...qtd("quantos slots"), ...porNivel("quantidade") },
+  },
+};
+
+// ============================================================================
+// Ativas (campo "ativas" de raças e classes)
+// Cada ativa tem: id, nome, texto, acao, limite (combate, rodada, turno, turnoProprio)
+// e opcionalmente custo: { "descartar": N } ou { "descartarMao": N (mínimo) }.
+// ============================================================================
+
+export const ACTIONS: Record<string, EffectSpec> = {
+  bonusCombate: {
+    desc: "Soma bônus ao seu lado do combate.",
+    params: { ...valor(), ...porNivel("valor"), dobraContraTags: { tipo: "lista", desc: "dobra contra monstros com essas tags" }, fogo: { tipo: "sim/nao", desc: "conta como dano de fogo" } },
+  },
+  nivelDobradoAjudando: { desc: "Se você estiver ajudando, seu nível conta em dobro." },
+  itemDaMaoParaLado: { desc: "Descarte 1 item da mão e some o bônus dele a qualquer lado do combate." },
+  arremesso: {
+    desc: "Perca níveis e descarte 1 item Grande seu: some o bônus dele multiplicado.",
+    params: { multiplicador: { tipo: "numero", desc: "multiplicador do bônus", obrigatorio: true }, perdeNiveis: { tipo: "numero", desc: "níveis perdidos" } },
+  },
+  usarItemRestrito: { desc: "Use um item restrito a outra raça/classe até o fim do combate." },
+  ignorarEspecial: { desc: "O texto Especial de um monstro é ignorado neste combate.", params: { naoEmLendarios: { tipo: "sim/nao", desc: "não funciona em Lendários" } } },
+  passarMaldicao: { desc: "Passe uma maldição ativa em você para outro jogador." },
+  monstrosPerdemNivel: { desc: "Todos os monstros do combate perdem níveis (com 0 eles morrem).", params: { ...valor(), ...porNivel("valor"), fogo: { tipo: "sim/nao", desc: "conta como dano de fogo" } } },
+  bugiganga: { desc: "Pegue 1 item do descarte de Tesouros ou roube 1 tesouro aberto de quem acabou de ganhar." },
+  abrirOutraPorta: { desc: "Depois de vencer ou fugir de um combate, abra mais uma porta neste turno." },
+  hibernar: { desc: "No lugar de chutar a porta: compra tesouros e fica imune a maldições e roubos até o próximo turno.", params: { tesouros: { tipo: "numero", desc: "tesouros comprados" } } },
+  pressagio: { desc: "Coloque 1 carta de Porta da mão no topo do baralho e pegue a do fundo." },
+  ameacarAjuda: { desc: "Peça ajuda: quem recusar perde níveis.", params: { perdeNiveis: { tipo: "numero", desc: "níveis perdidos por quem recusa" } } },
+  forcarAjuda: { desc: "Obrigue um jogador a ajudar você no combate (sem tesouro)." },
+  trocarItem: { desc: "Troque um item equipado seu por um do mesmo slot de outro jogador (exceto Lendários); ele pode descartar cartas para impedir.", params: { custoBloqueio: { tipo: "numero", desc: "cartas que o alvo descarta para impedir" } } },
+  roubarNivel: { desc: "Depois de vencer um combate, roube 1 nível de um jogador de nível igual ou maior (nunca leva ao nível máximo)." },
+  desafio: {
+    desc: "Ninguém mais pode jogar cartas no combate nem ajudar; você sacrifica seu melhor item e luta com a penalidade, sem poder fugir (perder = Coisas Ruins e morte).",
+    params: { penalidade: { tipo: "numero", desc: "penalidade de combate" }, multiplicadorNiveis: { tipo: "numero", desc: "multiplica os níveis ganhos" } },
+  },
+  mandarMonstroEmbora: {
+    desc: "Um monstro sai do combate; você ganha parte dos tesouros dele, sem nível.",
+    params: { fracaoTesouros: { tipo: "numero", desc: "fração dos tesouros (1 = todos, 0.5 = metade)" }, naoEmLendarios: { tipo: "sim/nao", desc: "não funciona em Lendários" } },
+  },
+  curar: { desc: "Remova 1 maldição ativa ou devolva 1 nível perdido nesta rodada (seu ou de outro jogador)." },
+  roubarItem: { desc: "Role 1d6 para roubar 1 item equipado (não Grande) de outro jogador; se falhar, perde 1 nível.", params: { sucesso: { tipo: "numero", desc: "resultado mínimo", obrigatorio: true } } },
+  domarFera: { desc: "Um monstro com a tag e nível igual ou menor que o seu vira sua montaria (bônus = tesouros dele).", params: { tag: { tipo: "texto", desc: "tag necessária, ex.: animal" } } },
+  assumirCoisasRuins: { desc: "Assuma as Coisas Ruins de outro jogador; depois compre tesouros.", params: { tesouros: { tipo: "numero", desc: "tesouros comprados depois" } } },
+  cancelarBonusMonstro: { desc: "Cancele todos os bônus que outros jogadores deram ao monstro neste combate." },
+  polimorfia: { desc: "O monstro vira o próximo monstro do baralho de Portas.", params: { naoEmLendarios: { tipo: "sim/nao", desc: "não funciona em Lendários" } } },
+  maldicaoForca: {
+    desc: "Um jogador fica com penalidade de combate por alguns turnos (conta como maldição).",
+    params: { ...valor(), ...porNivel("valor"), turnos: { tipo: "numero", desc: "até o fim de quantos turnos do alvo" } },
+  },
+  encerrarCombate: { desc: "Encerre o combate sem vencer nem perder.", params: { naoEmLendarios: { tipo: "sim/nao", desc: "não funciona com Lendários" } } },
+  anularErrante: { desc: "Anule um Monstro Errante que entrou em qualquer combate." },
+  duplicata: { desc: "Coloque um monstro da mão lutando do seu lado (soma metade do nível); ninguém mais pode ajudar." },
+  dobrarFuria: { desc: "Dobre o bônus de fúria neste combate." },
+  dobrarItem: { desc: "Dobre o bônus de 1 item equipado (seu ou de um aliado no combate) até o fim do combate." },
+  buscarPocao: { desc: "Pegue a primeira Poção do baralho de Tesouros e embaralhe-o." },
+  reforjar: { desc: "Descarte 1 item: um item equipado (exceto anéis) ganha bônus permanente (1x por item).", params: { bonus: { tipo: "numero", desc: "bônus ganho" } } },
+};
 
 export const ITEM_EFFECTS: Record<string, EffectSpec> = {
   bonusPara: { desc: "Bônus a mais se o dono tiver uma das raças/classes.", params: { ...cond, ...valor() } },
@@ -101,6 +218,7 @@ export const MONSTER_EFFECTS: Record<string, EffectSpec> = {
       nivelMinimo: { tipo: "numero", desc: "não persegue jogadores deste nível ou mais" },
       nivelMaximo: { tipo: "numero", desc: "não persegue jogadores deste nível ou menos" },
       semArmadura: { tipo: "sim/nao", desc: "não persegue quem não tem armadura" },
+      sempre: { tipo: "sim/nao", desc: "vale mesmo se o Especial do monstro for ignorado" },
     },
   },
   dispensavel: {
@@ -128,7 +246,7 @@ export const MONSTER_EFFECTS: Record<string, EffectSpec> = {
   grito: { desc: "Ao aparecer, o jogador à esquerda pode pôr 1 monstro da mão no combate." },
   voltaAoFugir: { desc: "Se fugirem dele, volta ao topo do baralho de Portas." },
   semPedirAjuda: { desc: "Quem luta não pode pedir ajuda (outros podem se oferecer)." },
-  paralisaAtivas: { desc: "Ninguém do lado dos jogadores usa habilidades ativas (Clérigos ignoram)." },
+  paralisaAtivas: { desc: "Ninguém do lado dos jogadores usa habilidades ativas.", params: { excetoClasses: { tipo: "lista", desc: "classes que ignoram" } } },
   drenoDeVida: { desc: "A Cura do Clérigo não devolve níveis perdidos para este monstro." },
   ajudanteSofre: { desc: "Quem ajudar também sofre as Coisas Ruins se perderem." },
   dobraPrimeiroBonus: { desc: "O primeiro bônus de monstro jogado a favor dele vale o dobro." },
@@ -246,10 +364,16 @@ export const BAD_STUFF_TYPES: Record<string, EffectSpec> = {
   perderItensAleatorios: { desc: "Perca itens equipados aleatórios.", params: qtd() },
   perderGrandeOuDoisItens: { desc: "Perca 1 item Grande; sem item Grande, perca 2 itens à sua escolha." },
   perderGrandeOuNiveis: { desc: "Perca 1 item Grande ou níveis (a vítima escolhe).", params: { niveis: { tipo: "numero", desc: "níveis", obrigatorio: true } } },
-  podridaoDeMumia: { desc: "Fica com -2 em combate por 2 rodadas (conta como maldição)." },
+  penalidadeTemporaria: {
+    desc: "Fica com uma penalidade de combate por algumas rodadas (conta como maldição).",
+    params: { nome: { tipo: "texto", desc: "nome mostrado", obrigatorio: true }, ...valor(), rodadas: { tipo: "numero", desc: "rodadas", obrigatorio: true } },
+  },
   possessao: { desc: "O jogador à esquerda escolhe 1 item seu e fica com ele." },
-  quimera: { desc: "Role 1d6 três vezes: perca 1 nível para cada resultado de 1 a 3." },
-  virarVampirico: { desc: "Se morrer neste combate, sua raça vira Vampírico." },
+  perderNiveisNoDado: {
+    desc: "Role 1d6 várias vezes: perca 1 nível para cada resultado até o valor.",
+    params: { rolagens: { tipo: "numero", desc: "quantas rolagens", obrigatorio: true }, dadoAte: { tipo: "numero", desc: "resultado que faz perder", obrigatorio: true } },
+  },
+  virarRacaSeMorrer: { desc: "Se morrer neste combate, sua raça vira outra.", params: { raca: { tipo: "texto", desc: "id da raça", obrigatorio: true } } },
   perderItensNaoEquipados: { desc: "Perca todos os itens que não estiverem equipados." },
   outrosPerdemNiveis: { desc: "Todos os outros jogadores perdem níveis.", params: qtd() },
 };

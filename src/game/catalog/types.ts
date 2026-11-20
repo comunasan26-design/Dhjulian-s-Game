@@ -4,42 +4,10 @@ export type { Fx };
 
 // Tipos das definições de cartas (catálogo estático).
 
-export type RaceId =
-  | "divino"
-  | "anao"
-  | "draconato"
-  | "elfo"
-  | "gnomo"
-  | "gigante"
-  | "humano"
-  | "orc"
-  | "diabrete"
-  | "elemental"
-  | "goblin"
-  | "centauro"
-  | "torkle"
-  | "owlin"
-  | "tritao"
-  | "fada"
-  | "vampirico";
-
-export type ClassId =
-  | "guerreiro"
-  | "mago"
-  | "clerigo"
-  | "ladino"
-  | "druida"
-  | "paladino"
-  | "barbaro"
-  | "bardo"
-  | "feiticeiro"
-  | "bruxo"
-  | "monge"
-  | "patrulheiro"
-  | "ilusionista"
-  | "berserker"
-  | "artifice"
-  | "alquimista";
+/** Id de uma raça (o "id" da carta em cartas/racas.json). */
+export type RaceId = string;
+/** Id de uma classe (o "id" da carta em cartas/classes.json). */
+export type ClassId = string;
 
 export type Slot = "head" | "chest" | "legs" | "feet" | "hand" | "ring" | "neck" | "mount";
 export type Rarity = "comum" | "incomum" | "raro" | "epico" | "lendario";
@@ -70,18 +38,51 @@ export interface AbilityText {
   text: string;
 }
 
+export type AbilityLimit = "combate" | "rodada" | "turno" | "turnoProprio";
+
+/** Ativa de raça/classe, toda definida no JSON. */
+export interface AbilityDef {
+  id: string;
+  name: string;
+  text: string;
+  /** Tipo de ação genérica que o motor sabe executar (ver ACTIONS em effects.ts). */
+  acao: string;
+  limite: AbilityLimit;
+  custo: { descartar?: number; descartarMao?: number };
+  /** Parâmetros da ação (valor, valorPorNivel, fogo…). */
+  params: Fx;
+  /** Ativa concedida por uma carta de item (não por raça/classe). */
+  fromItem?: boolean;
+}
+
 export interface RaceCard extends CardBase {
   kind: "race";
-  race: RaceId;
   passive: AbilityText;
-  active: AbilityText;
+  actives: AbilityDef[];
 }
 
 export interface ClassCard extends CardBase {
   kind: "class";
-  cls: ClassId;
   passive: AbilityText;
-  active: AbilityText;
+  actives: AbilityDef[];
+}
+
+/** Regras gerais (cartas/regras.json). */
+export interface GameRules {
+  nivelInicial: number;
+  nivelMaximo: number;
+  cartasIniciais: { portas: number; tesouros: number };
+  cartasAoMorrer: { portas: number; tesouros: number };
+  limiteMao: number;
+  fugirCom: number;
+  ouroPorNivel: number;
+  limiteItensGrandes: number;
+  limiteItensLendarios: number;
+  limiteFugirAneis: number;
+  slots: Record<string, number>;
+  encaixesDeRuna: Record<string, number>;
+  jogadoresMinimo: number;
+  jogadoresMaximo: number;
 }
 
 export interface Restriction {
@@ -145,10 +146,10 @@ export type BadEffect =
   | { t: "randomEquipped"; n: number }
   | { t: "bigOrChoose2" }
   | { t: "bigOrLevels"; n: number }
-  | { t: "mummyRot" }
+  | { t: "tempPenalty"; name: string; value: number; turns: number }
   | { t: "possession" }
-  | { t: "chimera" }
-  | { t: "vampirize" }
+  | { t: "rollLevels"; rolls: number; upTo: number }
+  | { t: "becomeRace"; race: string }
   | { t: "carried" }
   | { t: "othersLoseLevels"; n: number };
 

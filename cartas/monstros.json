@@ -422,7 +422,10 @@
     "especial": "Toque paralisante: ninguém do seu lado usa habilidades ativas neste combate. Clérigos ignoram isso.",
     "efeitos": [
       {
-        "tipo": "paralisaAtivas"
+        "tipo": "paralisaAtivas",
+        "excetoClasses": [
+          "clerigo"
+        ]
       }
     ],
     "coisasRuinsTexto": "Perca 2 níveis.",
@@ -534,7 +537,10 @@
         "quantidade": 2
       },
       {
-        "tipo": "podridaoDeMumia"
+        "tipo": "penalidadeTemporaria",
+        "nome": "Podridão de Múmia",
+        "valor": -2,
+        "rodadas": 2
       }
     ]
   },
@@ -779,6 +785,11 @@
     "especial": "Incorpóreo: itens de mão não somam bônus; anéis, runas e poções funcionam normalmente.",
     "efeitos": [
       {
+        "tipo": "naoPersegue",
+        "nivelMaximo": 4,
+        "sempre": true
+      },
+      {
         "tipo": "anula",
         "alvo": "itensDeMao"
       }
@@ -801,6 +812,11 @@
     "niveis": 2,
     "especial": "Tritão/Sereia ganham +4. Jogadores da raça Elemental podem dispensá-lo descartando 1 carta (parentes).",
     "efeitos": [
+      {
+        "tipo": "naoPersegue",
+        "nivelMaximo": 4,
+        "sempre": true
+      },
       {
         "tipo": "jogadoresGanham",
         "racas": [
@@ -839,6 +855,11 @@
     "especial": "Congela: -2 em Fugir. +4 para o seu lado se alguém causar dano de fogo.",
     "efeitos": [
       {
+        "tipo": "naoPersegue",
+        "nivelMaximo": 4,
+        "sempre": true
+      },
+      {
         "tipo": "fogoDaBonus",
         "valor": 4
       }
@@ -868,6 +889,11 @@
     "especial": "Cabeças crescem: +3 para cada jogador que ajudar você.",
     "efeitos": [
       {
+        "tipo": "naoPersegue",
+        "nivelMaximo": 4,
+        "sempre": true
+      },
+      {
         "tipo": "bonusContra",
         "porAjudante": true,
         "valor": 3
@@ -890,6 +916,11 @@
     "especial": "Feitiço: o ajudante de maior nível passa a lutar do lado dela.",
     "efeitos": [
       {
+        "tipo": "naoPersegue",
+        "nivelMaximo": 4,
+        "sempre": true
+      },
+      {
         "tipo": "seduzAjudante"
       }
     ],
@@ -909,6 +940,11 @@
     "niveis": 2,
     "especial": "Imune a magia: nenhuma habilidade ativa funciona neste combate, de nenhum lado.",
     "efeitos": [
+      {
+        "tipo": "naoPersegue",
+        "nivelMaximo": 4,
+        "sempre": true
+      },
       {
         "tipo": "imuneMagia"
       }
@@ -937,6 +973,11 @@
     "niveis": 2,
     "especial": "Sopro congelante: ninguém pode usar poções neste combate.",
     "efeitos": [
+      {
+        "tipo": "naoPersegue",
+        "nivelMaximo": 4,
+        "sempre": true
+      },
       {
         "tipo": "semPocoes"
       }
@@ -969,7 +1010,16 @@
     "coisasRuinsTexto": "Role 1d6 três vezes: perca 1 nível para cada resultado de 1 a 3.",
     "coisasRuins": [
       {
-        "tipo": "quimera"
+        "tipo": "perderNiveisNoDado",
+        "rolagens": 3,
+        "dadoAte": 3
+      }
+    ],
+    "efeitos": [
+      {
+        "tipo": "naoPersegue",
+        "nivelMaximo": 4,
+        "sempre": true
       }
     ]
   },
@@ -984,6 +1034,11 @@
     "niveis": 2,
     "especial": "Jogadores da raça Vampírico podem dispensá-lo e comprar 2 tesouros (sem nível). Divinos e Paladinos ganham +4.",
     "efeitos": [
+      {
+        "tipo": "naoPersegue",
+        "nivelMaximo": 4,
+        "sempre": true
+      },
       {
         "tipo": "dispensavel",
         "racas": [
@@ -1010,7 +1065,8 @@
         "quantidade": 4
       },
       {
-        "tipo": "virarVampirico"
+        "tipo": "virarRacaSeMorrer",
+        "raca": "vampirico"
       }
     ]
   },
@@ -1026,6 +1082,11 @@
     "gigante": true,
     "especial": "Anões ganham +3 (rivalidade de forja).",
     "efeitos": [
+      {
+        "tipo": "naoPersegue",
+        "nivelMaximo": 4,
+        "sempre": true
+      },
       {
         "tipo": "jogadoresGanham",
         "racas": [
@@ -1058,6 +1119,11 @@
     "especial": "Escraviza mentes: o jogador com mais cartas na mão (fora você) luta do lado dele.",
     "efeitos": [
       {
+        "tipo": "naoPersegue",
+        "nivelMaximo": 4,
+        "sempre": true
+      },
+      {
         "tipo": "escravizaMente"
       }
     ],
@@ -1082,6 +1148,13 @@
       {
         "tipo": "morte"
       }
+    ],
+    "efeitos": [
+      {
+        "tipo": "naoPersegue",
+        "nivelMaximo": 4,
+        "sempre": true
+      }
     ]
   },
   {
@@ -1097,6 +1170,11 @@
     "niveis": 2,
     "especial": "Ganancioso: +5 contra quem tiver 8 ou mais itens equipados.",
     "efeitos": [
+      {
+        "tipo": "naoPersegue",
+        "nivelMaximo": 4,
+        "sempre": true
+      },
       {
         "tipo": "bonusContra",
         "itensEquipadosMin": 8,
@@ -1119,6 +1197,11 @@
     "gigante": true,
     "especial": "Tempestade: montarias não somam bônus.",
     "efeitos": [
+      {
+        "tipo": "naoPersegue",
+        "nivelMaximo": 4,
+        "sempre": true
+      },
       {
         "tipo": "anula",
         "alvo": "montarias"
@@ -1148,6 +1231,11 @@
     "especial": "Oferece um desejo: antes do combate, você pode subir 1 nível na hora; se aceitar, ele ganha +10.",
     "efeitos": [
       {
+        "tipo": "naoPersegue",
+        "nivelMaximo": 4,
+        "sempre": true
+      },
+      {
         "tipo": "desejo",
         "valor": 10
       }
@@ -1168,6 +1256,7 @@
     "id": "senhor-mumias",
     "nome": "Senhor das Múmias",
     "nivel": 31,
+    "lendario": true,
     "tags": [
       "morto-vivo"
     ],
@@ -1175,6 +1264,11 @@
     "niveis": 3,
     "especial": "Maldição do faraó: mesmo vencendo, quem lutou perde 1 item aleatório. +4 para o seu lado se alguém causar dano de fogo.",
     "efeitos": [
+      {
+        "tipo": "naoPersegue",
+        "nivelMaximo": 8,
+        "sempre": true
+      },
       {
         "tipo": "maldicaoDoFarao"
       },
@@ -1194,6 +1288,7 @@
     "id": "dragao-negro",
     "nome": "Dragão Negro Ancião",
     "nivel": 31,
+    "lendario": true,
     "tags": [
       "dragao",
       "aquatico",
@@ -1203,6 +1298,11 @@
     "niveis": 3,
     "especial": "Sopro ácido: peitorais não somam bônus.",
     "efeitos": [
+      {
+        "tipo": "naoPersegue",
+        "nivelMaximo": 8,
+        "sempre": true
+      },
       {
         "tipo": "anula",
         "alvo": "peitorais"
@@ -1219,6 +1319,7 @@
     "id": "lich",
     "nome": "Lich",
     "nivel": 32,
+    "lendario": true,
     "tags": [
       "morto-vivo"
     ],
@@ -1226,6 +1327,11 @@
     "niveis": 3,
     "especial": "Filactéria: se for derrotado sem um Clérigo ou Paladino no combate, volta ao topo do baralho de Portas.",
     "efeitos": [
+      {
+        "tipo": "naoPersegue",
+        "nivelMaximo": 8,
+        "sempre": true
+      },
       {
         "tipo": "filacteria",
         "classes": [
@@ -1249,6 +1355,7 @@
     "id": "dragao-azul",
     "nome": "Dragão Azul Ancião",
     "nivel": 33,
+    "lendario": true,
     "tags": [
       "dragao",
       "voador"
@@ -1257,6 +1364,11 @@
     "niveis": 3,
     "especial": "Sopro de relâmpago: anéis não somam bônus (metal conduz).",
     "efeitos": [
+      {
+        "tipo": "naoPersegue",
+        "nivelMaximo": 8,
+        "sempre": true
+      },
       {
         "tipo": "anula",
         "alvo": "aneis"
@@ -1273,6 +1385,7 @@
     "id": "planetar",
     "nome": "Planetar",
     "nivel": 33,
+    "lendario": true,
     "tags": [
       "sagrado",
       "voador"
@@ -1281,6 +1394,11 @@
     "niveis": 3,
     "especial": "Detecta mentiras: quem lançou uma maldição nesta rodada não pode ajudar nem atrapalhar este combate.",
     "efeitos": [
+      {
+        "tipo": "naoPersegue",
+        "nivelMaximo": 8,
+        "sempre": true
+      },
       {
         "tipo": "detectaMentiras"
       }
@@ -1297,6 +1415,7 @@
     "id": "solar",
     "nome": "Solar",
     "nivel": 34,
+    "lendario": true,
     "tags": [
       "sagrado",
       "voador"
@@ -1305,6 +1424,11 @@
     "niveis": 3,
     "especial": "Divinos e Paladinos podem dispensá-lo e subir 1 nível. Vampíricos e Bruxos lutam com -5.",
     "efeitos": [
+      {
+        "tipo": "naoPersegue",
+        "nivelMaximo": 8,
+        "sempre": true
+      },
       {
         "tipo": "dispensavel",
         "racas": [
@@ -1339,6 +1463,7 @@
     "id": "marilith",
     "nome": "Marilith",
     "nivel": 34,
+    "lendario": true,
     "tags": [
       "demonio"
     ],
@@ -1346,6 +1471,11 @@
     "niveis": 3,
     "especial": "Seis braços: anula os 2 maiores bônus de item do seu lado.",
     "efeitos": [
+      {
+        "tipo": "naoPersegue",
+        "nivelMaximo": 8,
+        "sempre": true
+      },
       {
         "tipo": "anula",
         "alvo": "doisMaioresItens"
@@ -1362,6 +1492,7 @@
     "id": "balor",
     "nome": "Balor",
     "nivel": 35,
+    "lendario": true,
     "tags": [
       "demonio",
       "fogo"
@@ -1370,6 +1501,11 @@
     "niveis": 3,
     "especial": "Explode ao morrer: mesmo vencendo, cada jogador do seu lado perde 1 item equipado à escolha.",
     "efeitos": [
+      {
+        "tipo": "naoPersegue",
+        "nivelMaximo": 8,
+        "sempre": true
+      },
       {
         "tipo": "explodeAoMorrer"
       }
@@ -1385,6 +1521,7 @@
     "id": "kraken",
     "nome": "Kraken",
     "nivel": 36,
+    "lendario": true,
     "tags": [
       "aquatico"
     ],
@@ -1392,6 +1529,11 @@
     "niveis": 3,
     "especial": "Tritão/Sereia ganham +6 (estão em casa). Montarias não somam bônus (afundam).",
     "efeitos": [
+      {
+        "tipo": "naoPersegue",
+        "nivelMaximo": 8,
+        "sempre": true
+      },
       {
         "tipo": "jogadoresGanham",
         "racas": [
@@ -1415,6 +1557,7 @@
     "id": "dragao-verde",
     "nome": "Dragão Verde Ancião",
     "nivel": 36,
+    "lendario": true,
     "tags": [
       "dragao",
       "voador"
@@ -1423,6 +1566,11 @@
     "niveis": 3,
     "especial": "Sopro venenoso: cada ajudante perde 1 nível ao entrar no combate.",
     "efeitos": [
+      {
+        "tipo": "naoPersegue",
+        "nivelMaximo": 8,
+        "sempre": true
+      },
       {
         "tipo": "venenoNoAjudante"
       }
@@ -1438,6 +1586,7 @@
     "id": "diabo",
     "nome": "Diabo das Profundezas",
     "nivel": 37,
+    "lendario": true,
     "tags": [
       "demonio",
       "fogo"
@@ -1447,6 +1596,11 @@
     "fugir": -3,
     "especial": "Aura de medo: -3 em Fugir e -2 para cada ajudante. Paladinos ignoram a aura.",
     "efeitos": [
+      {
+        "tipo": "naoPersegue",
+        "nivelMaximo": 8,
+        "sempre": true
+      },
       {
         "tipo": "jogadoresGanham",
         "soAjudante": true,
@@ -1473,6 +1627,7 @@
     "id": "dragao-vermelho-anciao",
     "nome": "Dragão Vermelho Ancião",
     "nivel": 38,
+    "lendario": true,
     "tags": [
       "dragao",
       "fogo",
@@ -1482,6 +1637,11 @@
     "niveis": 3,
     "especial": "Incendeia a vila: se ninguém o derrotar, todos os outros jogadores perdem 1 nível.",
     "efeitos": [
+      {
+        "tipo": "naoPersegue",
+        "nivelMaximo": 8,
+        "sempre": true
+      },
       {
         "tipo": "incendeiaVila",
         "niveis": 1
@@ -1498,6 +1658,7 @@
     "id": "empireo",
     "nome": "Empíreo",
     "nivel": 38,
+    "lendario": true,
     "tags": [
       "sagrado"
     ],
@@ -1505,6 +1666,11 @@
     "niveis": 3,
     "especial": "Fúria titânica: +2 para cada nível que você tiver acima do 15.",
     "efeitos": [
+      {
+        "tipo": "naoPersegue",
+        "nivelMaximo": 8,
+        "sempre": true
+      },
       {
         "tipo": "bonusContra",
         "porNivelAcimaDe": 15,
@@ -1523,6 +1689,7 @@
     "id": "dragao-dourado",
     "nome": "Dragão Dourado Ancião",
     "nivel": 39,
+    "lendario": true,
     "tags": [
       "dragao",
       "sagrado",
@@ -1532,6 +1699,11 @@
     "niveis": 3,
     "especial": "Não persegue Divinos nem Paladinos. Julga a ganância: +1 para cada carta na sua mão.",
     "efeitos": [
+      {
+        "tipo": "naoPersegue",
+        "nivelMaximo": 8,
+        "sempre": true
+      },
       {
         "tipo": "naoPersegue",
         "racas": [
@@ -1562,10 +1734,16 @@
     "id": "tarrasque",
     "nome": "Tarrasque",
     "nivel": 40,
+    "lendario": true,
     "tesouros": 12,
     "niveis": 3,
     "especial": "Imbatível no papel: nenhuma habilidade pode encantá-lo, anulá-lo ou dispensá-lo. Cada ajudante que vencer com você compra 1 tesouro extra.",
     "efeitos": [
+      {
+        "tipo": "naoPersegue",
+        "nivelMaximo": 8,
+        "sempre": true
+      },
       {
         "tipo": "imbativel"
       },

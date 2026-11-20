@@ -231,14 +231,13 @@ export function CombatPanel() {
             🤚 Oferecer ajuda
           </Button>
         )}
-        {!onSide && c.stage !== "badstuff" && !c.desafio && !c.used.includes(`${me.id}:threat`) && (
+        {!onSide && c.stage !== "badstuff" && !c.desafio && !c.used.includes(`${me.id}:threat`) && c.freeTreasures > 0 && (
           <Button
             onClick={async () => {
-              const treasures = c.monsters.reduce((a, m) => a + ((api.def(m.cardId) as { treasures?: number })?.treasures ?? 0), 0);
               const v = await picker.pick({
                 title: `Ameaçar atrapalhar ${fighter.name}`,
-                description: "Peça tesouros para não atrapalhar. Se ele aceitar, você recebe os tesouros quando ele vencer e não pode atrapalhá-lo nesta rodada.",
-                options: Array.from({ length: Math.max(1, Math.min(10, treasures)) }, (_, i) => ({ value: String(i + 1), label: `${i + 1} tesouro(s)` })),
+                description: `Peça tesouros para não atrapalhar. ${fighter.name} tem ${c.freeTreasures} tesouro(s) ainda não prometido(s). Se aceitar, você recebe quando ele vencer e não pode atrapalhá-lo nesta rodada.`,
+                options: Array.from({ length: c.freeTreasures }, (_, i) => ({ value: String(i + 1), label: `${i + 1} tesouro(s)` })),
               });
               if (v) await api.act({ type: "THREATEN", count: Number(v) });
             }}

@@ -75,7 +75,7 @@ export function fullText(d: CardDef): string[] {
   switch (d.kind) {
     case "race":
     case "class":
-      return [`Passiva — ${d.passive.name}: ${d.passive.text}`, `Ativa — ${d.active.name}: ${d.active.text}`];
+      return [`Passiva — ${d.passive.name}: ${d.passive.text}`, ...d.actives.map((a) => `Ativa — ${a.name}: ${a.text}`)];
     case "item": {
       const lines = [`Bônus +${d.bonus}${d.flee ? ` · Fugir ${d.flee > 0 ? "+" : ""}${d.flee}` : ""} · ${d.price} de ouro`];
       if (d.text) lines.push(d.text);

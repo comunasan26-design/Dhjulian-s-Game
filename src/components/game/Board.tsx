@@ -214,7 +214,7 @@ function TableArea({ view, me, act }: { view: GameView; me: GameView["players"][
       <div>
         <p className="mb-1 text-xs text-muted">Descarte de Tesouros</p>
         {topTreasure ? <CardView id={topTreasure} size="sm" /> : <p className="text-xs text-muted">vazio</p>}
-        {view.lastItemDiscard && me.raceId === "goblin" && view.lastItemDiscard.by !== me.id && (
+        {view.lastItemDiscard && me.passives.includes("catador") && view.lastItemDiscard.by !== me.id && (
           <Button size="sm" className="mt-1" onClick={() => act({ type: "CATADOR" })}>
             👺 Catar item
           </Button>

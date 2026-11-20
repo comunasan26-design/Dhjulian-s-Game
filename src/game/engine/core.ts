@@ -1,5 +1,5 @@
 // Núcleo das regras: turnos, combate, fuga, Coisas Ruins, morte, recompensas e maldições.
-import { ALL_CARDS, CARD_DEFS, def, findFx, type CurseCard, type MonsterCard, type Slot } from "../catalog";
+import { ALL_CARDS, CARD_DEFS, def, findFx, RULES, type CurseCard, type MonsterCard, type Slot } from "../catalog";
 import {
   cardFxAll,
   combatFx,
@@ -26,7 +26,6 @@ import {
   type PlayerState,
   type Prompt,
   type PromptKind,
-  START_HAND,
   TIMERS,
   fail,
 } from "./state";
@@ -54,8 +53,10 @@ import {
   drawTo,
   gainLevels,
   giveItem,
-  hasClass,
-  hasRace,
+  hasPassive,
+  passiveFx,
+  passiveFxSrc,
+  scaled,
   isCurrent,
   itemDef,
   leftOf,
@@ -158,8 +159,8 @@ export function createGame(
     const c = pickRandom(classes, ctx);
     state.decks.door.splice(state.decks.door.indexOf(c), 1);
     p.classes = [c];
-    drawTo(state, p, "door", START_HAND, ctx);
-    drawTo(state, p, "treasure", START_HAND, ctx);
+    drawTo(state, p, "door", RULES.cartasIniciais.portas, ctx);
+    drawTo(state, p, "treasure", RULES.cartasIniciais.tesouros, ctx);
   }
 
   // Ordem: maior d6 começa (empates rolam de novo), depois sentido horário
@@ -233,9 +234,8 @@ export function beginTurn(state: GameState, ctx: Ctx, pid: string, depth: number
   }
   if (p.needsNewHand) {
     p.needsNewHand = false;
-    drawTo(state, p, "door", START_HAND, ctx);
-    drawTo(state, p, "treasure", START_HAND, ctx);
-    log(state, ctx, `${p.name} recebeu 4 Portas e 4 Tesouros após a morte.`);
+    const got = drawTo(state, p, "door", RULES.cartasAoMorrer.portas, ctx).length + drawTo(state, p, "treasure", RULES.cartasAoMorrer.tesouros, ctx).length;
+    log(state, ctx, `${p.name} recebeu ${got} cartas novas após a morte.`);
   }
   log(state, ctx, `— Turno de ${p.name} (rodada ${state.round}) —`, "system", p.id);
 
@@ -597,32 +597,16 @@ export function resolveVictory(state: GameState, ctx: Ctx) {
   const beaten = combat.monsters;
   const fighterLevelBefore = fighter.level;
   let levels = 0;
-  let treasures = 0;
-  const elmo = !!equippedFx(state, fighter, "metadeErrantes");
-  for (const cm of beaten) {
-    const d = monsterDef(state, cm);
-    levels += d.levels;
-    let t = d.treasures;
-    if (cm.wandering && elmo && cm.addedBy !== fighter.id) t = Math.floor(t / 2);
-    treasures += t;
-  }
-  if (combat.desafio) levels *= 2;
+  for (const cm of beaten) levels += monsterDef(state, cm).levels;
+  let treasures = rewardTreasures(state, combat);
+  if (combat.desafio) levels *= combat.desafioMult ?? 1;
   log(
     state,
     ctx,
     `🏅 ${fighter.name}${helper ? ` e ${helper.name}` : ""} derrotaram ${beaten.map((m) => nameOf(state, m.cardId)).join(" + ")}!`,
     "combat",
   );
-  if (side.some((p) => hasClass(state, p, "patrulheiro")) && beaten.some((m) => {
-    const t = monsterDef(state, m).tags;
-    return t.includes("animal") || t.includes("voador");
-  }))
-    treasures += 1;
-  treasures += Number(combat.mapa) || 0;
-  for (const fx of curseFx(fighter, "menosTesouros")) treasures -= num(fx, "quantidade", 1);
-  if (hasCurseFx(fighter, "metadeTesouros")) treasures = Math.floor(treasures / 2);
-  treasures = Math.max(0, treasures);
-  const bardo = hasClass(state, fighter, "bardo");
+  const bardo = hasPassive(state, fighter, "tesouroExtraEscolhe");
   if (bardo) treasures += 1;
 
   for (const cu of [...fighter.curses]) {
@@ -632,17 +616,18 @@ export function resolveVictory(state: GameState, ctx: Ctx) {
       log(state, ctx, `${def(cu.defId).name} sumiu de ${fighter.name}.`, "curse");
     }
   }
-  for (const p of side) if (hasClass(state, p, "berserker")) p.streak += 1;
+  for (const p of side) if (hasPassive(state, p, "furia")) p.streak += 1;
 
   gainLevels(state, fighter, levels, ctx, true, "monstro derrotado");
+  const blood = passiveFxSrc(state, fighter, "nivelExtraSozinhoContraMaior")[0];
   if (
+    blood &&
     !helper &&
-    hasRace(state, fighter, "orc") &&
     fighter.usage["orcBlood"] !== state.round &&
     beaten.some((m) => monsterDef(state, m).level > fighterLevelBefore)
   ) {
     fighter.usage["orcBlood"] = state.round;
-    gainLevels(state, fighter, 1, ctx, true, "Sede de Sangue");
+    gainLevels(state, fighter, scaled(blood.fx, "quantidade", fighter.level, 1), ctx, true, blood.source);
   }
   for (const p of side) {
     for (const { cardId, fx } of equippedFxAll(state, p, "nivelExtraAoVencer")) {
@@ -650,9 +635,10 @@ export function resolveVictory(state: GameState, ctx: Ctx) {
       if (r.total >= num(fx, "dado", 6)) gainLevels(state, p, 1, ctx, true, nameOf(state, cardId));
     }
   }
-  if (helper && hasRace(state, helper, "elfo") && helper.usage["elfGrace"] !== state.round) {
+  const grace = helper ? passiveFxSrc(state, helper, "nivelAoAjudar")[0] : undefined;
+  if (helper && grace && helper.usage["elfGrace"] !== state.round) {
     helper.usage["elfGrace"] = state.round;
-    gainLevels(state, helper, 1, ctx, true, "Graça Élfica");
+    gainLevels(state, helper, scaled(grace.fx, "quantidade", helper.level, 1), ctx, true, grace.source);
   }
   if (state.winnerId) {
     endCombat(state, ctx, "won");
@@ -708,6 +694,40 @@ export function resolveVictory(state: GameState, ctx: Ctx) {
     if (got.length) log(state, ctx, `${helper.name} comprou ${got.length} tesouro(s) extra(s) por ajudar.`);
   }
   continueReward(state, ctx);
+}
+
+/** Quantos tesouros o combate atual rende se for vencido agora (sem o extra do Bardo, que é descartado). */
+export function rewardTreasures(state: GameState, combat: CombatState): number {
+  const fighter = player(state, combat.fighterId);
+  const side = playerSide(state, combat).map((id) => player(state, id));
+  const elmo = !!equippedFx(state, fighter, "metadeErrantes");
+  let treasures = 0;
+  for (const cm of combat.monsters) {
+    let t = monsterDef(state, cm).treasures;
+    if (cm.wandering && elmo && cm.addedBy !== fighter.id) t = Math.floor(t / 2);
+    treasures += t;
+  }
+  for (const p of side) {
+    for (const fx of passiveFx(state, p, "tesouroExtraContra")) {
+      const tags = strs(fx, "tags");
+      if (combat.monsters.some((m) => monsterDef(state, m).tags.some((t) => tags.includes(t)))) treasures += scaled(fx, "quantidade", p.level, 1);
+    }
+  }
+  treasures += Number(combat.mapa) || 0;
+  for (const fx of curseFx(fighter, "menosTesouros")) treasures -= num(fx, "quantidade", 1);
+  if (hasCurseFx(fighter, "metadeTesouros")) treasures = Math.floor(treasures / 2);
+  return Math.max(0, treasures);
+}
+
+/**
+ * Tesouros que ainda são do lutador: o total da recompensa menos o que já foi prometido
+ * ao ajudante e às ameaças aceitas. É o máximo que se pode pedir numa ameaça.
+ */
+export function freeTreasures(state: GameState, combat: CombatState): number {
+  let free = rewardTreasures(state, combat);
+  if (combat.helperId && !combat.helperForced && combat.helperDeal) free -= combat.helperDeal.count;
+  for (const b of combat.bribes ?? []) free -= b.count;
+  return Math.max(0, free);
 }
 
 export function continueReward(state: GameState, ctx: Ctx) {
@@ -803,7 +823,7 @@ export function startFlee(state: GameState, ctx: Ctx) {
         continue;
       }
       const r = rollD6(state, p, ctx, `Fugir de ${d.name} (bônus ${info.bonus >= 0 ? "+" : ""}${info.bonus})`);
-      let success = r.total + info.bonus >= 5;
+      let success = r.total + info.bonus >= RULES.fugirCom;
       let note: string | undefined;
       const stubborn = equippedFx(state, p, "podeEmpacar");
       if (success && stubborn) {
@@ -873,7 +893,7 @@ export function applyAllBadStuff(state: GameState, ctx: Ctx) {
       paladins.push(target);
       log(state, ctx, `🛡️ ${target.name} assume as Coisas Ruins de ${player(state, pid).name} (Escudo da Fé).`, "combat");
     }
-    if (hasClass(state, target, "berserker") && target.streak > 0) {
+    if (target.streak > 0) {
       target.streak = 0;
     }
     // Runa do Sangue: perca 1 nível a mais ao perder um combate
@@ -892,7 +912,7 @@ export function applyAllBadStuff(state: GameState, ctx: Ctx) {
     }
   }
   for (const pal of paladins) {
-    const got = drawTo(state, pal, "treasure", 3, ctx);
+    const got = drawTo(state, pal, "treasure", flee.substituteTreasures?.[pal.id] ?? 0, ctx);
     log(state, ctx, `${pal.name} comprou ${got.length} tesouro(s) pelo Escudo da Fé.`);
   }
   endCombat(state, ctx, "lost");
@@ -927,9 +947,10 @@ export function applyBadStuff(state: GameState, ctx: Ctx, target: PlayerState, c
   const d = monsterDef(state, cm);
   const combat = state.combat;
   const immune = (why: string) => log(state, ctx, `🛡️ ${target.name} é imune às Coisas Ruins de ${d.name} (${why}).`, "combat");
-  if (hasRace(state, target, "draconato") && !d.legendary && (d.tags.includes("fogo") || d.tags.includes("dragao")))
-    return immune("Escamas Dracônicas");
-  if (hasRace(state, target, "tritao") && d.tags.includes("aquatico")) return immune("Filho das Marés");
+  for (const { fx, source } of passiveFxSrc(state, target, "imuneCoisasRuins")) {
+    if (flag(fx, "excetoLendarios") && d.legendary) continue;
+    if (strs(fx, "tags").some((t) => d.tags.includes(t as never))) return immune(source);
+  }
   for (const { cardId, fx } of equippedFxAll(state, target, "imuneCoisasRuins")) {
     if (flag(fx, "excetoLendarios") && d.legendary) continue;
     if (strs(fx, "tags").some((t) => d.tags.includes(t as never))) return immune(nameOf(state, cardId));
@@ -938,15 +959,14 @@ export function applyBadStuff(state: GameState, ctx: Ctx, target: PlayerState, c
   if (d.poison && antidote) return immune(nameOf(state, antidote.cardId));
 
   log(state, ctx, `☠️ Coisas Ruins de ${d.name} em ${target.name}: ${d.badStuffText}`, "combat");
-  let dwarfSave = hasRace(state, target, "anao") ? 1 : 0;
+  const stubborn = passiveFxSrc(state, target, "perdeMenosItens");
+  let dwarfSave = stubborn.reduce((a, x) => a + scaled(x.fx, "quantidade", target.level, 1), 0);
   const losses: string[] = [];
   let death = false;
   const takeDwarf = (n: number) => {
-    if (dwarfSave > 0 && n > 0) {
-      dwarfSave = 0;
-      return n - 1;
-    }
-    return n;
+    const save = Math.min(dwarfSave, n);
+    dwarfSave -= save;
+    return n - save;
   };
   const candidatesAll = () => target.equipped.filter((id) => !itemProtected(state, target, id, d) && !losses.includes(id));
   for (const e of d.badStuff) {
@@ -1048,9 +1068,9 @@ export function applyBadStuff(state: GameState, ctx: Ctx, target: PlayerState, c
           });
         break;
       }
-      case "mummyRot":
-        addSpecialCurse(state, target, "special.mumia", 2, 2, null);
-        log(state, ctx, `${target.name} pegou a Podridão de Múmia (-2 por 2 rodadas).`, "curse");
+      case "tempPenalty":
+        addSpecialCurse(state, target, "special.forca", e.value, e.turns, null, e.name);
+        log(state, ctx, `${target.name} pegou ${e.name} (${e.value} por ${e.turns} rodada(s)).`, "curse");
         break;
       case "possession": {
         const cands = [...target.equipped, ...target.carried].filter((id) => !itemProtected(state, target, id, d));
@@ -1060,22 +1080,20 @@ export function applyBadStuff(state: GameState, ctx: Ctx, target: PlayerState, c
         createPrompt(state, ctx, "possession", left.id, { victimId: target.id, candidates: cands });
         break;
       }
-      case "chimera": {
+      case "rollLevels": {
         let lost = 0;
-        for (let i = 0; i < 3; i++) if (rollD6(state, target, ctx, "cabeça da Quimera").total <= 3) lost++;
-        loseLevels(state, target, lost, ctx, "Quimera");
+        for (let i = 0; i < e.rolls; i++) if (rollD6(state, target, ctx, d.name).total <= e.upTo) lost++;
+        loseLevels(state, target, lost, ctx, d.name);
         break;
       }
-      case "vampirize":
+      case "becomeRace":
         break;
       case "carried": {
         const cands = target.carried.filter((id) => !itemProtected(state, target, id, d));
-        if (dwarfSave > 0 && cands.length > 0) {
-          dwarfSave = 0;
-          cands.sort((a, b) => itemWorth(state, b) - itemWorth(state, a));
-          cands.shift();
-        }
-        losses.push(...cands);
+        cands.sort((a, b) => itemWorth(state, b) - itemWorth(state, a));
+        const save = Math.min(dwarfSave, cands.length);
+        dwarfSave -= save;
+        losses.push(...cands.slice(save));
         break;
       }
       case "othersLoseLevels":
@@ -1088,8 +1106,8 @@ export function applyBadStuff(state: GameState, ctx: Ctx, target: PlayerState, c
   }
   if (dwarfSave > 0 && losses.length > 0) {
     losses.sort((a, b) => itemWorth(state, b) - itemWorth(state, a));
-    const saved = losses.shift()!;
-    log(state, ctx, `⛏️ Teimosia Anã: ${target.name} manteve ${nameOf(state, saved)}.`);
+    const saved = losses.splice(0, dwarfSave);
+    log(state, ctx, `⛏️ ${stubborn[0]?.source ?? "Passiva"}: ${target.name} manteve ${saved.map((id) => nameOf(state, id)).join(", ")}.`);
   }
   for (const id of [...new Set(losses)]) {
     log(state, ctx, `${target.name} perdeu ${nameOf(state, id)}.`);
@@ -1103,10 +1121,11 @@ export function applyBadStuff(state: GameState, ctx: Ctx, target: PlayerState, c
 // ----------------------------------------------------------------------------
 
 export function killPlayer(state: GameState, ctx: Ctx, p: PlayerState, reason: string): boolean {
-  if (hasRace(state, p, "vampirico")) {
-    const r = rollD6(state, p, ctx, "Não-morto");
-    if (r.total >= 5) {
-      log(state, ctx, `🧛 ${p.name} se recusa a morrer (Não-morto)! O turno dele acaba.`, "combat");
+  const undead = passiveFxSrc(state, p, "naoMorreNoDado")[0];
+  if (undead) {
+    const r = rollD6(state, p, ctx, undead.source);
+    if (r.total >= scaled(undead.fx, "dado", p.level, 6)) {
+      log(state, ctx, `🧛 ${p.name} se recusa a morrer (${undead.source})! O turno dele acaba.`, "combat");
       if (isCurrent(state, p.id) && state.turnPhase !== "COMBAT") state.turnPhase = "END";
       return false;
     }
@@ -1121,10 +1140,11 @@ export function killPlayer(state: GameState, ctx: Ctx, p: PlayerState, reason: s
   p.streak = 0;
   p.needsNewHand = true;
   p.hibernating = false;
-  if (state.combat && state.combat.monsters.some((m) => monsterDef(state, m).badStuff.some((e) => e.t === "vampirize"))) {
+  const becomes = state.combat?.monsters.flatMap((m) => monsterDef(state, m).badStuff).find((e) => e.t === "becomeRace");
+  if (becomes && becomes.t === "becomeRace" && CARD_DEFS[`race.${becomes.race}`]) {
     if (p.race) discardCard(state, p.race);
-    p.race = newCard(state, "race.vampirico", true);
-    log(state, ctx, `🧛 ${p.name} renasceu como Vampírico!`, "combat");
+    p.race = newCard(state, `race.${becomes.race}`, true);
+    log(state, ctx, `${p.name} renasceu como ${def(`race.${becomes.race}`).name}!`, "combat");
   }
   for (const id of items) delete state.cards[id]?.artificeSecond;
   if (items.length > 0) {
@@ -1153,8 +1173,8 @@ export function nextLoot(state: GameState, ctx: Ctx, deadId: string, items: stri
 // ============================================================================
 
 export function curseName(state: GameState, c: ActiveCurse): string {
-  if (c.defId === "special.sombria") return "Maldição Sombria";
-  if (c.defId === "special.mumia") return "Podridão de Múmia";
+  if (c.label) return c.label;
+  if (c.defId.startsWith("special.")) return "Maldição";
   return def(c.defId).name;
 }
 
@@ -1172,9 +1192,10 @@ export function addSpecialCurse(
   value: number,
   turns: number,
   casterId: string | null,
+  label?: string,
 ) {
   const remaining = turns + (isCurrent(state, target.id) ? 1 : 0);
-  target.curses.push({ id: uid(state, "k"), defId, value, remaining, casterId });
+  target.curses.push({ id: uid(state, "k"), defId, value, remaining, casterId, ...(label ? { label } : {}) });
 }
 
 /**
@@ -1189,7 +1210,7 @@ export function defendCurse(
   label: string,
   allowReflect = true,
 ): PlayerState | null {
-  const bruxo = !!caster && hasClass(state, caster, "bruxo");
+  const bruxo = !!caster && hasPassive(state, caster, "maldicoesFortes");
   if (target.hibernating) {
     log(state, ctx, `🐢 ${target.name} está no casco e ignora ${label}.`, "curse");
     return null;
@@ -1205,18 +1226,20 @@ export function defendCurse(
     log(state, ctx, `🪞 ${nameOf(state, equippedFx(state, target, "refleteMaldicao")!.cardId)} de ${target.name} devolve ${label} para ${caster.name}!`, "curse");
     return defendCurse(state, ctx, caster, target, label, false);
   }
-  if (!bruxo && hasRace(state, target, "divino")) {
-    const r = rollD6(state, target, ctx, "Proteção Celestial");
-    if (r.total >= (tier11(target) ? 4 : 5)) {
-      log(state, ctx, `✨ Proteção Celestial anulou ${label}.`, "curse");
+  for (const { fx, source } of bruxo ? [] : passiveFxSrc(state, target, "anulaMaldicaoNoDado")) {
+    const r = rollD6(state, target, ctx, source);
+    if (r.total >= scaled(fx, "dado", target.level, 6)) {
+      log(state, ctx, `✨ ${source} anulou ${label}.`, "curse");
       return null;
     }
   }
-  if (allowReflect && !bruxo && caster && caster.id !== target.id && hasClass(state, target, "ilusionista")) {
-    const r = rollD6(state, target, ctx, "Imagem Espelhada");
-    if (r.total >= (tier11(target) ? 5 : 6)) {
-      log(state, ctx, `🪞 Imagem Espelhada! ${label} volta para ${caster.name}.`, "curse");
-      return defendCurse(state, ctx, caster, target, label, false);
+  if (allowReflect && !bruxo && caster && caster.id !== target.id) {
+    for (const { fx, source } of passiveFxSrc(state, target, "refleteNoDado")) {
+      const r = rollD6(state, target, ctx, source);
+      if (r.total >= scaled(fx, "dado", target.level, 6)) {
+        log(state, ctx, `🪞 ${source}! ${label} volta para ${caster.name}.`, "curse");
+        return defendCurse(state, ctx, caster, target, label, false);
+      }
     }
   }
   const ward = equippedFx(state, target, "anulaMaldicao");
@@ -1235,10 +1258,11 @@ export function castCurse(state: GameState, ctx: Ctx, cardId: string, caster: Pl
   const d = defOf(state, cardId) as CurseCard;
   if (caster) {
     caster.curseCastRound = state.round;
-    if (caster.id !== target.id && hasRace(state, caster, "diabrete") && caster.usage["malicia"] !== state.round) {
+    const malice = passiveFxSrc(state, caster, "comprarAoAmaldicoar")[0];
+    if (malice && caster.id !== target.id && caster.usage["malicia"] !== state.round) {
       caster.usage["malicia"] = state.round;
-      const got = drawTo(state, caster, "door", 2, ctx);
-      log(state, ctx, `😈 Malícia: ${caster.name} comprou ${got.length} Porta(s).`);
+      const got = drawTo(state, caster, "door", scaled(malice.fx, "portas", caster.level, 2), ctx);
+      log(state, ctx, `😈 ${malice.source}: ${caster.name} comprou ${got.length} Porta(s).`);
     }
   }
   log(state, ctx, `🕯️ ${caster ? `${caster.name} lançou` : "A porta revelou"} ${d.name} em ${target.name}.`, "curse", caster?.id);
@@ -1266,7 +1290,8 @@ const CURSE_SLOT: Record<string, Slot> = { capacete: "head", peitoral: "chest", 
 
 export function applyCurse(state: GameState, ctx: Ctx, cardId: string, target: PlayerState, caster: PlayerState | null) {
   const d = defOf(state, cardId) as CurseCard;
-  const bruxo = !!caster && hasClass(state, caster, "bruxo");
+  const strong = caster ? passiveFx(state, caster, "maldicoesFortes") : [];
+  const extraTurns = caster ? strong.reduce((a, fx) => a + scaled(fx, "duracaoExtra", caster.level, 1), 0) : 0;
   const keepCard = d.curseType === "duration" || d.curseType === "persistent";
   if (d.curseType === "combat") {
     const combat = state.combat;
@@ -1279,7 +1304,7 @@ export function applyCurse(state: GameState, ctx: Ctx, cardId: string, target: P
       return;
     }
   } else if (d.curseType === "duration") {
-    let turns = (d.duration ?? 1) + (bruxo ? 1 : 0);
+    let turns = (d.duration ?? 1) + extraTurns;
     if (!findFx(d.id, "pulaTurno") && isCurrent(state, target.id)) turns += 1;
     target.curses.push({ id: uid(state, "k"), defId: d.id, cardId, remaining: turns, casterId: caster?.id ?? null });
     onPersistentCurse(state, ctx, target, d.id);
@@ -1448,7 +1473,7 @@ export function applyCombatCurse(state: GameState, ctx: Ctx, cardId: string, tar
 export function revalidateEquipment(state: GameState, ctx: Ctx, p: PlayerState) {
   const current = [...p.equipped];
   p.equipped = [];
-  if (!hasClass(state, p, "artifice")) p.artificeSlots = [];
+  if (passiveFx(state, p, "slotExtraMetade").length === 0) p.artificeSlots = [];
   for (const id of current) delete state.cards[id]?.artificeSecond;
   // Recoloca um a um respeitando as regras
   for (const id of current) {

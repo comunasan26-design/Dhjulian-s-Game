@@ -2,209 +2,489 @@
   {
     "id": "guerreiro",
     "nome": "Guerreiro",
-    "habilidadesDe": "guerreiro",
     "passiva": {
       "nome": "Mestre de Armas",
-      "texto": "Vence empates em combate."
+      "texto": "Vence empates em combate.",
+      "efeitos": [
+        {
+          "tipo": "venceEmpates"
+        }
+      ]
     },
-    "ativa": {
-      "nome": "Desafio",
-      "texto": "Descarte sua mão (mín. 4 cartas) e seu item equipado de maior bônus (ou montaria): ninguém mais pode jogar cartas neste combate (nem a favor nem contra), nem lutar junto; os níveis ganhos com o monstro contam em dobro e você recebe -5. Não dá para fugir: se perder, aplica as Coisas Ruins e morre. 1x por combate."
-    }
+    "ativas": [
+      {
+        "id": "desafio",
+        "nome": "Desafio",
+        "texto": "Descarte sua mão (mín. 4 cartas) e seu item equipado de maior bônus (ou montaria): ninguém mais pode jogar cartas neste combate (nem a favor nem contra), nem lutar junto; os níveis ganhos com o monstro contam em dobro e você recebe -5. Não dá para fugir: se perder, aplica as Coisas Ruins e morre. 1x por combate.",
+        "acao": "desafio",
+        "limite": "combate",
+        "custo": {
+          "descartarMao": 4
+        },
+        "penalidade": -5,
+        "multiplicadorNiveis": 2
+      }
+    ]
   },
   {
     "id": "mago",
     "nome": "Mago",
-    "habilidadesDe": "mago",
     "passiva": {
       "nome": "Foco Arcano",
-      "texto": "Cada anel equipado dá +1 adicional."
+      "texto": "Cada anel equipado dá +1 adicional.",
+      "efeitos": [
+        {
+          "tipo": "bonusPorItem",
+          "slot": "anel",
+          "valor": 1
+        }
+      ]
     },
-    "ativa": {
-      "nome": "Encantar",
-      "texto": "Descarte a mão inteira (mín. 3 cartas): o monstro sai do combate; você ganha o tesouro, mas não o nível. Não funciona em Lendários. 1x por combate."
-    }
+    "ativas": [
+      {
+        "id": "encantar",
+        "nome": "Encantar",
+        "texto": "Descarte a mão inteira (mín. 3 cartas): o monstro sai do combate; você ganha o tesouro, mas não o nível. Não funciona em Lendários. 1x por combate.",
+        "acao": "mandarMonstroEmbora",
+        "limite": "combate",
+        "custo": {
+          "descartarMao": 3
+        },
+        "fracaoTesouros": 1,
+        "naoEmLendarios": true
+      }
+    ]
   },
   {
     "id": "clerigo",
     "nome": "Clérigo",
-    "habilidadesDe": "clerigo",
     "passiva": {
       "nome": "Fé",
-      "texto": "+3 contra Mortos-vivos e Demônios."
+      "texto": "+3 contra Mortos-vivos e Demônios.",
+      "efeitos": [
+        {
+          "tipo": "bonusContra",
+          "tags": [
+            "morto-vivo",
+            "demonio"
+          ],
+          "valor": 3
+        }
+      ]
     },
-    "ativa": {
-      "nome": "Cura",
-      "texto": "Descarte 2 cartas: remova 1 maldição ativa ou devolva 1 nível perdido nesta rodada (seu ou de outro jogador). 1x por rodada."
-    }
+    "ativas": [
+      {
+        "id": "cura",
+        "nome": "Cura",
+        "texto": "Descarte 2 cartas: remova 1 maldição ativa ou devolva 1 nível perdido nesta rodada (seu ou de outro jogador). 1x por rodada.",
+        "acao": "curar",
+        "limite": "rodada",
+        "custo": {
+          "descartar": 2
+        }
+      }
+    ]
   },
   {
     "id": "ladino",
     "nome": "Ladino",
-    "habilidadesDe": "ladino",
     "passiva": {
       "nome": "Mãos Leves",
-      "texto": "+1 em Fugir; seus itens equipados não podem ser roubados."
+      "texto": "+1 em Fugir; seus itens equipados não podem ser roubados.",
+      "efeitos": [
+        {
+          "tipo": "fugir",
+          "valor": 1
+        },
+        {
+          "tipo": "itensNaoRoubaveis"
+        }
+      ]
     },
-    "ativa": {
-      "nome": "Roubo",
-      "texto": "Descarte 1 carta e role 1d6: com 4+ roube 1 item equipado (não Grande) de outro jogador; com 1–3 perca 1 nível. 1x por rodada."
-    }
+    "ativas": [
+      {
+        "id": "roubo",
+        "nome": "Roubo",
+        "texto": "Descarte 1 carta e role 1d6: com 4+ roube 1 item equipado (não Grande) de outro jogador; com 1–3 perca 1 nível. 1x por rodada.",
+        "acao": "roubarItem",
+        "limite": "rodada",
+        "custo": {
+          "descartar": 1
+        },
+        "sucesso": 4
+      }
+    ]
   },
   {
     "id": "druida",
     "nome": "Druida",
-    "habilidadesDe": "druida",
     "passiva": {
       "nome": "Laço Animal",
-      "texto": "Montarias dão +2 adicional; +2 em Fugir contra monstros Animal."
+      "texto": "Montarias dão +2 adicional; +2 em Fugir contra monstros Animal.",
+      "efeitos": [
+        {
+          "tipo": "bonusPorItem",
+          "slot": "montaria",
+          "valor": 2
+        },
+        {
+          "tipo": "fugirContra",
+          "tags": [
+            "animal"
+          ],
+          "valor": 2
+        }
+      ]
     },
-    "ativa": {
-      "nome": "Domar Fera",
-      "texto": "Descarte 2 cartas: um monstro Animal de nível igual ou menor que o seu vira sua montaria (o bônus é o número de tesouros dele) em vez de lutar; você não ganha nível nem tesouro. 1x por rodada."
-    }
+    "ativas": [
+      {
+        "id": "domarFera",
+        "nome": "Domar Fera",
+        "texto": "Descarte 2 cartas: um monstro Animal de nível igual ou menor que o seu vira sua montaria (o bônus é o número de tesouros dele) em vez de lutar; você não ganha nível nem tesouro. 1x por rodada.",
+        "acao": "domarFera",
+        "limite": "rodada",
+        "custo": {
+          "descartar": 2
+        },
+        "tag": "animal"
+      }
+    ]
   },
   {
     "id": "paladino",
     "nome": "Paladino",
-    "habilidadesDe": "paladino",
     "passiva": {
       "nome": "Aura de Coragem",
-      "texto": "Você e todo jogador do seu lado no mesmo combate ganham +2 (+3 a partir do nível 11)."
+      "texto": "Você e todo jogador do seu lado no mesmo combate ganham +2 (+3 a partir do nível 11).",
+      "efeitos": [
+        {
+          "tipo": "aura",
+          "valor": 2,
+          "valorPorNivel": {
+            "11": 3
+          }
+        }
+      ]
     },
-    "ativa": {
-      "nome": "Escudo da Fé",
-      "texto": "Assuma as Coisas Ruins de outro jogador (incluindo a morte); depois de aplicadas, compre 3 Tesouros. 1x por rodada."
-    }
+    "ativas": [
+      {
+        "id": "escudoFe",
+        "nome": "Escudo da Fé",
+        "texto": "Assuma as Coisas Ruins de outro jogador (incluindo a morte); depois de aplicadas, compre 3 Tesouros. 1x por rodada.",
+        "acao": "assumirCoisasRuins",
+        "limite": "rodada",
+        "tesouros": 3
+      }
+    ]
   },
   {
     "id": "barbaro",
     "nome": "Bárbaro",
-    "habilidadesDe": "barbaro",
     "passiva": {
       "nome": "Pele Nua",
-      "texto": "+1 por slot vazio entre capacete, peitoral, calças e botas (+2 por slot a partir do nível 5 e +3 a partir do 11)."
+      "texto": "+1 por slot vazio entre capacete, peitoral, calças e botas (+2 por slot a partir do nível 5 e +3 a partir do 11).",
+      "efeitos": [
+        {
+          "tipo": "bonusPorSlotVazio",
+          "valor": 1,
+          "valorPorNivel": {
+            "5": 2,
+            "11": 3
+          }
+        }
+      ]
     },
-    "ativa": {
-      "nome": "Esmagar",
-      "texto": "Descarte a mão inteira (mín. 4 cartas): cancele todos os bônus que outros jogadores deram ao monstro neste combate (Monstros Errantes ficam). 1x por combate."
-    }
+    "ativas": [
+      {
+        "id": "esmagar",
+        "nome": "Esmagar",
+        "texto": "Descarte a mão inteira (mín. 4 cartas): cancele todos os bônus que outros jogadores deram ao monstro neste combate (Monstros Errantes ficam). 1x por combate.",
+        "acao": "cancelarBonusMonstro",
+        "limite": "combate",
+        "custo": {
+          "descartarMao": 4
+        }
+      }
+    ]
   },
   {
     "id": "bardo",
     "nome": "Bardo",
-    "habilidadesDe": "bardo",
     "passiva": {
       "nome": "Sorte do Bardo",
-      "texto": "Ao vencer um combate, compre 1 Tesouro extra e descarte 1 dos tesouros comprados."
+      "texto": "Ao vencer um combate, compre 1 Tesouro extra e descarte 1 dos tesouros comprados.",
+      "efeitos": [
+        {
+          "tipo": "tesouroExtraEscolhe"
+        }
+      ]
     },
-    "ativa": {
-      "nome": "Lábia",
-      "texto": "Descarte 1 carta: convença o monstro a ir embora; você ganha metade dos tesouros dele (arredondado para baixo), sem nível. Não funciona em Lendários. 1x por rodada."
-    }
+    "ativas": [
+      {
+        "id": "labia",
+        "nome": "Lábia",
+        "texto": "Descarte 1 carta: convença o monstro a ir embora; você ganha metade dos tesouros dele (arredondado para baixo), sem nível. Não funciona em Lendários. 1x por rodada.",
+        "acao": "mandarMonstroEmbora",
+        "limite": "rodada",
+        "custo": {
+          "descartar": 1
+        },
+        "fracaoTesouros": 0.5,
+        "naoEmLendarios": true
+      }
+    ]
   },
   {
     "id": "feiticeiro",
     "nome": "Feiticeiro",
-    "habilidadesDe": "feiticeiro",
     "passiva": {
       "nome": "Magia Selvagem",
-      "texto": "Sempre que usar uma habilidade ativa, role 1d6: com 6 ela não conta para o limite de uso."
+      "texto": "Sempre que usar uma habilidade ativa, role 1d6: com 6 ela não conta para o limite de uso.",
+      "efeitos": [
+        {
+          "tipo": "magiaSelvagem",
+          "dado": 6
+        }
+      ]
     },
-    "ativa": {
-      "nome": "Polimorfia",
-      "texto": "Descarte 2 cartas: o monstro vira o próximo monstro do baralho de Portas (vire cartas até achar um; as outras vão para o descarte). Não funciona em Lendários. 1x por combate."
-    }
+    "ativas": [
+      {
+        "id": "polimorfia",
+        "nome": "Polimorfia",
+        "texto": "Descarte 2 cartas: o monstro vira o próximo monstro do baralho de Portas (vire cartas até achar um; as outras vão para o descarte). Não funciona em Lendários. 1x por combate.",
+        "acao": "polimorfia",
+        "limite": "combate",
+        "custo": {
+          "descartar": 2
+        },
+        "naoEmLendarios": true
+      }
+    ]
   },
   {
     "id": "bruxo",
     "nome": "Bruxo",
-    "habilidadesDe": "bruxo",
     "passiva": {
       "nome": "Mestre das Maldições",
-      "texto": "Suas maldições não podem ser anuladas nem refletidas por passivas e as que têm duração duram 1 rodada a mais."
+      "texto": "Suas maldições não podem ser anuladas nem refletidas por passivas e as que têm duração duram 1 rodada a mais.",
+      "efeitos": [
+        {
+          "tipo": "maldicoesFortes",
+          "duracaoExtra": 1
+        }
+      ]
     },
-    "ativa": {
-      "nome": "Maldição Sombria",
-      "texto": "Descarte 2 cartas: um jogador fica com -3 em combate (-5 a partir do nível 11) até o fim do próximo turno dele; conta como maldição. 1x por rodada."
-    }
+    "ativas": [
+      {
+        "id": "maldicaoSombria",
+        "nome": "Maldição Sombria",
+        "texto": "Descarte 2 cartas: um jogador fica com -3 em combate (-5 a partir do nível 11) até o fim do próximo turno dele; conta como maldição. 1x por rodada.",
+        "acao": "maldicaoForca",
+        "limite": "rodada",
+        "custo": {
+          "descartar": 2
+        },
+        "valor": -3,
+        "valorPorNivel": {
+          "11": -5
+        },
+        "turnos": 1
+      }
+    ]
   },
   {
     "id": "monge",
     "nome": "Monge",
-    "habilidadesDe": "monge",
     "passiva": {
       "nome": "Corpo Treinado",
-      "texto": "Sem itens nas mãos: +2 em combate e +1 em Fugir (+4 e +2 a partir do nível 11)."
+      "texto": "Sem itens nas mãos: +2 em combate e +1 em Fugir (+4 e +2 a partir do nível 11).",
+      "efeitos": [
+        {
+          "tipo": "forca",
+          "valor": 2,
+          "valorPorNivel": {
+            "11": 4
+          },
+          "seMaosLivres": true
+        },
+        {
+          "tipo": "fugir",
+          "valor": 1,
+          "valorPorNivel": {
+            "11": 2
+          },
+          "seMaosLivres": true
+        }
+      ]
     },
-    "ativa": {
-      "nome": "Paz Interior",
-      "texto": "Descarte 2 cartas: encerre o combate sem vencer nem perder; o monstro é descartado, sem nível, tesouro ou Coisas Ruins. Não funciona em Lendários. 1x por rodada."
-    }
+    "ativas": [
+      {
+        "id": "pazInterior",
+        "nome": "Paz Interior",
+        "texto": "Descarte 2 cartas: encerre o combate sem vencer nem perder; o monstro é descartado, sem nível, tesouro ou Coisas Ruins. Não funciona em Lendários. 1x por rodada.",
+        "acao": "encerrarCombate",
+        "limite": "rodada",
+        "custo": {
+          "descartar": 2
+        },
+        "naoEmLendarios": true
+      }
+    ]
   },
   {
     "id": "patrulheiro",
     "nome": "Patrulheiro",
-    "habilidadesDe": "patrulheiro",
     "passiva": {
       "nome": "Rastreador",
-      "texto": "+1 em Fugir; ao derrotar um monstro Animal ou Voador, compre 1 Tesouro extra."
+      "texto": "+1 em Fugir; ao derrotar um monstro Animal ou Voador, compre 1 Tesouro extra.",
+      "efeitos": [
+        {
+          "tipo": "fugir",
+          "valor": 1
+        },
+        {
+          "tipo": "tesouroExtraContra",
+          "tags": [
+            "animal",
+            "voador"
+          ],
+          "quantidade": 1
+        }
+      ]
     },
-    "ativa": {
-      "nome": "Armadilha",
-      "texto": "Descarte 2 cartas: anule um Monstro Errante que entrou em qualquer combate. 1x por rodada."
-    }
+    "ativas": [
+      {
+        "id": "armadilha",
+        "nome": "Armadilha",
+        "texto": "Descarte 2 cartas: anule um Monstro Errante que entrou em qualquer combate. 1x por rodada.",
+        "acao": "anularErrante",
+        "limite": "rodada",
+        "custo": {
+          "descartar": 2
+        }
+      }
+    ]
   },
   {
     "id": "ilusionista",
     "nome": "Ilusionista",
-    "habilidadesDe": "ilusionista",
     "passiva": {
       "nome": "Imagem Espelhada",
-      "texto": "Quando outro jogador usar uma ativa ou maldição contra você, role 1d6: com 6 ela é aplicada nele (5+ a partir do nível 11). Maldições do Bruxo não podem ser refletidas."
+      "texto": "Quando outro jogador usar uma ativa ou maldição contra você, role 1d6: com 6 ela é aplicada nele (5+ a partir do nível 11). Maldições do Bruxo não podem ser refletidas.",
+      "efeitos": [
+        {
+          "tipo": "refleteNoDado",
+          "dado": 6,
+          "dadoPorNivel": {
+            "11": 5
+          }
+        }
+      ]
     },
-    "ativa": {
-      "nome": "Duplicata",
-      "texto": "Descarte 2 cartas e coloque em campo um monstro da mão: ele luta do seu lado e soma metade do nível dele (arredondado para cima) ao seu combate; outros jogadores não podem se juntar a você. 1x por combate."
-    }
+    "ativas": [
+      {
+        "id": "duplicata",
+        "nome": "Duplicata",
+        "texto": "Descarte 2 cartas e coloque em campo um monstro da mão: ele luta do seu lado e soma metade do nível dele (arredondado para cima) ao seu combate; outros jogadores não podem se juntar a você. 1x por combate.",
+        "acao": "duplicata",
+        "limite": "combate",
+        "custo": {
+          "descartar": 2
+        }
+      }
+    ]
   },
   {
     "id": "berserker",
     "nome": "Berserker",
-    "habilidadesDe": "berserker",
     "passiva": {
       "nome": "Fúria Crescente",
-      "texto": "+1 cumulativo (+2 a partir do nível 16) por combate vencido em sequência; zera ao perder ou morrer. Você não pode fugir de nenhum combate."
+      "texto": "+1 cumulativo (+2 a partir do nível 16) por combate vencido em sequência; zera ao perder ou morrer. Você não pode fugir de nenhum combate.",
+      "efeitos": [
+        {
+          "tipo": "furia",
+          "valor": 1,
+          "valorPorNivel": {
+            "16": 2
+          }
+        },
+        {
+          "tipo": "naoPodeFugir"
+        }
+      ]
     },
-    "ativa": {
-      "nome": "Fúria Sangrenta",
-      "texto": "Descarte 4 cartas: dobre o bônus da Fúria Crescente. 1x por combate."
-    }
+    "ativas": [
+      {
+        "id": "furiaSangrenta",
+        "nome": "Fúria Sangrenta",
+        "texto": "Descarte 4 cartas: dobre o bônus da Fúria Crescente. 1x por combate.",
+        "acao": "dobrarFuria",
+        "limite": "combate",
+        "custo": {
+          "descartar": 4
+        }
+      }
+    ]
   },
   {
     "id": "artifice",
     "nome": "Artífice",
-    "habilidadesDe": "artifice",
     "passiva": {
       "nome": "Bancada Portátil",
-      "texto": "Escolha 1 slot entre capacete, peitoral, calças, botas ou colar: você pode equipar um segundo item nele, que dá metade do bônus. No nível 11, escolha outro slot."
+      "texto": "Escolha 1 slot entre capacete, peitoral, calças, botas ou colar: você pode equipar um segundo item nele, que dá metade do bônus. No nível 11, escolha outro slot.",
+      "efeitos": [
+        {
+          "tipo": "slotExtraMetade",
+          "slots": [
+            "capacete",
+            "peitoral",
+            "calcas",
+            "botas",
+            "colar"
+          ],
+          "quantidade": 1,
+          "quantidadePorNivel": {
+            "11": 2
+          }
+        }
+      ]
     },
-    "ativa": {
-      "nome": "Infusão",
-      "texto": "Descarte 3 cartas: dobre o bônus de 1 item equipado (seu ou de um aliado no combate) até o fim do combate. 1x por combate."
-    }
+    "ativas": [
+      {
+        "id": "infusao",
+        "nome": "Infusão",
+        "texto": "Descarte 3 cartas: dobre o bônus de 1 item equipado (seu ou de um aliado no combate) até o fim do combate. 1x por combate.",
+        "acao": "dobrarItem",
+        "limite": "combate",
+        "custo": {
+          "descartar": 3
+        }
+      }
+    ]
   },
   {
     "id": "alquimista",
     "nome": "Alquimista",
-    "habilidadesDe": "alquimista",
     "passiva": {
       "nome": "Destilação",
-      "texto": "Poções que você usa (em você ou em outros) têm efeito dobrado."
+      "texto": "Poções que você usa (em você ou em outros) têm efeito dobrado.",
+      "efeitos": [
+        {
+          "tipo": "pocoesDobradas"
+        }
+      ]
     },
-    "ativa": {
-      "nome": "Transmutar",
-      "texto": "Descarte 2 cartas: pegue a primeira Poção do baralho de Tesouros e embaralhe-o depois. 1x por turno seu."
-    }
+    "ativas": [
+      {
+        "id": "transmutar",
+        "nome": "Transmutar",
+        "texto": "Descarte 2 cartas: pegue a primeira Poção do baralho de Tesouros e embaralhe-o depois. 1x por turno seu.",
+        "acao": "buscarPocao",
+        "limite": "turnoProprio",
+        "custo": {
+          "descartar": 2
+        }
+      }
+    ]
   }
 ]

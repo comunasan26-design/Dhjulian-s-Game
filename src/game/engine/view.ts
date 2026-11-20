@@ -1,6 +1,6 @@
 // Visão do estado filtrada para um jogador (nunca vaza mãos alheias nem a ordem dos baralhos).
 import { type AbilityInfo, abilityInfos } from "./abilities";
-import { badStuffVictims, curseName } from "./core";
+import { badStuffVictims, curseName, freeTreasures } from "./core";
 import type { ActiveCurse, CardInst, CombatState, GameState, LogEntry, Prompt } from "./state";
 import {
   type CalcLine,
@@ -12,7 +12,8 @@ import {
   playerSide,
   runeSockets,
 } from "./stats";
-import { classesOf, player, raceOf } from "./util";
+import { fxOf } from "../catalog";
+import { classesOf, identityCards, maxClasses, player, raceOf } from "./util";
 
 export interface PlayerView {
   id: string;
@@ -34,6 +35,9 @@ export interface PlayerView {
   hibernating: boolean;
   ready: boolean;
   bot: boolean;
+  /** Tipos de efeito passivo que o jogador tem (vindos da raça/classe no JSON). */
+  passives: string[];
+  maxClasses: number;
   power: number;
   handLimit: number;
   ambushCount: number;
@@ -63,7 +67,16 @@ export interface GameView {
   turn: GameState["turn"];
   decks: { door: number; treasure: number; doorDiscard: string[]; treasureDiscard: string[] };
   cards: Record<string, Pick<CardInst, "defId" | "reforged" | "runes" | "charges" | "tamed" | "artificeSecond">>;
-  combat: (CombatState & { calc: CombatCalc | null; flee: CombatState["flee"]; victims: string[]; fleePreview: FleePreview[] }) | null;
+  combat:
+    | (CombatState & {
+        calc: CombatCalc | null;
+        flee: CombatState["flee"];
+        victims: string[];
+        fleePreview: FleePreview[];
+        /** Tesouros do lutador ainda não prometidos (máximo de uma ameaça). */
+        freeTreasures: number;
+      })
+    | null;
   reward: { cards: string[] | null; count: number; fighterId: string; helperId: string | null; faceUp: boolean } | null;
   prompts: (Omit<Prompt, "data"> & { data: Record<string, unknown> | null })[];
   notices: { id: string; text: string; cards: string[]; kind?: string }[];
@@ -117,6 +130,8 @@ export function viewFor(state: GameState, me: string, now: number, online: Set<s
       hibernating: p.hibernating,
       ready: p.ready,
       bot: !!p.bot,
+      passives: [...new Set(identityCards(state, p).flatMap((id) => fxOf(state.cards[id].defId).map((f) => f.tipo)))],
+      maxClasses: maxClasses(state, p),
       power: playerPower(state, p),
       handLimit: handLimit(state, p),
       ambushCount: p.ambush.length,
@@ -149,6 +164,7 @@ export function viewFor(state: GameState, me: string, now: number, online: Set<s
       calc: computeCombat(state),
       victims: badStuffVictims(state),
       fleePreview,
+      freeTreasures: freeTreasures(state, c),
     };
   }
 

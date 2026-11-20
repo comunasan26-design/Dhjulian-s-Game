@@ -1,5 +1,5 @@
 // Valores derivados: limites, slots, força de combate e Fugir.
-import { def, fxOf, type ItemCard, type MonsterCard, type Slot, type Tag } from "../catalog";
+import { def, fxOf, RULES, type ItemCard, type MonsterCard, type Slot, type Tag } from "../catalog";
 import {
   cardFx,
   combatFx,
@@ -21,15 +21,19 @@ import {
 import type { CombatMonster, CombatState, GameState, PlayerState } from "./state";
 import {
   classesOf,
+  raceOf as raceOfId,
   defOf,
   equippedRuneCount,
   hasClass,
-  hasRace,
+  hasPassive,
+  passiveFx,
+  passiveFxSrc,
+  passiveSum,
+  scaled,
   inst,
   itemDef,
   lostLevelThisRound,
   player,
-  raceOf,
   tryPlayer,
 } from "./util";
 
@@ -39,6 +43,23 @@ export interface CalcLine {
 }
 
 const ARMOR_SLOTS: Slot[] = ["head", "chest", "legs", "feet"];
+
+/** Nome do slot no JSON (português) ↔ slot interno. */
+export const SLOT_PT: Record<Slot, string> = {
+  head: "capacete",
+  chest: "peitoral",
+  legs: "calcas",
+  feet: "botas",
+  hand: "maos",
+  ring: "anel",
+  neck: "colar",
+  mount: "montaria",
+};
+const PT_SLOT: Record<string, Slot> = { ...Object.fromEntries(Object.entries(SLOT_PT).map(([k, v]) => [v, k as Slot])), mao: "hand" };
+export function slotFromPt(name: unknown): Slot | null {
+  return PT_SLOT[String(name)] ?? null;
+}
+const NULL_TARGET: Partial<Record<Slot, string>> = { ring: "aneis", mount: "montarias", chest: "peitorais" };
 
 export function tier11(p: PlayerState): boolean {
   return p.level >= 11;
@@ -53,9 +74,7 @@ export function hasCurse(p: PlayerState, defId: string): boolean {
 // ----------------------------------------------------------------------------
 
 export function handLimit(state: GameState, p: PlayerState): number {
-  let n = 5;
-  if (hasRace(state, p, "anao")) n = p.level >= 11 ? 7 : 6;
-  if (hasRace(state, p, "humano")) n += 1;
+  let n = RULES.limiteMao + passiveSum(state, p, "limiteMao");
   for (const id of [...p.carried, ...p.equipped]) n += num(cardFx(state, id, "limiteMao"), "quantidade");
   return n;
 }
@@ -68,36 +87,31 @@ export function isLegendaryItem(state: GameState, cardId: string): boolean {
 }
 
 export function bigLimit(state: GameState, p: PlayerState): number {
-  if (hasRace(state, p, "anao") || hasRace(state, p, "fada")) return 0;
-  let n = hasRace(state, p, "gigante") ? 2 : 1;
+  if (hasPassive(state, p, "semItensGrandes")) return 0;
+  let n = RULES.limiteItensGrandes + passiveSum(state, p, "grandesExtras", "quantidade");
   for (const { fx } of equippedFxAll(state, p, "grandeExtra")) if (matchesWho(state, p, fx)) n += 1;
   return n;
 }
 
 export function legendaryLimit(state: GameState, p: PlayerState): number {
-  return hasCurseFx(p, "semLendarios") ? 0 : 1;
+  return hasCurseFx(p, "semLendarios") ? 0 : RULES.limiteItensLendarios;
 }
 
 export function slotBaseCapacity(state: GameState, p: PlayerState, slot: Slot): number {
-  switch (slot) {
-    case "chest":
-      return hasRace(state, p, "torkle") ? 0 : 1;
-    case "feet":
-      return hasRace(state, p, "centauro") ? 2 : 1;
-    case "mount":
-      return hasRace(state, p, "centauro") ? 0 : 1;
-    case "ring":
-      return 10;
-    case "hand":
-      return 2;
-    default:
-      return 1;
-  }
+  const pt = SLOT_PT[slot];
+  if (passiveFx(state, p, "semSlot").some((fx) => slotFromPt(fx.slot) === slot)) return 0;
+  let n = RULES.slots[pt] ?? 1;
+  for (const fx of passiveFx(state, p, "slotExtra")) if (slotFromPt(fx.slot) === slot) n += scaled(fx, "quantidade", p.level, 1);
+  return n;
+}
+
+/** Slots onde o jogador pode ter um segundo item com metade do bônus (ex.: Artífice). */
+export function artificeAllowed(state: GameState, p: PlayerState): Slot[] {
+  return passiveFx(state, p, "slotExtraMetade").flatMap((fx) => strs(fx, "slots").map((x) => slotFromPt(x)).filter((x): x is Slot => !!x));
 }
 
 export function artificeSlotLimit(state: GameState, p: PlayerState): number {
-  if (!hasClass(state, p, "artifice")) return 0;
-  return p.level >= 11 ? 2 : 1;
+  return passiveFx(state, p, "slotExtraMetade").reduce((a, fx) => a + scaled(fx, "quantidade", p.level, 1), 0);
 }
 
 export function handsUsed(state: GameState, p: PlayerState, except?: string): number {
@@ -111,8 +125,12 @@ export function handsUsed(state: GameState, p: PlayerState, except?: string): nu
   return n;
 }
 
+export function handCapacity(state: GameState, p: PlayerState): number {
+  return slotBaseCapacity(state, p, "hand");
+}
+
 export function meetsRestrictions(state: GameState, p: PlayerState, d: ItemCard): string | null {
-  const race = raceOf(state, p);
+  const race = raceOfId(state, p);
   const classes = classesOf(state, p);
   if (d.requires && ((d.requires.races?.length ?? 0) > 0 || (d.requires.classes?.length ?? 0) > 0)) {
     const ok =
@@ -147,7 +165,7 @@ export function equipCheck(state: GameState, p: PlayerState, cardId: string): { 
     if (legs + 1 > legendaryLimit(state, p)) return { error: "Só 1 item Lendário equipado por vez.", asSecond: false };
   }
   if (slot === "hand") {
-    if (handsUsed(state, p) + (d?.hands ?? 1) > 2) return { error: "Suas mãos estão ocupadas.", asSecond: false };
+    if (handsUsed(state, p) + (d?.hands ?? 1) > handCapacity(state, p)) return { error: "Suas mãos estão ocupadas.", asSecond: false };
     return { error: null, asSecond: false };
   }
   const inSlot = p.equipped.filter((id) => slotOf(state, id) === slot);
@@ -155,7 +173,7 @@ export function equipCheck(state: GameState, p: PlayerState, cardId: string): { 
   if (base === 0) return { error: "Sua raça não pode usar esse tipo de item.", asSecond: false };
   if (inSlot.length < base) return { error: null, asSecond: false };
   // Slot extra do Artífice
-  const artSlots: Slot[] = ["head", "chest", "legs", "feet", "neck"];
+  const artSlots = artificeAllowed(state, p);
   if (artSlots.includes(slot) && artificeSlotLimit(state, p) > 0) {
     const hasSecond = inSlot.some((id) => state.cards[id]?.artificeSecond);
     const chosen = p.artificeSlots.includes(slot) || p.artificeSlots.length < artificeSlotLimit(state, p);
@@ -176,9 +194,7 @@ export function slotOf(state: GameState, cardId: string): Slot | null {
 export function runeSockets(state: GameState, p: PlayerState, cardId: string): number {
   const d = itemDef(state, cardId);
   if (!d) return 0;
-  let n = d.rarity === "raro" || d.rarity === "epico" || d.rarity === "lendario" ? 2 : 1;
-  if (hasRace(state, p, "elemental")) n += 1;
-  return n;
+  return (RULES.encaixesDeRuna[d.rarity] ?? 1) + passiveSum(state, p, "encaixesExtras", "quantidade");
 }
 
 // ----------------------------------------------------------------------------
@@ -290,7 +306,7 @@ function itemValue(
   if (!itemUsable(state, p, item, slot)) return 0;
 
   let v = base;
-  if (c.reforged) v += 1;
+  v += Number(c.reforged) || 0;
   for (const fx of runeFx(state, cardId, "bonusItem")) v += num(fx, "valor");
   // Bônus extras por raça/classe e contra certos monstros (efeitos do item)
   for (const fx of fxOf(c.defId)) {
@@ -331,10 +347,10 @@ function collectItems(
     if (v === null) continue;
     out.push({ cardId: id, ownerId: p.id, label: defOf(state, id).name, value: v });
   }
-  if (hasRace(state, p, "torkle")) {
-    let v = p.level >= 11 ? 7 : 5;
+  for (const { fx, source } of passiveFxSrc(state, p, "casco")) {
+    let v = scaled(fx, "valor", p.level);
     if (combat && nullified(state, combat, "peitorais")) v = 0;
-    out.push({ cardId: "", ownerId: p.id, label: "Casco (Torkle)", value: v });
+    out.push({ cardId: "", ownerId: p.id, label: source, value: v });
   }
   return out;
 }
@@ -346,14 +362,14 @@ function hasHandItems(state: GameState, p: PlayerState): boolean {
 export function emptyArmorSlots(state: GameState, p: PlayerState): number {
   let n = 0;
   for (const s of ARMOR_SLOTS) {
-    if (s === "chest" && hasRace(state, p, "torkle")) continue; // o casco conta como peitoral
+    if (s === "chest" && hasPassive(state, p, "casco")) continue; // o casco conta como peitoral
     if (!p.equipped.some((id) => slotOf(state, id) === s)) n++;
   }
   return n;
 }
 
 export function hasArmor(state: GameState, p: PlayerState): boolean {
-  return hasRace(state, p, "torkle") || p.equipped.some((id) => ARMOR_SLOTS.includes(slotOf(state, id) as Slot));
+  return hasPassive(state, p, "casco") || p.equipped.some((id) => ARMOR_SLOTS.includes(slotOf(state, id) as Slot));
 }
 
 /** Força "pessoal" de um jogador (nível + itens + passivas + maldições). */
@@ -377,45 +393,46 @@ function personLines(
       lines.push({ label: it.label, value: it.value });
     }
   }
-  // Mago: +1 por anel
-  if (hasClass(state, p, "mago")) {
-    const rings = p.equipped.filter((id) => slotOf(state, id) === "ring").length;
-    if (rings > 0 && !(combat && nullified(state, combat, "aneis"))) lines.push({ label: "Foco Arcano (anéis)", value: rings });
+  // Passivas de raça/classe
+  for (const { fx, source } of passiveFxSrc(state, p, "bonusPorItem")) {
+    const slot = slotFromPt(fx.slot);
+    if (!slot) continue;
+    const target = NULL_TARGET[slot];
+    if (combat && target && nullified(state, combat, target)) continue;
+    const count = p.equipped.filter((id) => slotOf(state, id) === slot).length;
+    if (count > 0) lines.push({ label: source, value: count * scaled(fx, "valor", p.level) });
   }
-  // Druida: +2 com montaria
-  if (hasClass(state, p, "druida")) {
-    const mounts = p.equipped.filter((id) => slotOf(state, id) === "mount").length;
-    const nulled = combat && nullified(state, combat, "montarias");
-    if (mounts > 0 && !nulled) lines.push({ label: "Laço Animal (montaria)", value: 2 * mounts });
-  }
-  // Elemental: +1 por runa equipada (máx. +4)
-  if (hasRace(state, p, "elemental")) {
+  for (const { fx, source } of passiveFxSrc(state, p, "bonusPorRuna")) {
     let runes = 0;
     for (const id of p.equipped) runes += (state.cards[id]?.runes ?? []).length;
-    if (runes > 0) lines.push({ label: "Afinidade Rúnica", value: Math.min(4, runes) });
+    const max = fx.maximo === undefined ? Infinity : num(fx, "maximo");
+    if (runes > 0) lines.push({ label: source, value: Math.min(max, runes * scaled(fx, "valor", p.level)) });
   }
-  // Raças
-  if (hasRace(state, p, "draconato")) lines.push({ label: "Escamas Dracônicas", value: tier11(p) ? 2 : 1 });
-  if (hasRace(state, p, "gigante")) lines.push({ label: "Colosso", value: tier11(p) ? 3 : 2 });
-  if (hasRace(state, p, "fada")) lines.push({ label: "Asas Leves", value: -1 });
-  if (combat && hasRace(state, p, "tritao") && tags.has("aquatico")) lines.push({ label: "Filho das Marés (Aquático)", value: 3 });
-  // Classes
-  if (combat && hasClass(state, p, "clerigo") && (tags.has("morto-vivo") || tags.has("demonio")))
-    lines.push({ label: "Fé (Morto-vivo/Demônio)", value: 3 });
-  if (hasClass(state, p, "barbaro")) {
-    const per = p.level >= 11 ? 3 : p.level >= 5 ? 2 : 1;
+  for (const { fx, source } of passiveFxSrc(state, p, "forca")) {
+    if (flag(fx, "seMaosLivres") && hasHandItems(state, p)) continue;
+    lines.push({ label: source, value: scaled(fx, "valor", p.level) });
+  }
+  if (combat) {
+    for (const { fx, source } of passiveFxSrc(state, p, "bonusContra")) {
+      if (strs(fx, "tags").some((t) => tags.has(t as Tag))) lines.push({ label: source, value: scaled(fx, "valor", p.level) });
+    }
+  }
+  for (const { fx, source } of passiveFxSrc(state, p, "bonusPorSlotVazio")) {
     const e = emptyArmorSlots(state, p);
-    if (e > 0) lines.push({ label: `Pele Nua (${e} slot(s) vazio(s))`, value: e * per });
+    if (e > 0) lines.push({ label: `${source} (${e} slot(s) vazio(s))`, value: e * scaled(fx, "valor", p.level) });
   }
-  if (hasClass(state, p, "monge") && !hasHandItems(state, p)) lines.push({ label: "Corpo Treinado", value: tier11(p) ? 4 : 2 });
-  if (hasClass(state, p, "berserker") && p.streak > 0) {
-    let v = p.streak * (p.level >= 16 ? 2 : 1);
-    if (combat?.berserkDouble.includes(p.id)) v *= 2;
-    lines.push({ label: `Fúria Crescente (${p.streak} vitória(s))`, value: v });
+  if (p.streak > 0) {
+    for (const { fx, source } of passiveFxSrc(state, p, "furia")) {
+      let v = p.streak * scaled(fx, "valor", p.level);
+      if (combat?.berserkDouble.includes(p.id)) v *= 2;
+      lines.push({ label: `${source} (${p.streak} vitória(s))`, value: v });
+    }
   }
   // Maldições
   for (const cu of p.curses) {
     for (const fx of fxOf(cu.defId)) if (fx.tipo === "forca") lines.push({ label: def(cu.defId).name, value: num(fx, "valor") });
+    if (cu.defId === "special.forca") lines.push({ label: cu.label ?? "Maldição", value: cu.value ?? 0 });
+    // compatibilidade com partidas salvas antes das cartas em JSON
     if (cu.defId === "special.sombria") lines.push({ label: "Maldição Sombria", value: -(cu.value ?? 3) });
     if (cu.defId === "special.mumia") lines.push({ label: "Podridão de Múmia", value: -2 });
   }
@@ -423,7 +440,7 @@ function personLines(
     // Especiais de monstros que afetam jogadores
     for (const { cm, fx } of combatFx(state, combat, "jogadoresGanham")) {
       if (flag(fx, "soAjudante") && !opts.isHelper) continue;
-      if (strs(fx, "excetoClasses").some((c) => hasClass(state, p, c as never))) continue;
+      if (strs(fx, "excetoClasses").some((c) => hasClass(state, p, c))) continue;
       const listed = strs(fx, "racas").length > 0 || strs(fx, "classes").length > 0 || flag(fx, "armaDeImpacto");
       const impact = flag(fx, "armaDeImpacto") && p.equipped.some((id) => itemDef(state, id)?.impact);
       if (listed && !matchesListed(state, p, fx) && !impact) continue;
@@ -435,7 +452,7 @@ function personLines(
         lines.push({ label: `${monsterDef(state, m).name} (ao revelar)`, value: m.revealPlayer });
       }
     }
-    if (p.id === combat.fighterId && combat.desafio) lines.push({ label: "Desafio", value: -5 });
+    if (p.id === combat.fighterId && combat.desafio && combat.desafioPenalty) lines.push({ label: "Desafio", value: combat.desafioPenalty });
     for (const mod of combat.playerMods) if (mod.target === p.id) lines.push({ label: mod.label, value: mod.value });
   }
   return lines;
@@ -512,10 +529,13 @@ export function computeCombat(state: GameState): CombatCalc | null {
     for (const l of lines) playerLines.push({ label: side.length > 1 ? `${p.name}: ${l.label}` : l.label, value: l.value });
   }
   // Aura de Coragem (Paladino)
-  const paladins = side.map((id) => player(state, id)).filter((p) => hasClass(state, p, "paladino"));
-  if (paladins.length > 0) {
-    const per = paladins.some((p) => tier11(p)) ? 3 : 2;
-    playerLines.push({ label: `Aura de Coragem (${side.length} jogador(es))`, value: per * side.length });
+  const auras = side.flatMap((id) => {
+    const p = player(state, id);
+    return passiveFxSrc(state, p, "aura").map(({ fx, source }) => ({ source, v: scaled(fx, "valor", p.level) }));
+  });
+  if (auras.length > 0) {
+    const best = auras.reduce((a, b) => (b.v > a.v ? b : a));
+    playerLines.push({ label: `${best.source} (${side.length} jogador(es))`, value: best.v * side.length });
   }
   for (const mod of combat.playerMods) if (!mod.target) playerLines.push({ label: mod.label, value: mod.value });
   for (const a of combat.allies) {
@@ -563,7 +583,7 @@ export function computeCombat(state: GameState): CombatCalc | null {
     (a, id) => a + sum(personLines(state, player(state, id), combat, { isHelper: false })),
     0,
   );
-  const warrior = side.some((id) => hasClass(state, player(state, id), "guerreiro"));
+  const warrior = side.some((id) => hasPassive(state, player(state, id), "venceEmpates"));
   const winning = monsters.length > 0 && (playerTotal > monsterTotal || (warrior && playerTotal === monsterTotal));
   return { playerTotal, monsterTotal, playerLines, monsterLines, monsters, winning, fire, side, monsterSide: mSide };
 }
@@ -580,12 +600,10 @@ export interface FleeInfo {
 }
 
 export function notPursued(state: GameState, p: PlayerState, d: MonsterCard, specialOn: boolean): string | null {
-  if (d.tier === 3 && p.level <= 4) return "não persegue jogadores de nível 4 ou menos";
-  if (d.tier === 4 && p.level <= 8) return "Lendários não perseguem jogadores de nível 8 ou menos";
   if (d.goblinoid && equippedFx(state, p, "naoPerseguidoPorGoblinoides")) return "item contra goblinoides";
-  if (!specialOn) return null;
   for (const fx of fxOf(d.id)) {
     if (fx.tipo !== "naoPersegue") continue;
+    if (!specialOn && !flag(fx, "sempre")) continue;
     if (fx.nivelMinimo !== undefined && p.level >= num(fx, "nivelMinimo")) return `não persegue jogadores de nível ${num(fx, "nivelMinimo")} ou mais`;
     if (fx.nivelMaximo !== undefined && p.level <= num(fx, "nivelMaximo")) return `não persegue jogadores de nível ${num(fx, "nivelMaximo")} ou menos`;
     if (flag(fx, "semArmadura") && !hasArmor(state, p)) return "não persegue quem não tem armadura";
@@ -609,21 +627,23 @@ export function fleeInfo(state: GameState, p: PlayerState, cm: CombatMonster): F
   if (combat.autoFlee.includes(`${p.id}|all`)) return res("Pergaminho de Teletransporte", null);
   const np = notPursued(state, p, d, specialOn);
   if (np) return res(`${d.name} ${np}`, null);
-  if (hasClass(state, p, "berserker")) return res(null, "Berserker não pode fugir");
+  const noFlee = passiveFxSrc(state, p, "naoPodeFugir")[0];
+  if (noFlee) return res(null, `${noFlee.source}: não pode fugir`);
   if (combat.cantFlee.includes(p.id)) return res(null, "Pés de Chumbo");
   const botas = !!equippedFx(state, p, "fugirDeTudo");
   if (d.cantFlee && specialOn && !botas) return res(null, `${d.name}: não dá para fugir`);
   if (combat.autoFlee.includes(`${p.id}|nonleg`) && !d.legendary) return res("Poção de Invisibilidade", null);
-  if (hasRace(state, p, "tritao") && d.tags.includes("aquatico")) return res("Filho das Marés (Aquático)", null);
+  for (const { fx, source } of passiveFxSrc(state, p, "fugaAutomaticaContra"))
+    if (strs(fx, "tags").some((t) => d.tags.includes(t as Tag))) return res(source, null);
 
   // Bônus
-  const race = raceOf(state, p);
-  const raceFlee: Partial<Record<string, number>> = { elfo: 1, gnomo: 1, gigante: -1, centauro: 1, torkle: -2, tritao: 2, fada: 2 };
-  if (race && raceFlee[race]) lines.push({ label: def(`race.${race}`).name, value: raceFlee[race]! });
-  if (hasClass(state, p, "ladino")) lines.push({ label: "Mãos Leves", value: 1 });
-  if (hasClass(state, p, "patrulheiro")) lines.push({ label: "Rastreador", value: 1 });
-  if (hasClass(state, p, "druida") && d.tags.includes("animal")) lines.push({ label: "Laço Animal (Animal)", value: 2 });
-  if (hasClass(state, p, "monge") && !hasHandItems(state, p)) lines.push({ label: "Corpo Treinado", value: tier11(p) ? 2 : 1 });
+  for (const { fx, source } of passiveFxSrc(state, p, "fugir")) {
+    if (flag(fx, "seMaosLivres") && hasHandItems(state, p)) continue;
+    const v = scaled(fx, "valor", p.level);
+    if (v) lines.push({ label: source, value: v });
+  }
+  for (const { fx, source } of passiveFxSrc(state, p, "fugirContra"))
+    if (strs(fx, "tags").some((t) => d.tags.includes(t as Tag))) lines.push({ label: source, value: scaled(fx, "valor", p.level) });
   let ringFlee = 0;
   for (const id of p.equipped) {
     const c = inst(state, id);
@@ -641,7 +661,7 @@ export function fleeInfo(state: GameState, p: PlayerState, cm: CombatMonster): F
     f += wind;
     if (f !== 0) lines.push({ label: defOf(state, id).name, value: f });
   }
-  if (ringFlee !== 0) lines.push({ label: "Anéis (máx. +2)", value: Math.min(2, ringFlee) });
+  if (ringFlee !== 0) lines.push({ label: `Anéis (máx. +${RULES.limiteFugirAneis})`, value: Math.min(RULES.limiteFugirAneis, ringFlee) });
   if (specialOn && d.fleeMod) {
     const ignored = fxOf(d.id).some((fx) => fx.tipo === "fugirIgnoradoPor" && matchesListed(state, p, fx));
     if (!ignored) lines.push({ label: d.name, value: d.fleeMod });
