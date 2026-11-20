@@ -2,6 +2,7 @@
   {
     "id": "faminto",
     "nome": "Faminto",
+    "imagem": "garras",
     "valor": 3,
     "copias": 2,
     "texto": "Não come há dias."
@@ -9,6 +10,7 @@
   {
     "id": "enfurecido",
     "nome": "Enfurecido",
+    "imagem": "garras",
     "valor": 5,
     "copias": 2,
     "texto": "Alguém pisou no rabo dele."
@@ -16,6 +18,7 @@
   {
     "id": "anciao",
     "nome": "Ancião",
+    "imagem": "garras",
     "valor": 10,
     "copias": 1,
     "texto": "Viu reinos nascerem e caírem."
@@ -23,6 +26,7 @@
   {
     "id": "ferido",
     "nome": "Ferido",
+    "imagem": "garras",
     "valor": -3,
     "copias": 2,
     "texto": "Já saiu de outra briga."
@@ -30,6 +34,7 @@
   {
     "id": "filhote",
     "nome": "Filhote",
+    "imagem": "garras",
     "valor": -5,
     "copias": 2,
     "texto": "Ainda está aprendendo a rugir."

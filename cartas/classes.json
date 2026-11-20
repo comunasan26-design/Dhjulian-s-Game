@@ -2,6 +2,7 @@
   {
     "id": "guerreiro",
     "nome": "Guerreiro",
+    "imagem": "escudo-e-espada",
     "passiva": {
       "nome": "Mestre de Armas",
       "texto": "Vence empates em combate.",
@@ -29,6 +30,7 @@
   {
     "id": "mago",
     "nome": "Mago",
+    "imagem": "chapeu-e-cajado",
     "passiva": {
       "nome": "Foco Arcano",
       "texto": "Cada anel equipado dá +1 adicional.",
@@ -58,6 +60,7 @@
   {
     "id": "clerigo",
     "nome": "Clérigo",
+    "imagem": "simbolo-sagrado",
     "passiva": {
       "nome": "Fé",
       "texto": "+3 contra Mortos-vivos e Demônios.",
@@ -88,6 +91,7 @@
   {
     "id": "ladino",
     "nome": "Ladino",
+    "imagem": "mascara-e-adaga",
     "passiva": {
       "nome": "Mãos Leves",
       "texto": "+1 em Fugir; seus itens equipados não podem ser roubados.",
@@ -118,6 +122,7 @@
   {
     "id": "druida",
     "nome": "Druida",
+    "imagem": "cajado-de-folhas",
     "passiva": {
       "nome": "Laço Animal",
       "texto": "Montarias dão +2 adicional; +2 em Fugir contra monstros Animal.",
@@ -153,6 +158,7 @@
   {
     "id": "paladino",
     "nome": "Paladino",
+    "imagem": "espada-e-escudo-sagrado",
     "passiva": {
       "nome": "Aura de Coragem",
       "texto": "Você e todo jogador do seu lado no mesmo combate ganham +2 (+3 a partir do nível 11).",
@@ -180,6 +186,7 @@
   {
     "id": "barbaro",
     "nome": "Bárbaro",
+    "imagem": "machado",
     "passiva": {
       "nome": "Pele Nua",
       "texto": "+1 por slot vazio entre capacete, peitoral, calças e botas (+2 por slot a partir do nível 5 e +3 a partir do 11).",
@@ -210,6 +217,7 @@
   {
     "id": "bardo",
     "nome": "Bardo",
+    "imagem": "alaude",
     "passiva": {
       "nome": "Sorte do Bardo",
       "texto": "Ao vencer um combate, compre 1 Tesouro extra e descarte 1 dos tesouros comprados.",
@@ -237,6 +245,7 @@
   {
     "id": "feiticeiro",
     "nome": "Feiticeiro",
+    "imagem": "orbe",
     "passiva": {
       "nome": "Magia Selvagem",
       "texto": "Sempre que usar uma habilidade ativa, role 1d6: com 6 ela não conta para o limite de uso.",
@@ -264,6 +273,7 @@
   {
     "id": "bruxo",
     "nome": "Bruxo",
+    "imagem": "grimorio",
     "passiva": {
       "nome": "Mestre das Maldições",
       "texto": "Suas maldições não podem ser anuladas nem refletidas por passivas e as que têm duração duram 1 rodada a mais.",
@@ -295,6 +305,7 @@
   {
     "id": "monge",
     "nome": "Monge",
+    "imagem": "punho",
     "passiva": {
       "nome": "Corpo Treinado",
       "texto": "Sem itens nas mãos: +2 em combate e +1 em Fugir (+4 e +2 a partir do nível 11).",
@@ -334,6 +345,7 @@
   {
     "id": "patrulheiro",
     "nome": "Patrulheiro",
+    "imagem": "arco",
     "passiva": {
       "nome": "Rastreador",
       "texto": "+1 em Fugir; ao derrotar um monstro Animal ou Voador, compre 1 Tesouro extra.",
@@ -368,6 +380,7 @@
   {
     "id": "ilusionista",
     "nome": "Ilusionista",
+    "imagem": "mascara",
     "passiva": {
       "nome": "Imagem Espelhada",
       "texto": "Quando outro jogador usar uma ativa ou maldição contra você, role 1d6: com 6 ela é aplicada nele (5+ a partir do nível 11). Maldições do Bruxo não podem ser refletidas.",
@@ -397,6 +410,7 @@
   {
     "id": "berserker",
     "nome": "Berserker",
+    "imagem": "machados-duplos",
     "passiva": {
       "nome": "Fúria Crescente",
       "texto": "+1 cumulativo (+2 a partir do nível 16) por combate vencido em sequência; zera ao perder ou morrer. Você não pode fugir de nenhum combate.",
@@ -429,6 +443,7 @@
   {
     "id": "artifice",
     "nome": "Artífice",
+    "imagem": "engrenagem-e-martelo",
     "passiva": {
       "nome": "Bancada Portátil",
       "texto": "Escolha 1 slot entre capacete, peitoral, calças, botas ou colar: você pode equipar um segundo item nele, que dá metade do bônus. No nível 11, escolha outro slot.",
@@ -465,6 +480,7 @@
   {
     "id": "alquimista",
     "nome": "Alquimista",
+    "imagem": "frascos",
     "passiva": {
       "nome": "Destilação",
       "texto": "Poções que você usa (em você ou em outros) têm efeito dobrado.",

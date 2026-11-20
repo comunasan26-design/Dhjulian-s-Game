@@ -11,6 +11,7 @@ import racasJson from "../../../cartas/racas.json";
 import runasJson from "../../../cartas/runas.json";
 import regrasJson from "../../../cartas/regras.json";
 import subirJson from "../../../cartas/subir-nivel.json";
+import imagensJson from "../../../cartas/imagens.json";
 import {
   ACTIONS,
   BAD_STUFF_TYPES,
@@ -25,6 +26,8 @@ import {
   RUNE_EFFECTS,
 } from "./effects";
 import type {
+  ArtConfig,
+  CardDef,
   AbilityDef,
   AbilityLimit,
   BadEffect,
@@ -255,6 +258,7 @@ function actives(p: Problems, file: string, c: Raw): AbilityDef[] {
 }
 
 export interface LoadedCatalog {
+  art: ArtConfig;
   races: RaceCard[];
   classes: ClassCard[];
   items: ItemCard[];
@@ -319,6 +323,60 @@ function parseRules(p: Problems): GameRules {
   };
 }
 
+/** Endereço de arquivo de imagem (pasta public/ ou internet). */
+export function isImageUrl(v: string): boolean {
+  return /^(https?:\/\/|\/|data:image\/)/.test(v.trim());
+}
+
+export const ART_FILES = ["racas", "classes", "itens", "pocoes", "runas", "diversos", "subir-nivel", "monstros", "maldicoes", "bonus-monstro", "monstro-errante"] as const;
+const GEMS = ["quartzoBranco", "quartzoMarrom", "topazio", "bismuto", "turmalina", "safira", "rubi", "esmeralda", "diamante", "obsidiana", "obsidianaRachada"];
+const METALS = ["cobre", "bronze", "prata", "ouro", "negro"];
+const ART_RARITIES = ["comum", "incomum", "raro", "epico", "lendario"];
+
+function parseArt(p: Problems): ArtConfig {
+  const f = "imagens.json";
+  const r = (imagensJson ?? {}) as Raw;
+  const obj = (k: string): Raw => {
+    const v = r[k];
+    if (!v || typeof v !== "object" || Array.isArray(v)) {
+      p.list.push(`cartas/${f}: falta o bloco "${k}".`);
+      return {};
+    }
+    return v as Raw;
+  };
+  const desenhos: Record<string, string> = {};
+  for (const [name, v] of Object.entries(obj("desenhos"))) {
+    if (typeof v !== "string" || !v.trim().startsWith("<")) p.list.push(`cartas/${f} → desenho "${name}": precisa ser um texto com SVG (começando com "<svg" ou "<g").`);
+    else desenhos[name] = v;
+  }
+  const padroes: Record<string, string> = {};
+  const cenarios: ArtConfig["cenarios"] = {};
+  const gemas: Record<string, string> = {};
+  const P = obj("padroes");
+  const CE = obj("cenarios");
+  const G = obj("gemas");
+  for (const file of ART_FILES) {
+    const d = P[file];
+    if (typeof d !== "string" || (!desenhos[d] && !isImageUrl(d))) p.list.push(`cartas/${f} → padroes."${file}": precisa ser o nome de um desenho existente.`);
+    else padroes[file] = d;
+    const c = CE[file] as Raw | undefined;
+    const color = (k: string) => (typeof c?.[k] === "string" ? String(c[k]) : "#cccccc");
+    if (!c || typeof c !== "object") p.list.push(`cartas/${f} → cenarios."${file}": informe "ceu", "horizonte" e "chao" (cores).`);
+    cenarios[file] = { ceu: color("ceu"), horizonte: color("horizonte"), chao: color("chao") };
+    const g = G[file];
+    if (typeof g !== "string" || !GEMS.includes(g)) p.list.push(`cartas/${f} → gemas."${file}": use uma destas: ${GEMS.join(", ")}.`);
+    else gemas[file] = g;
+  }
+  const M = obj("molduras");
+  const molduras: Record<string, string> = {};
+  for (const rar of ART_RARITIES) {
+    const m = M[rar];
+    if (typeof m !== "string" || !METALS.includes(m)) p.list.push(`cartas/${f} → molduras."${rar}": use um destes metais: ${METALS.join(", ")}.`);
+    else molduras[rar] = m;
+  }
+  return { desenhos, padroes, cenarios, gemas, molduras };
+}
+
 export function loadCatalog(): LoadedCatalog {
   const p = new Problems();
   const idsOf = (data: unknown) => (Array.isArray(data) ? (data as Raw[]).map((x) => String(x?.id ?? "")) : []);
@@ -334,7 +392,7 @@ export function loadCatalog(): LoadedCatalog {
 
   const playerCard = <K extends "race" | "class">(file: string, data: unknown, kind: K, prefix: string) =>
     arr(file, data, p).map((c) => {
-      checkKeys(p, file, c, ["id", "nome", "copias", "passiva", "ativas"]);
+      checkKeys(p, file, c, ["id", "nome", "imagem", "copias", "passiva", "ativas"]);
       uniq(file, c, `${prefix}.${c.id}`);
       const pas = passive(p, file, c);
       return {
@@ -362,7 +420,7 @@ export function loadCatalog(): LoadedCatalog {
   };
   const items: ItemCard[] = arr("itens.json", itensJson, p).map((c) => {
     const f = "itens.json";
-    checkKeys(p, f, c, ["id", "nome", "slot", "maos", "raridade", "bonus", "fugir", "grande", "preco", "copias", "somente", "proibido", "fogo", "impacto", "tags", "texto", "efeitos"]);
+    checkKeys(p, f, c, ["id", "nome", "imagem", "slot", "maos", "raridade", "bonus", "fugir", "grande", "preco", "copias", "somente", "proibido", "fogo", "impacto", "tags", "texto", "efeitos"]);
     uniq(f, c, `item.${c.id}`);
     const slotName = one(p, f, c, "slot", Object.keys(SLOTS));
     const slot = SLOTS[slotName] ?? "head";
@@ -392,7 +450,7 @@ export function loadCatalog(): LoadedCatalog {
   });
   const simpleTreasure = <K extends "potion" | "rune" | "misc">(file: string, data: unknown, kind: K, reg: Record<string, EffectSpec>, prefix: string) =>
     arr(file, data, p).map((c) => {
-      checkKeys(p, file, c, ["id", "nome", "raridade", "preco", "copias", "texto", "efeitos", ...(kind === "misc" ? ["permanente"] : [])]);
+      checkKeys(p, file, c, ["id", "nome", "imagem", "raridade", "preco", "copias", "texto", "efeitos", ...(kind === "misc" ? ["permanente"] : [])]);
       uniq(file, c, `${prefix}.${c.id}`);
       const fx = effects(p, file, c, "efeitos", reg);
       if (fx.length === 0) p.add(file, c, `precisa de pelo menos 1 efeito em "efeitos".`);
@@ -414,7 +472,7 @@ export function loadCatalog(): LoadedCatalog {
   const misc = simpleTreasure("diversos.json", diversosJson, "misc", MISC_EFFECTS, "misc") as MiscCard[];
   const levelUps: LevelUpCard[] = arr("subir-nivel.json", subirJson, p).map((c) => {
     const f = "subir-nivel.json";
-    checkKeys(p, f, c, ["id", "nome", "copias", "texto"]);
+    checkKeys(p, f, c, ["id", "nome", "imagem", "copias", "texto"]);
     uniq(f, c, `levelup.${c.id}`);
     return {
       id: `levelup.${str(p, f, c, "id")}`,
@@ -427,7 +485,7 @@ export function loadCatalog(): LoadedCatalog {
   });
   const monsters: MonsterCard[] = arr("monstros.json", monstrosJson, p).map((c) => {
     const f = "monstros.json";
-    checkKeys(p, f, c, ["id", "nome", "nivel", "lendario", "tags", "tesouros", "niveis", "copias", "fugir", "naoDaPraFugir", "acido", "veneno", "gigante", "goblinoide", "especial", "efeitos", "coisasRuinsTexto", "coisasRuins"]);
+    checkKeys(p, f, c, ["id", "nome", "imagem", "nivel", "lendario", "tags", "tesouros", "niveis", "copias", "fugir", "naoDaPraFugir", "acido", "veneno", "gigante", "goblinoide", "especial", "efeitos", "coisasRuinsTexto", "coisasRuins"]);
     uniq(f, c, `monster.${c.id}`);
     const level = num(p, f, c, "nivel");
     const badRaw = c.coisasRuins;
@@ -480,7 +538,7 @@ export function loadCatalog(): LoadedCatalog {
   });
   const curses: CurseCard[] = arr("maldicoes.json", maldicoesJson, p).map((c) => {
     const f = "maldicoes.json";
-    checkKeys(p, f, c, ["id", "nome", "tipo", "duracao", "copias", "texto", "efeitos"]);
+    checkKeys(p, f, c, ["id", "nome", "imagem", "tipo", "duracao", "copias", "texto", "efeitos"]);
     uniq(f, c, `curse.${c.id}`);
     const type = CURSE_TYPES[one(p, f, c, "tipo", Object.keys(CURSE_TYPES))] ?? "instant";
     if (type === "duration" && c.duracao === undefined) p.add(f, c, `maldições de "duracao" precisam do campo "duracao" (em rodadas).`);
@@ -500,7 +558,7 @@ export function loadCatalog(): LoadedCatalog {
   });
   const bonuses: MonsterBonusCard[] = arr("bonus-monstro.json", bonusJson, p).map((c) => {
     const f = "bonus-monstro.json";
-    checkKeys(p, f, c, ["id", "nome", "valor", "copias", "texto"]);
+    checkKeys(p, f, c, ["id", "nome", "imagem", "valor", "copias", "texto"]);
     uniq(f, c, `bonus.${c.id}`);
     const value = num(p, f, c, "valor");
     return {
@@ -515,7 +573,7 @@ export function loadCatalog(): LoadedCatalog {
   });
   const wandering: WanderingCard[] = arr("monstro-errante.json", erranteJson, p).map((c) => {
     const f = "monstro-errante.json";
-    checkKeys(p, f, c, ["id", "nome", "copias", "texto"]);
+    checkKeys(p, f, c, ["id", "nome", "imagem", "copias", "texto"]);
     uniq(f, c, `wandering.${c.id}`);
     return {
       id: `wandering.${str(p, f, c, "id")}`,
@@ -536,9 +594,44 @@ export function loadCatalog(): LoadedCatalog {
     for (const fx of m.fx ?? [])
       if (typeof fx.itemEquipado === "string" && !itemIds.has(fx.itemEquipado))
         p.list.push(`cartas/monstros.json → carta "${m.id.slice(8)}": "itemEquipado" aponta para o item "${fx.itemEquipado}", que não existe.`);
+  // Imagens: cada carta aponta para um desenho de imagens.json (ou um arquivo/endereço de imagem)
+  const art = parseArt(p);
+  const sources: [string, unknown, string, CardDef[]][] = [
+    ["racas", racasJson, "race", races],
+    ["classes", classesJson, "class", classes],
+    ["itens", itensJson, "item", items],
+    ["pocoes", pocoesJson, "potion", potions],
+    ["runas", runasJson, "rune", runes],
+    ["diversos", diversosJson, "misc", misc],
+    ["subir-nivel", subirJson, "levelup", levelUps],
+    ["monstros", monstrosJson, "monster", monsters],
+    ["maldicoes", maldicoesJson, "curse", curses],
+    ["bonus-monstro", bonusJson, "bonus", bonuses],
+    ["monstro-errante", erranteJson, "wandering", wandering],
+  ];
+  for (const [file, data, prefix, cards] of sources) {
+    const byId = new Map(cards.map((c) => [c.id, c]));
+    for (const c of (Array.isArray(data) ? data : []) as Raw[]) {
+      const card = byId.get(`${prefix}.${String(c.id)}`);
+      if (!card) continue;
+      const img = c.imagem;
+      if (img === undefined) {
+        card.image = art.padroes[file];
+        continue;
+      }
+      if (typeof img !== "string" || !img.trim()) {
+        p.add(`${file}.json`, c, `"imagem" precisa ser um texto: o nome de um desenho de imagens.json ou o endereço de uma imagem.`);
+        continue;
+      }
+      if (!isImageUrl(img) && !img.trim().startsWith("<") && !art.desenhos[img])
+        p.add(`${file}.json`, c, `"imagem" = "${img}" não existe em cartas/imagens.json (veja a lista em "desenhos").`);
+      card.image = img;
+    }
+  }
   if (races.length === 0) p.list.push("cartas/racas.json: precisa ter pelo menos uma raça.");
   if (classes.length === 0) p.list.push("cartas/classes.json: precisa ter pelo menos uma classe.");
   return {
+    art,
     races,
     classes,
     items,

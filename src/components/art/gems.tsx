@@ -3,7 +3,8 @@
  * Cada gema tem um contorno poligonal (gemOutline) que ela preenche por inteiro; o engaste de metal da carta
  * segue esse mesmo contorno. Tudo centrado em (0,0), cabendo numa caixa de lado 2R.
  */
-import type { CardDef } from "@/game/catalog";
+import { ART, type CardDef } from "@/game/catalog";
+import { KIND_FILE } from "./emblems";
 
 export type GemKind =
   | "quartzoBranco"
@@ -32,31 +33,10 @@ export const GEM_LABEL: Record<GemKind, string> = {
   obsidianaRachada: "Obsidiana rachada",
 };
 
+/** Gema de cada tipo de carta (definida em cartas/imagens.json, bloco "gemas"). */
 export function gemOf(kind: CardDef["kind"] | undefined): GemKind {
-  switch (kind) {
-    case "race":
-      return "quartzoMarrom";
-    case "misc":
-      return "topazio";
-    case "potion":
-      return "bismuto";
-    case "monsterBonus":
-      return "turmalina";
-    case "item":
-      return "safira";
-    case "rune":
-      return "rubi";
-    case "curse":
-      return "esmeralda";
-    case "levelup":
-      return "diamante";
-    case "monster":
-      return "obsidiana";
-    case "wandering":
-      return "obsidianaRachada";
-    default:
-      return "quartzoBranco";
-  }
+  const g = kind ? ART.gemas[KIND_FILE[kind]] : undefined;
+  return (g && g in GEM_LABEL ? g : "quartzoBranco") as GemKind;
 }
 
 type Pt = [number, number];

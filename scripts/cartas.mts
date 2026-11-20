@@ -88,6 +88,7 @@ if (cmd === "validar") {
   md += `Raças válidas (para \`racas\`): ${RACE_IDS.map((r) => `\`${r}\``).join(", ")}.\n\n`;
   md += `Classes válidas (para \`classes\`): ${CLASS_IDS.map((r) => `\`${r}\``).join(", ")}.\n\n`;
   md += "Tags de monstro (para `tags`): `morto-vivo`, `demonio`, `dragao`, `fogo`, `aquatico`, `animal`, `voador`, `sagrado`.\n\n";
+  md += "## Desenhos disponíveis (imagens.json)\n\nUse no campo `\"imagem\"` das cartas. Para criar novos, veja o LEIA-ME.\n\n" + Object.keys(cat.art.desenhos).map((n) => "`" + n + "`").join(", ") + "\n\n";
   md += section("Passivas de raças e classes", "racas.json / classes.json (campo \"passiva.efeitos\")", PLAYER_EFFECTS);
   md += "## Ativas de raças e classes\n\nCada ativa (lista `\"ativas\"` em racas.json/classes.json) tem `id`, `nome`, `texto`, `acao` (um dos tipos abaixo), `limite` (`combate`, `rodada`, `turno` ou `turnoProprio`), opcionalmente `custo` (`{ \"descartar\": 2 }` ou `{ \"descartarMao\": 4 }`) e os parâmetros da ação. Qualquer número pode variar com o nível usando `<parametro>PorNivel`, ex.: `\"valor\": 2, \"valorPorNivel\": { \"11\": 4 }`.\n\n";
   md += section("Ações (tipos de ativa)", "racas.json / classes.json (campo \"ativas\", chave \"acao\")", ACTIONS).replace(/^## Ações[^\n]*\n\n[^\n]*\n\n/, "").replace(/"tipo":/g, '"acao":');

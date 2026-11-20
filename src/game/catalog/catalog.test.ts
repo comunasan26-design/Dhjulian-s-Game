@@ -13,6 +13,12 @@ describe("cartas em JSON", () => {
     expect(loadCatalog().problems).toEqual([]);
   });
 
+  it("toda carta tem uma imagem vinda de cartas/imagens.json", () => {
+    const cat = loadCatalog();
+    const all = [...cat.races, ...cat.classes, ...cat.items, ...cat.potions, ...cat.runes, ...cat.misc, ...cat.levelUps, ...cat.monsters, ...cat.curses, ...cat.bonuses, ...cat.wandering];
+    for (const c of all) expect(cat.art.desenhos[c.image ?? ""], c.id).toMatch(/^<svg/);
+  });
+
   it("uma carta nova criada só com dados funciona no jogo", () => {
     // Simula alguém criando um monstro e um item novos no JSON
     const monster: MonsterCard = {
