@@ -77,10 +77,14 @@ src/
   mais de 45 s, qualquer um pode pular o turno dele.
 - **Janela de ataque**: quando alguém clica em “Atacar”, os outros têm 60 s para interferir ou “Deixar passar”; qualquer
   ação que mude o combate reinicia o contador.
-- **Bots** (`src/game/bot/ai.ts`): decidem simulando ações no próprio motor e escolhem a que mais aumenta o ganho deles
-  (níveis, poder, vencer monstros), dando peso maior a prejudicar humanos e o líder. Preferem alianças com outros bots
-  (menos os que estão quase ganhando) e propõem trocas justas por itens exclusivos da sua raça/classe. Nas salas online,
-  o servidor faz os bots agirem pelo mesmo stream de eventos (um passo a cada ~0,9 s); no modo local, o navegador.
+- **Bots** (`src/game/bot/ai.ts`): simulam as jogadas no próprio motor e procuram o **combo** mais barato de cartas e
+  habilidades que vira um combate (o deles, ou o de quem eles querem derrubar), guardando o resto para depois. Procuram
+  encrenca quando um combo garante a vitória com folga contra o que os outros podem jogar, avaliam a montagem de
+  raça/classe/itens como um todo (Bárbaro sem armadura, Monge sem armas…), vendem o que não usam para subir de nível,
+  usam a mão que iria para a Caridade e gastam tudo para impedir que alguém chegue ao nível máximo. Pesam o risco de
+  fugir (Coisas Ruins), aliam-se a outros bots contra humanos e contra o líder e propõem trocas por itens exclusivos da
+  sua raça/classe. Nas salas online, o servidor faz os bots agirem pelo mesmo stream de eventos (um passo a cada
+  ~0,9 s); no modo local, o navegador.
 - **Cartas**: o motor não conhece cartas pelo nome; ele lê os `"efeitos"` de cada carta (ex.: `bonusContra`, `anula`,
   `naoPersegue`). Assim, cartas novas podem reaproveitar qualquer efeito existente. Veja `cartas/LEIA-ME.md`.
 - **Ameaça**: quem não está no combate pode pedir tesouros para não atrapalhar. Se o lutador aceitar, paga com a
