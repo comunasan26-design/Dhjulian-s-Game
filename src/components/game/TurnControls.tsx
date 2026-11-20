@@ -21,7 +21,7 @@ export function TurnControls() {
   const myTurn = view.currentPlayerId === me.id;
   const current = view.players.find((p) => p.id === view.currentPlayerId);
   const blocking = view.prompts.some((p) => p.blocking);
-  const isOwlin = me.raceId === "owlin";
+  const isOwlin = me.passives.includes("olhosDaNoite");
   const canSkip = !myTurn && current && !current.online && now - view.lastActionAt > 45_000;
 
   if (view.phase === "SETUP") {

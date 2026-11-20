@@ -145,21 +145,52 @@ Tipos de maldição: `instantanea` (efeito na hora), `combate` (vale no combate 
 
 ## Raças e classes
 
-As habilidades de raças e classes são programadas no jogo. Você pode mudar nomes e textos, e também **criar uma raça ou
-classe nova reaproveitando as habilidades** de uma existente com `"habilidadesDe"`:
+Raças e classes funcionam **100% pelo JSON**, igual às outras cartas: nenhuma está programada no código. Você pode
+alterar números, trocar efeitos ou criar raças/classes totalmente novas. Cada uma tem:
+
+- `id` e `nome` (o `id` é o que os itens/monstros usam em `"racas"` e `"classes"`);
+- `passiva`: `nome`, `texto` e uma lista `efeitos` (efeitos que valem sempre, ex.: `forca`, `fugir`, `limiteMao`,
+  `venceEmpates`…);
+- `ativas`: lista de habilidades que o jogador aciona. Cada ativa tem `id`, `nome`, `texto`, `acao` (o que ela faz),
+  `limite` (`combate`, `rodada`, `turno` ou `turnoProprio`), opcionalmente `custo` e os parâmetros da ação.
+
+Qualquer número pode mudar com o nível: escreva `<parametro>PorNivel`. Ex.: `"valor": 2, "valorPorNivel": { "11": 4 }`
+vale 2 até o nível 10 e 4 do nível 11 em diante.
 
 ```json
 {
   "id": "anao-da-montanha",
   "nome": "Anão da Montanha",
-  "habilidadesDe": "anao",
-  "passiva": { "nome": "Teimosia Anã", "texto": "…" },
-  "ativa": { "nome": "Reforjar", "texto": "…" }
+  "passiva": {
+    "nome": "Teimosia",
+    "texto": "+1 em combate e pode ter 6 cartas na mão.",
+    "efeitos": [
+      { "tipo": "forca", "valor": 1, "valorPorNivel": { "11": 2 } },
+      { "tipo": "limiteMao", "valor": 1 }
+    ]
+  },
+  "ativas": [
+    {
+      "id": "martelada",
+      "nome": "Martelada",
+      "texto": "Descarte 1 carta: +3 no combate (dobra contra dragões). 1x por combate.",
+      "acao": "bonusCombate",
+      "limite": "combate",
+      "custo": { "descartar": 1 },
+      "valor": 3,
+      "dobraContraTags": ["dragao"]
+    }
+  ]
 }
 ```
 
-Nos efeitos, `"racas"` e `"classes"` usam esses ids de habilidades (ex.: `"anao"`), então valem também para raças
-novas que usem `"habilidadesDe": "anao"`.
+A lista completa de efeitos de passiva e de ações (com todos os parâmetros) está em `EFEITOS.md`.
+
+## Regras gerais (`regras.json`)
+
+Números gerais do jogo também ficam no JSON: nível inicial e máximo (`nivelMaximo` é o nível da vitória), cartas
+iniciais, cartas recebidas ao morrer, limite de mão, valor do dado para fugir (`fugirCom`), ouro por nível, limites de
+itens grandes/lendários, quantidade de slots, encaixes de runa por raridade e número mínimo/máximo de jogadores.
 
 ## Conferir se está tudo certo
 

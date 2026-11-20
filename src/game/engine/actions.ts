@@ -1,5 +1,5 @@
 // Despachante de ações dos jogadores + processamento de prazos.
-import { CARD_DEFS, type CurseCard, fxOf } from "../catalog";
+import { CARD_DEFS, type CurseCard, fxOf, RULES } from "../catalog";
 import {
   cardFx,
   combatHas,
@@ -44,18 +44,18 @@ import {
   playerSide,
   runeSockets,
   slotOf,
-  tier11,
 } from "./stats";
 import {
-  classesOf,
   currentPlayer,
   defOf,
   discardCard,
   discardFromPlayer,
   drawCard,
   gainLevels,
-  hasClass,
-  hasRace,
+  hasPassive,
+  passiveFx,
+  passiveFxSrc,
+  scaled,
   isCurrent,
   itemDef,
   log,
@@ -206,7 +206,7 @@ function handOrTable(p: PlayerState, cardId: string) {
 }
 
 function multiplier(state: GameState, p: PlayerState): number {
-  return hasClass(state, p, "alquimista") ? 2 : 1;
+  return hasPassive(state, p, "pocoesDobradas") ? 2 : 1;
 }
 
 function allPassed(state: GameState, ctx: Ctx): boolean {
@@ -428,7 +428,7 @@ function dispatch(state: GameState, p: PlayerState, a: Action, ctx: Ctx) {
         const fx = cardFx(state, id, "vendaMultiplicador");
         if (fx) gold = Math.floor(gold * num(fx, "valor", 1));
       }
-      const levels = Math.floor(gold / 1000);
+      const levels = Math.floor(gold / RULES.ouroPorNivel);
       for (const id of ids) discardFromPlayer(state, p, id);
       log(state, ctx, `💰 ${p.name} vendeu ${ids.length} item(ns) por ${gold} de ouro.`, "info", p.id);
       if (levels > 0) gainLevels(state, p, levels, ctx, false, "venda de itens");
@@ -450,7 +450,7 @@ function dispatch(state: GameState, p: PlayerState, a: Action, ctx: Ctx) {
       inHand(p, a.cardId);
       const d = defOf(state, a.cardId);
       if (d.kind !== "class") fail("Isso não é uma carta de classe.");
-      if (classesOf(state, p).includes(d.cls)) fail("Você já tem essa classe.");
+      if (p.classes.some((c) => state.cards[c]?.defId === d.id)) fail("Você já tem essa classe.");
       removeFromPlayer(p, a.cardId);
       if (p.classes.length >= maxClasses(state, p)) {
         const replace = a.replaceId && p.classes.includes(a.replaceId) ? a.replaceId : p.classes[0];
@@ -517,7 +517,7 @@ function dispatch(state: GameState, p: PlayerState, a: Action, ctx: Ctx) {
       if (state.phase !== "PLAYING") fail("A partida não está em andamento.");
       inHand(p, a.cardId);
       if (defOf(state, a.cardId).kind !== "levelup") fail("Isso não é uma carta de subir nível.");
-      if (p.level >= 19) fail("Cartas de subir nível nunca levam ao nível 20.");
+      if (p.level >= RULES.nivelMaximo - 1) fail(`Cartas de subir nível nunca levam ao nível ${RULES.nivelMaximo}.`);
       discardFromPlayer(state, p, a.cardId);
       gainLevels(state, p, 1, ctx, false, nameOf(state, a.cardId));
       return;
@@ -686,7 +686,7 @@ function dispatch(state: GameState, p: PlayerState, a: Action, ctx: Ctx) {
       }
       const roll = rollD6(state, p, ctx, `nova rolagem para fugir de ${nameOf(state, r.monsterCardId)}`);
       r.roll = roll.total;
-      r.success = roll.total + r.bonus >= 5;
+      r.success = roll.total + r.bonus >= RULES.fugirCom;
       r.note = r.success ? "rerrolado" : "rerrolado, falhou de novo";
       log(state, ctx, r.success ? `🏃 ${p.name} conseguiu fugir na nova rolagem!` : `❌ Falhou de novo.`, "combat");
       maybeApplyBadStuff(state, ctx);
@@ -760,7 +760,8 @@ function dispatch(state: GameState, p: PlayerState, a: Action, ctx: Ctx) {
       dispense(state, ctx, p, a.monsterId, a.discardId);
       return;
     case "CATADOR": {
-      if (!hasRace(state, p, "goblin")) fail("Só Goblins catam itens.");
+      const scav = passiveFx(state, p, "catador")[0];
+      if (!scav) fail("Você não tem a passiva de catar itens.");
       const li = state.lastItemDiscard;
       if (!li || !state.decks.treasureDiscard.includes(li.cardId)) fail("Não há item para catar.");
       if (li.by === p.id) fail("O item foi descartado por você.");
@@ -769,7 +770,7 @@ function dispatch(state: GameState, p: PlayerState, a: Action, ctx: Ctx) {
       p.usage["catador"] = state.round;
       li.tried.push(p.id);
       const r = rollD6(state, p, ctx, `Catador (${nameOf(state, li.cardId)})`);
-      if (r.total >= (tier11(p) ? 4 : 5)) {
+      if (r.total >= scaled(scav, "dado", p.level, 5)) {
         state.decks.treasureDiscard.splice(state.decks.treasureDiscard.indexOf(li.cardId), 1);
         p.carried.push(li.cardId);
         log(state, ctx, `👺 ${p.name} catou ${nameOf(state, li.cardId)}!`);
@@ -779,7 +780,7 @@ function dispatch(state: GameState, p: PlayerState, a: Action, ctx: Ctx) {
     }
     case "OWL_PEEK": {
       ownTurn(state, p);
-      if (!hasRace(state, p, "owlin")) fail("Só Owlins têm Olhos da Noite.");
+      if (!hasPassive(state, p, "olhosDaNoite")) fail("Você não tem a passiva de ver a carta do topo.");
       const start = state.turnPhase === "KICK" && !state.turn.owlStartDone && !state.turn.revealed;
       const end = state.turnPhase === "END" && !state.turn.owlEndDone && !state.combat;
       if (!start && !end) fail("Olhos da Noite: só no início e no fim do seu turno.");
@@ -922,10 +923,11 @@ function playConsumable(state: GameState, ctx: Ctx, p: PlayerState, a: Extract<A
     assertMayHinder(state, p, combat.fighterId);
 
   const finish = () => {
-    if (d.kind === "potion" && hasRace(state, p, "gnomo")) {
-      const r = rollD6(state, p, ctx, "Gambiarra");
-      if (r.total >= 6) {
-        log(state, ctx, `🔧 Gambiarra: ${p.name} guardou a poção.`);
+    const keep = d.kind === "potion" ? passiveFxSrc(state, p, "guardaPocao")[0] : undefined;
+    if (keep) {
+      const r = rollD6(state, p, ctx, keep.source);
+      if (r.total >= scaled(keep.fx, "dado", p.level, 6)) {
+        log(state, ctx, `🔧 ${keep.source}: ${p.name} guardou a poção.`);
         return;
       }
     }
@@ -1065,7 +1067,7 @@ function playConsumable(state: GameState, ctx: Ctx, p: PlayerState, a: Extract<A
   }
   const up = has("subirNivel");
   if (up) {
-    if (p.level >= 19) fail("Isso nunca leva ao nível 20.");
+    if (p.level >= RULES.nivelMaximo - 1) fail(`Isso nunca leva ao nível ${RULES.nivelMaximo}.`);
     finish();
     gainLevels(state, p, num(up, "quantidade", 1) * mult, ctx, false, d.name);
     return;

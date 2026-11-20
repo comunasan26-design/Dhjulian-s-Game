@@ -2,222 +2,561 @@
   {
     "id": "divino",
     "nome": "Divino",
-    "habilidadesDe": "divino",
     "passiva": {
       "nome": "Proteção Celestial",
-      "texto": "Ao ser alvo de uma maldição, role 1d6; com 5+ ela é anulada (4+ a partir do nível 11)."
+      "texto": "Ao ser alvo de uma maldição, role 1d6; com 5+ ela é anulada (4+ a partir do nível 11).",
+      "efeitos": [
+        {
+          "tipo": "anulaMaldicaoNoDado",
+          "dado": 5,
+          "dadoPorNivel": {
+            "11": 4
+          }
+        }
+      ]
     },
-    "ativa": {
-      "nome": "Luz Sagrada",
-      "texto": "Descarte 1 carta: +2 no combate (+4 a partir do nível 11); contra Mortos-vivos e Demônios o bônus dobra. 1x por combate."
-    }
+    "ativas": [
+      {
+        "id": "luzSagrada",
+        "nome": "Luz Sagrada",
+        "texto": "Descarte 1 carta: +2 no combate (+4 a partir do nível 11); contra Mortos-vivos e Demônios o bônus dobra. 1x por combate.",
+        "acao": "bonusCombate",
+        "limite": "combate",
+        "custo": {
+          "descartar": 1
+        },
+        "valor": 2,
+        "valorPorNivel": {
+          "11": 4
+        },
+        "dobraContraTags": [
+          "morto-vivo",
+          "demonio"
+        ]
+      }
+    ]
   },
   {
     "id": "anao",
     "nome": "Anão",
-    "habilidadesDe": "anao",
     "passiva": {
       "nome": "Teimosia Anã",
-      "texto": "Coisas Ruins que fariam você perder itens tiram 1 item a menos; você pode carregar até 6 cartas na mão (7 a partir do nível 11), mas não pode segurar nem equipar itens Grandes."
+      "texto": "Coisas Ruins que fariam você perder itens tiram 1 item a menos; você pode carregar até 6 cartas na mão (7 a partir do nível 11), mas não pode segurar nem equipar itens Grandes.",
+      "efeitos": [
+        {
+          "tipo": "perdeMenosItens",
+          "quantidade": 1
+        },
+        {
+          "tipo": "limiteMao",
+          "valor": 1,
+          "valorPorNivel": {
+            "11": 2
+          }
+        },
+        {
+          "tipo": "semItensGrandes"
+        }
+      ]
     },
-    "ativa": {
-      "nome": "Reforjar",
-      "texto": "Descarte 1 item: um item equipado (exceto anéis) ganha +1 permanente. Cada item só pode ser reforjado 1 vez. 1x por turno seu, fora de combate."
-    }
+    "ativas": [
+      {
+        "id": "reforjar",
+        "nome": "Reforjar",
+        "texto": "Descarte 1 item: um item equipado (exceto anéis) ganha +1 permanente. Cada item só pode ser reforjado 1 vez. 1x por turno seu, fora de combate.",
+        "acao": "reforjar",
+        "limite": "turnoProprio",
+        "bonus": 1
+      }
+    ]
   },
   {
     "id": "draconato",
     "nome": "Draconato",
-    "habilidadesDe": "draconato",
     "passiva": {
       "nome": "Escamas Dracônicas",
-      "texto": "+1 em combate (+2 a partir do nível 11); imune às Coisas Ruins de monstros Fogo e Dragão, exceto Lendários."
+      "texto": "+1 em combate (+2 a partir do nível 11); imune às Coisas Ruins de monstros Fogo e Dragão, exceto Lendários.",
+      "efeitos": [
+        {
+          "tipo": "forca",
+          "valor": 1,
+          "valorPorNivel": {
+            "11": 2
+          }
+        },
+        {
+          "tipo": "imuneCoisasRuins",
+          "tags": [
+            "fogo",
+            "dragao"
+          ],
+          "excetoLendarios": true
+        }
+      ]
     },
-    "ativa": {
-      "nome": "Baforada",
-      "texto": "Descarte 3 cartas: +5 no combate (+7 a partir do nível 11); conta como dano de fogo. 1x por combate."
-    }
+    "ativas": [
+      {
+        "id": "baforada",
+        "nome": "Baforada",
+        "texto": "Descarte 3 cartas: +5 no combate (+7 a partir do nível 11); conta como dano de fogo. 1x por combate.",
+        "acao": "bonusCombate",
+        "limite": "combate",
+        "custo": {
+          "descartar": 3
+        },
+        "valor": 5,
+        "valorPorNivel": {
+          "11": 7
+        },
+        "fogo": true
+      }
+    ]
   },
   {
     "id": "elfo",
     "nome": "Elfo",
-    "habilidadesDe": "elfo",
     "passiva": {
       "nome": "Graça Élfica",
-      "texto": "+1 em Fugir; sobe 1 nível ao ajudar outro jogador a derrotar um monstro (máx. 1 por rodada)."
+      "texto": "+1 em Fugir; sobe 1 nível ao ajudar outro jogador a derrotar um monstro (máx. 1 por rodada).",
+      "efeitos": [
+        {
+          "tipo": "fugir",
+          "valor": 1
+        },
+        {
+          "tipo": "nivelAoAjudar",
+          "quantidade": 1
+        }
+      ]
     },
-    "ativa": {
-      "nome": "Disparo Duplo",
-      "texto": "Descarte 3 cartas: se você estiver ajudando outro jogador, o seu nível conta 2x. 1x por combate."
-    }
+    "ativas": [
+      {
+        "id": "disparoDuplo",
+        "nome": "Disparo Duplo",
+        "texto": "Descarte 3 cartas: se você estiver ajudando outro jogador, o seu nível conta 2x. 1x por combate.",
+        "acao": "nivelDobradoAjudando",
+        "limite": "combate",
+        "custo": {
+          "descartar": 3
+        }
+      }
+    ]
   },
   {
     "id": "gnomo",
     "nome": "Gnomo",
-    "habilidadesDe": "gnomo",
     "passiva": {
       "nome": "Gambiarra",
-      "texto": "+1 em Fugir; ao usar uma poção, role 1d6: com 6 ela não é descartada."
+      "texto": "+1 em Fugir; ao usar uma poção, role 1d6: com 6 ela não é descartada.",
+      "efeitos": [
+        {
+          "tipo": "fugir",
+          "valor": 1
+        },
+        {
+          "tipo": "guardaPocao",
+          "dado": 6
+        }
+      ]
     },
-    "ativa": {
-      "nome": "Engenhoca Explosiva",
-      "texto": "Descarte 1 item da mão: some o bônus dele a qualquer lado do combate, mesmo que você não pudesse usá-lo. 1x por combate."
-    }
+    "ativas": [
+      {
+        "id": "engenhoca",
+        "nome": "Engenhoca Explosiva",
+        "texto": "Descarte 1 item da mão: some o bônus dele a qualquer lado do combate, mesmo que você não pudesse usá-lo. 1x por combate.",
+        "acao": "itemDaMaoParaLado",
+        "limite": "combate"
+      }
+    ]
   },
   {
     "id": "gigante",
     "nome": "Gigante",
-    "habilidadesDe": "gigante",
     "passiva": {
       "nome": "Colosso",
-      "texto": "+2 em combate (+3 a partir do nível 11) e pode usar 2 itens Grandes; -1 em Fugir."
+      "texto": "+2 em combate (+3 a partir do nível 11) e pode usar 2 itens Grandes; -1 em Fugir.",
+      "efeitos": [
+        {
+          "tipo": "forca",
+          "valor": 2,
+          "valorPorNivel": {
+            "11": 3
+          }
+        },
+        {
+          "tipo": "grandesExtras",
+          "quantidade": 1
+        },
+        {
+          "tipo": "fugir",
+          "valor": -1
+        }
+      ]
     },
-    "ativa": {
-      "nome": "Arremesso",
-      "texto": "Perca 1 nível e descarte 1 item Grande seu (equipado ou da mão): some o dobro do bônus dele ao combate. 1x por combate."
-    }
+    "ativas": [
+      {
+        "id": "arremesso",
+        "nome": "Arremesso",
+        "texto": "Perca 1 nível e descarte 1 item Grande seu (equipado ou da mão): some o dobro do bônus dele ao combate. 1x por combate.",
+        "acao": "arremesso",
+        "limite": "combate",
+        "multiplicador": 2,
+        "perdeNiveis": 1
+      }
+    ]
   },
   {
     "id": "humano",
     "nome": "Humano",
-    "habilidadesDe": "humano",
     "passiva": {
       "nome": "Versátil",
-      "texto": "Limite de mão +1. A partir do nível 11, pode ter 2 classes ao mesmo tempo."
+      "texto": "Limite de mão +1. A partir do nível 11, pode ter 2 classes ao mesmo tempo.",
+      "efeitos": [
+        {
+          "tipo": "limiteMao",
+          "valor": 1
+        },
+        {
+          "tipo": "classesExtras",
+          "quantidade": 1,
+          "nivelMinimo": 11
+        }
+      ]
     },
-    "ativa": {
-      "nome": "Adaptação",
-      "texto": "Descarte 3 cartas: use um item restrito a outra raça ou classe até o fim do combate. 1x por turno."
-    }
+    "ativas": [
+      {
+        "id": "adaptacao",
+        "nome": "Adaptação",
+        "texto": "Descarte 3 cartas: use um item restrito a outra raça ou classe até o fim do combate. 1x por turno.",
+        "acao": "usarItemRestrito",
+        "limite": "turno",
+        "custo": {
+          "descartar": 3
+        }
+      }
+    ]
   },
   {
     "id": "orc",
     "nome": "Orc",
-    "habilidadesDe": "orc",
     "passiva": {
       "nome": "Sede de Sangue",
-      "texto": "Ao vencer sozinho um monstro de nível maior que o seu, sobe 1 nível extra (máx. 1 por rodada)."
+      "texto": "Ao vencer sozinho um monstro de nível maior que o seu, sobe 1 nível extra (máx. 1 por rodada).",
+      "efeitos": [
+        {
+          "tipo": "nivelExtraSozinhoContraMaior",
+          "quantidade": 1
+        }
+      ]
     },
-    "ativa": {
-      "nome": "Brutalidade",
-      "texto": "Descarte 2 cartas: o texto Especial da carta do monstro é ignorado neste combate. Não funciona em Lendários. 1x por combate."
-    }
+    "ativas": [
+      {
+        "id": "brutalidade",
+        "nome": "Brutalidade",
+        "texto": "Descarte 2 cartas: o texto Especial da carta do monstro é ignorado neste combate. Não funciona em Lendários. 1x por combate.",
+        "acao": "ignorarEspecial",
+        "limite": "combate",
+        "custo": {
+          "descartar": 2
+        },
+        "naoEmLendarios": true
+      }
+    ]
   },
   {
     "id": "diabrete",
     "nome": "Diabrete",
-    "habilidadesDe": "diabrete",
     "passiva": {
       "nome": "Malícia",
-      "texto": "Ao lançar uma maldição em outro jogador, compre 2 cartas de Porta (máx. 1 por rodada)."
+      "texto": "Ao lançar uma maldição em outro jogador, compre 2 cartas de Porta (máx. 1 por rodada).",
+      "efeitos": [
+        {
+          "tipo": "comprarAoAmaldicoar",
+          "portas": 2
+        }
+      ]
     },
-    "ativa": {
-      "nome": "Pacto Diabólico",
-      "texto": "Descarte 1 carta: passe uma maldição ativa em você para outro jogador. 1x por rodada."
-    }
+    "ativas": [
+      {
+        "id": "pactoDiabolico",
+        "nome": "Pacto Diabólico",
+        "texto": "Descarte 1 carta: passe uma maldição ativa em você para outro jogador. 1x por rodada.",
+        "acao": "passarMaldicao",
+        "limite": "rodada",
+        "custo": {
+          "descartar": 1
+        }
+      }
+    ]
   },
   {
     "id": "elemental",
     "nome": "Elemental",
-    "habilidadesDe": "elemental",
     "passiva": {
       "nome": "Afinidade Rúnica",
-      "texto": "Cada item pode ter 1 runa a mais, e cada runa equipada dá +1 extra (máx. +4)."
+      "texto": "Cada item pode ter 1 runa a mais, e cada runa equipada dá +1 extra (máx. +4).",
+      "efeitos": [
+        {
+          "tipo": "encaixesExtras",
+          "quantidade": 1
+        },
+        {
+          "tipo": "bonusPorRuna",
+          "valor": 1,
+          "maximo": 4
+        }
+      ]
     },
-    "ativa": {
-      "nome": "Tempestade Elemental",
-      "texto": "Descarte 2 cartas: todos os monstros do combate, inclusive Monstros Errantes, perdem 2 níveis (4 a partir do nível 11). 1x por combate. Se chegar ao nível zero o monstro morre automaticamente."
-    }
+    "ativas": [
+      {
+        "id": "tempestade",
+        "nome": "Tempestade Elemental",
+        "texto": "Descarte 2 cartas: todos os monstros do combate, inclusive Monstros Errantes, perdem 2 níveis (4 a partir do nível 11). 1x por combate. Se chegar ao nível zero o monstro morre automaticamente.",
+        "acao": "monstrosPerdemNivel",
+        "limite": "combate",
+        "custo": {
+          "descartar": 2
+        },
+        "valor": 2,
+        "valorPorNivel": {
+          "11": 4
+        },
+        "fogo": true
+      }
+    ]
   },
   {
     "id": "goblin",
     "nome": "Goblin",
-    "habilidadesDe": "goblin",
     "passiva": {
       "nome": "Catador",
-      "texto": "Quando outro jogador descarta um item, você pode rolar 1d6 com sucesso em 5+ (4+ a partir do nível 11) para pegá-lo antes. 1x por rodada."
+      "texto": "Quando outro jogador descarta um item, você pode rolar 1d6 com sucesso em 5+ (4+ a partir do nível 11) para pegá-lo antes. 1x por rodada.",
+      "efeitos": [
+        {
+          "tipo": "catador",
+          "dado": 5,
+          "dadoPorNivel": {
+            "11": 4
+          }
+        }
+      ]
     },
-    "ativa": {
-      "nome": "Bugiganga Roubada",
-      "texto": "Descarte 1 carta: pegue 1 item da pilha de descarte de Tesouros ou roube 1 tesouro aberto de alguém que acabou de ganhar. 1x por turno seu."
-    }
+    "ativas": [
+      {
+        "id": "bugiganga",
+        "nome": "Bugiganga Roubada",
+        "texto": "Descarte 1 carta: pegue 1 item da pilha de descarte de Tesouros ou roube 1 tesouro aberto de alguém que acabou de ganhar. 1x por turno seu.",
+        "acao": "bugiganga",
+        "limite": "turnoProprio",
+        "custo": {
+          "descartar": 1
+        }
+      }
+    ]
   },
   {
     "id": "centauro",
     "nome": "Centauro",
-    "habilidadesDe": "centauro",
     "passiva": {
       "nome": "Quatro Patas",
-      "texto": "+1 em Fugir; pode equipar 2 pares de botas; não pode usar montarias."
+      "texto": "+1 em Fugir; pode equipar 2 pares de botas; não pode usar montarias.",
+      "efeitos": [
+        {
+          "tipo": "fugir",
+          "valor": 1
+        },
+        {
+          "tipo": "slotExtra",
+          "slot": "botas",
+          "quantidade": 1
+        },
+        {
+          "tipo": "semSlot",
+          "slot": "montaria"
+        }
+      ]
     },
-    "ativa": {
-      "nome": "Galope",
-      "texto": "Descarte 1 carta: depois de vencer ou fugir de um combate, abra mais uma porta neste turno. 1x por turno seu."
-    }
+    "ativas": [
+      {
+        "id": "galope",
+        "nome": "Galope",
+        "texto": "Descarte 1 carta: depois de vencer ou fugir de um combate, abra mais uma porta neste turno. 1x por turno seu.",
+        "acao": "abrirOutraPorta",
+        "limite": "turnoProprio",
+        "custo": {
+          "descartar": 1
+        }
+      }
+    ]
   },
   {
     "id": "torkle",
     "nome": "Torkle",
-    "habilidadesDe": "torkle",
     "passiva": {
       "nome": "Casco",
-      "texto": "Conta como peitoral de +5 (+7 a partir do nível 11) que não pode ser perdido nem roubado; não pode equipar peitorais; -2 em Fugir."
+      "texto": "Conta como peitoral de +5 (+7 a partir do nível 11) que não pode ser perdido nem roubado; não pode equipar peitorais; -2 em Fugir.",
+      "efeitos": [
+        {
+          "tipo": "casco",
+          "valor": 5,
+          "valorPorNivel": {
+            "11": 7
+          }
+        },
+        {
+          "tipo": "semSlot",
+          "slot": "peitoral"
+        },
+        {
+          "tipo": "fugir",
+          "valor": -2
+        }
+      ]
     },
-    "ativa": {
-      "nome": "Hibernar",
-      "texto": "No início do seu turno, em vez de chutar a porta, entre no casco: compre 2 Tesouros e fique imune a maldições e roubos até o seu próximo turno. 1x por turno seu."
-    }
+    "ativas": [
+      {
+        "id": "hibernar",
+        "nome": "Hibernar",
+        "texto": "No início do seu turno, em vez de chutar a porta, entre no casco: compre 2 Tesouros e fique imune a maldições e roubos até o seu próximo turno. 1x por turno seu.",
+        "acao": "hibernar",
+        "limite": "turnoProprio",
+        "tesouros": 2
+      }
+    ]
   },
   {
     "id": "owlin",
     "nome": "Owlin",
-    "habilidadesDe": "owlin",
     "passiva": {
       "nome": "Olhos da Noite",
-      "texto": "No início e no fim do seu turno, veja a carta do topo de Portas; deixe-a lá ou mande-a para o fundo."
+      "texto": "No início e no fim do seu turno, veja a carta do topo de Portas; deixe-a lá ou mande-a para o fundo.",
+      "efeitos": [
+        {
+          "tipo": "olhosDaNoite"
+        }
+      ]
     },
-    "ativa": {
-      "nome": "Presságio",
-      "texto": "Coloque 1 carta da sua mão no topo do baralho de Portas e pegue a última carta do baralho de Portas. 1x por rodada."
-    }
+    "ativas": [
+      {
+        "id": "pressagio",
+        "nome": "Presságio",
+        "texto": "Coloque 1 carta da sua mão no topo do baralho de Portas e pegue a última carta do baralho de Portas. 1x por rodada.",
+        "acao": "pressagio",
+        "limite": "rodada"
+      }
+    ]
   },
   {
     "id": "tritao",
     "nome": "Tritão/Sereia",
-    "habilidadesDe": "tritao",
     "passiva": {
       "nome": "Filho das Marés",
-      "texto": "+2 em Fugir (foge automaticamente de monstros Aquáticos); +3 em combate contra monstros Aquáticos e imune às Coisas Ruins deles."
+      "texto": "+2 em Fugir (foge automaticamente de monstros Aquáticos); +3 em combate contra monstros Aquáticos e imune às Coisas Ruins deles.",
+      "efeitos": [
+        {
+          "tipo": "fugir",
+          "valor": 2
+        },
+        {
+          "tipo": "fugaAutomaticaContra",
+          "tags": [
+            "aquatico"
+          ]
+        },
+        {
+          "tipo": "bonusContra",
+          "tags": [
+            "aquatico"
+          ],
+          "valor": 3
+        },
+        {
+          "tipo": "imuneCoisasRuins",
+          "tags": [
+            "aquatico"
+          ]
+        }
+      ]
     },
-    "ativa": {
-      "nome": "Tridente / Canto da Sereia",
-      "texto": "Tridente: ameace um jogador de perder 1 nível caso ele não ajude você no combate; você pode oferecer tesouros. 1x por rodada. — Canto da Sereia: descarte 2 cartas: obrigue um jogador a ajudar você no combate; ele não pode recusar e não recebe tesouro. 1x por rodada."
-    }
+    "ativas": [
+      {
+        "id": "tridente",
+        "nome": "Tridente",
+        "texto": "Ameace um jogador de perder 1 nível caso ele não ajude você no combate; você pode oferecer tesouros. 1x por rodada.",
+        "acao": "ameacarAjuda",
+        "limite": "rodada",
+        "perdeNiveis": 1
+      },
+      {
+        "id": "cantoSereia",
+        "nome": "Canto da Sereia",
+        "texto": "Descarte 2 cartas: obrigue um jogador a ajudar você no combate; ele não pode recusar e não recebe tesouro. 1x por rodada.",
+        "acao": "forcarAjuda",
+        "limite": "rodada",
+        "custo": {
+          "descartar": 2
+        }
+      }
+    ]
   },
   {
     "id": "fada",
     "nome": "Fada",
-    "habilidadesDe": "fada",
     "passiva": {
       "nome": "Asas Leves",
-      "texto": "+2 em Fugir; -1 em combate; não pode usar itens Grandes."
+      "texto": "+2 em Fugir; -1 em combate; não pode usar itens Grandes.",
+      "efeitos": [
+        {
+          "tipo": "fugir",
+          "valor": 2
+        },
+        {
+          "tipo": "forca",
+          "valor": -1
+        },
+        {
+          "tipo": "semItensGrandes"
+        }
+      ]
     },
-    "ativa": {
-      "nome": "Truque Feérico",
-      "texto": "Descarte 2 cartas: troque um item equipado seu por um item equipado de outro jogador no mesmo slot (exceto Lendários); o alvo pode descartar 2 cartas para impedir. 1x por turno seu, fora de combate."
-    }
+    "ativas": [
+      {
+        "id": "truqueFeerico",
+        "nome": "Truque Feérico",
+        "texto": "Descarte 2 cartas: troque um item equipado seu por um item equipado de outro jogador no mesmo slot (exceto Lendários); o alvo pode descartar 2 cartas para impedir. 1x por turno seu, fora de combate.",
+        "acao": "trocarItem",
+        "limite": "turnoProprio",
+        "custo": {
+          "descartar": 2
+        },
+        "custoBloqueio": 2
+      }
+    ]
   },
   {
     "id": "vampirico",
     "nome": "Vampírico",
-    "habilidadesDe": "vampirico",
     "passiva": {
       "nome": "Não-morto",
-      "texto": "Ao morrer, role 1d6; com 5+ não morre (mantém itens, mas seu turno acaba)."
+      "texto": "Ao morrer, role 1d6; com 5+ não morre (mantém itens, mas seu turno acaba).",
+      "efeitos": [
+        {
+          "tipo": "naoMorreNoDado",
+          "dado": 5
+        }
+      ]
     },
-    "ativa": {
-      "nome": "Mordida",
-      "texto": "Após vencer um combate, descarte 2 cartas: roube 1 nível de um jogador de nível igual ou maior que o seu (nunca chega ao nível 20 assim). 1x por turno seu."
-    }
+    "ativas": [
+      {
+        "id": "mordida",
+        "nome": "Mordida",
+        "texto": "Após vencer um combate, descarte 2 cartas: roube 1 nível de um jogador de nível igual ou maior que o seu (nunca chega ao nível 20 assim). 1x por turno seu.",
+        "acao": "roubarNivel",
+        "limite": "turnoProprio",
+        "custo": {
+          "descartar": 2
+        }
+      }
+    ]
   }
 ]

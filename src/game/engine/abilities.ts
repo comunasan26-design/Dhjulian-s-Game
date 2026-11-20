@@ -1,6 +1,7 @@
-// Habilidades ativas de raças e classes.
-import type { ClassId, MonsterCard, RaceId } from "../catalog";
-import { classDef, def, raceDef } from "../catalog";
+// Ativas de raças e classes. Nenhuma ativa é registrada aqui: cada raça/classe no JSON
+// (cartas/racas.json e cartas/classes.json) diz qual "acao" genérica usar, com custo, limite e números.
+// Este arquivo só sabe EXECUTAR cada tipo de ação.
+import { type AbilityDef, def, type Fx, type MonsterCard, RULES, type Tag } from "../catalog";
 import {
   addMonster,
   addSpecialCurse,
@@ -14,7 +15,7 @@ import {
   removeHelper,
   removeMonster,
 } from "./core";
-import { cardFx, combatHas, heldFx, monsterFx, num, runeFx } from "./fx";
+import { cardFx, combatFx, combatHas, flag, heldFx, monsterFx, num, runeFx, strs } from "./fx";
 import { type Ctx, type GameState, type HelpDeal, type PlayerState, fail } from "./state";
 import {
   activeMonsters,
@@ -27,7 +28,6 @@ import {
   monsterDef,
   playerSide,
   slotOf,
-  tier11,
 } from "./stats";
 import {
   defOf,
@@ -37,55 +37,25 @@ import {
   drawTo,
   gainLevels,
   hasClass,
-  hasRace,
+  hasPassive,
+  identityCards,
   isCurrent,
   itemDef,
   log,
   loseLevels,
   nameOf,
   ownerOf,
+  passiveFxSrc,
   player,
   removeFromPlayer,
   rollD6,
+  scaled,
   shuffle,
   uid,
 } from "./util";
 
-export type AbilityKey =
-  | "luzSagrada"
-  | "reforjar"
-  | "baforada"
-  | "disparoDuplo"
-  | "engenhoca"
-  | "arremesso"
-  | "adaptacao"
-  | "brutalidade"
-  | "pactoDiabolico"
-  | "tempestade"
-  | "bugiganga"
-  | "galope"
-  | "hibernar"
-  | "pressagio"
-  | "tridente"
-  | "cantoSereia"
-  | "truqueFeerico"
-  | "mordida"
-  | "desafio"
-  | "encantar"
-  | "cura"
-  | "roubo"
-  | "domarFera"
-  | "escudoFe"
-  | "esmagar"
-  | "labia"
-  | "polimorfia"
-  | "maldicaoSombria"
-  | "pazInterior"
-  | "armadilha"
-  | "duplicata"
-  | "furiaSangrenta"
-  | "infusao"
-  | "transmutar";
+/** Chave de uma ativa: "<id da carta>#<id da ativa>". */
+export type AbilityKey = string;
 
 export type FieldKind =
   | "player"
@@ -120,26 +90,17 @@ export interface FieldSpec {
   optional?: boolean;
 }
 
-type Limit = "combat" | "round" | "turn" | "ownTurn";
-
+/** Como executar um tipo de ação genérica. */
 interface Spec {
-  key: AbilityKey;
-  race?: RaceId;
-  cls?: ClassId;
-  /** Usa o nome da ativa (ou rótulo próprio). */
-  label?: string;
-  limit: Limit;
-  /** Habilidade usada dentro do combate (afetada por Golem, Desafio etc.). */
+  acao: string;
+  /** Ação usada dentro do combate (afetada por monstros imunes a magia, Desafio etc.). */
   combat: boolean;
   /** Conta como "contra" um monstro Lendário (Resistência Lendária). */
   againstMonster?: boolean;
-  discard?: number;
-  wholeHand?: number;
-  costText: string;
   fields: FieldSpec[];
-  check: (state: GameState, p: PlayerState) => string | null;
+  check: (state: GameState, p: PlayerState, ab: AbilityDef) => string | null;
   /** Valida parâmetros e devolve o efeito (sem alterar o estado). */
-  prepare: (state: GameState, ctx: Ctx, p: PlayerState, params: Params) => { run: () => void; paramCards?: string[] };
+  prepare: (state: GameState, ctx: Ctx, p: PlayerState, params: Params, ab: AbilityDef) => { run: () => void; paramCards?: string[] };
 }
 
 export type Params = Record<string, unknown>;
@@ -203,14 +164,15 @@ function otherPlayer(state: GameState, p: PlayerState, params: Params, key = "pl
   return t;
 }
 
-/** Imagem Espelhada do Ilusionista contra ativas. */
+/** Passiva "refleteNoDado" do alvo contra ativas. */
 function reflected(state: GameState, ctx: Ctx, actor: PlayerState, target: PlayerState, label: string): boolean {
-  if (target.id === actor.id || !hasClass(state, target, "ilusionista")) return false;
-  if (hasClass(state, actor, "bruxo") && label === "Maldição Sombria") return false;
-  const r = rollD6(state, target, ctx, "Imagem Espelhada");
-  if (r.total >= (tier11(target) ? 5 : 6)) {
-    log(state, ctx, `🪞 Imagem Espelhada! ${label} de ${actor.name} se volta contra ele.`, "combat");
-    return true;
+  if (target.id === actor.id) return false;
+  for (const { fx, source } of passiveFxSrc(state, target, "refleteNoDado")) {
+    const r = rollD6(state, target, ctx, source);
+    if (r.total >= scaled(fx, "dado", target.level, 6)) {
+      log(state, ctx, `🪞 ${source}! ${label} de ${actor.name} se volta contra ele.`, "combat");
+      return true;
+    }
   }
   return false;
 }
@@ -218,11 +180,11 @@ function reflected(state: GameState, ctx: Ctx, actor: PlayerState, target: Playe
 function canBeHelper(state: GameState, target: PlayerState): string | null {
   const combat = state.combat!;
   if (combat.helperId) return "Já existe um ajudante.";
-  if (combat.isolated.includes(combat.fighterId)) return "Ninguém pode ajudar neste combate (Isolamento/Duplicata).";
+  if (combat.isolated.includes(combat.fighterId)) return "Ninguém pode ajudar neste combate.";
   if (combat.desafio) return "Desafio: ninguém pode lutar junto.";
   if (target.id === combat.fighterId) return "Escolha outro jogador.";
   if (combatHas(state, combat, "detectaMentiras") && target.curseCastRound === state.round)
-    return "Planetar: quem lançou maldição nesta rodada não pode ajudar.";
+    return "Quem lançou maldição nesta rodada não pode ajudar neste combate.";
   return null;
 }
 
@@ -238,36 +200,29 @@ function parseDeal(params: Params): HelpDeal {
 
 const SPECS: Spec[] = [
   {
-    key: "luzSagrada",
-    race: "divino",
-    limit: "combat",
+    acao: "bonusCombate",
     combat: true,
     againstMonster: true,
-    discard: 1,
-    costText: "Descarte 1 carta",
     fields: [],
     check: onSide,
-    prepare: (state, ctx, p) => ({
+    prepare: (state, ctx, p, _params, ab) => ({
       run: () => {
         const tags = combatTags(state, state.combat);
-        let v = tier11(p) ? 4 : 2;
-        if (tags.has("morto-vivo") || tags.has("demonio")) v *= 2;
-        state.combat!.playerMods.push({ id: uid(state, "m"), value: v, by: p.id, label: `Luz Sagrada (${p.name})` });
+        let v = scaled(ab.params, "valor", p.level);
+        if (strs(ab.params, "dobraContraTags").some((t) => tags.has(t as Tag))) v *= 2;
+        state.combat!.playerMods.push({ id: uid(state, "m"), value: v, by: p.id, label: `${ab.name} (${p.name})`, fire: flag(ab.params, "fogo") });
       },
     }),
   },
   {
-    key: "reforjar",
-    race: "anao",
-    limit: "ownTurn",
+    acao: "reforjar",
     combat: false,
-    costText: "Descarte 1 item",
     fields: [
       { name: "costItem", kind: "itemHandOrTable", label: "Item a descartar" },
       { name: "item", kind: "ownEquippedNoRing", label: "Item equipado a reforjar" },
     ],
     check: ownTurnFree,
-    prepare: (state, ctx, p, params) => {
+    prepare: (state, ctx, p, params, ab) => {
       const cost = str(params, "costItem");
       const target = str(params, "item");
       if (cost === target) fail("Escolha itens diferentes.");
@@ -279,36 +234,16 @@ const SPECS: Spec[] = [
         paramCards: [cost],
         run: () => {
           discardFromPlayer(state, p, cost);
-          state.cards[target].reforged = true;
-          log(state, ctx, `⚒️ ${p.name} reforjou ${nameOf(state, target)} (+1 permanente).`);
+          state.cards[target].reforged = scaled(ab.params, "bonus", p.level, 1);
+          log(state, ctx, `⚒️ ${p.name} usou ${ab.name} em ${nameOf(state, target)} (+${scaled(ab.params, "bonus", p.level, 1)} permanente).`);
         },
       };
     },
   },
   {
-    key: "baforada",
-    race: "draconato",
-    limit: "combat",
+    acao: "nivelDobradoAjudando",
     combat: true,
     againstMonster: true,
-    discard: 3,
-    costText: "Descarte 3 cartas",
-    fields: [],
-    check: onSide,
-    prepare: (state, ctx, p) => ({
-      run: () => {
-        state.combat!.playerMods.push({ id: uid(state, "m"), value: tier11(p) ? 7 : 5, by: p.id, label: `Baforada (${p.name})`, fire: true });
-      },
-    }),
-  },
-  {
-    key: "disparoDuplo",
-    race: "elfo",
-    limit: "combat",
-    combat: true,
-    againstMonster: true,
-    discard: 3,
-    costText: "Descarte 3 cartas",
     fields: [],
     check: (state, p) => {
       const e = onSide(state, p);
@@ -323,11 +258,8 @@ const SPECS: Spec[] = [
     }),
   },
   {
-    key: "engenhoca",
-    race: "gnomo",
-    limit: "combat",
+    acao: "itemDaMaoParaLado",
     combat: true,
-    costText: "Descarte 1 item da mão",
     fields: [
       { name: "handItem", kind: "handItem", label: "Item da mão" },
       { name: "side", kind: "side", label: "Lado do combate" },
@@ -339,7 +271,7 @@ const SPECS: Spec[] = [
       if (!p.hand.some((id) => itemDef(state, id))) return "Você não tem itens na mão.";
       return null;
     },
-    prepare: (state, ctx, p, params) => {
+    prepare: (state, ctx, p, params, ab) => {
       const card = str(params, "handItem");
       const d = itemDef(state, card);
       if (!p.hand.includes(card) || !d) fail("Escolha um item da sua mão.");
@@ -349,7 +281,7 @@ const SPECS: Spec[] = [
         paramCards: [card],
         run: () => {
           discardFromPlayer(state, p, card);
-          const mod = { id: uid(state, "m"), value: d.bonus, by: p.id, label: `Engenhoca: ${d.name} (${p.name})` };
+          const mod = { id: uid(state, "m"), value: d.bonus, by: p.id, label: `${ab.name}: ${d.name} (${p.name})` };
           if (side === "player") state.combat!.playerMods.push(mod);
           else state.combat!.monsterSideMods.push(mod);
           void isSide;
@@ -358,15 +290,12 @@ const SPECS: Spec[] = [
     },
   },
   {
-    key: "arremesso",
-    race: "gigante",
-    limit: "combat",
+    acao: "arremesso",
     combat: true,
     againstMonster: true,
-    costText: "Perca 1 nível e descarte 1 item Grande",
     fields: [{ name: "bigItem", kind: "bigItem", label: "Item Grande" }],
     check: onSide,
-    prepare: (state, ctx, p, params) => {
+    prepare: (state, ctx, p, params, ab) => {
       const card = str(params, "bigItem");
       const d = itemDef(state, card);
       if (!d?.big || !(p.hand.includes(card) || p.equipped.includes(card) || p.carried.includes(card)))
@@ -374,24 +303,21 @@ const SPECS: Spec[] = [
       return {
         paramCards: [card],
         run: () => {
-          loseLevels(state, p, 1, ctx, "Arremesso");
+          loseLevels(state, p, scaled(ab.params, "perdeNiveis", p.level, 0), ctx, ab.name);
           discardFromPlayer(state, p, card);
-          state.combat!.playerMods.push({ id: uid(state, "m"), value: d.bonus * 2, by: p.id, label: `Arremesso: ${d.name} (${p.name})` });
+          const mult = scaled(ab.params, "multiplicador", p.level, 2);
+          state.combat!.playerMods.push({ id: uid(state, "m"), value: d.bonus * mult, by: p.id, label: `${ab.name}: ${d.name} (${p.name})` });
         },
       };
     },
   },
   {
-    key: "adaptacao",
-    race: "humano",
-    limit: "turn",
+    acao: "usarItemRestrito",
     combat: true,
     againstMonster: true,
-    discard: 3,
-    costText: "Descarte 3 cartas",
     fields: [{ name: "item", kind: "restrictedItem", label: "Item restrito" }],
     check: onSide,
-    prepare: (state, ctx, p, params) => {
+    prepare: (state, ctx, p, params, ab) => {
       const card = str(params, "item");
       const d = itemDef(state, card);
       if (!d || !(p.hand.includes(card) || p.carried.includes(card))) fail("Escolha um item da mão ou da mesa.");
@@ -400,22 +326,18 @@ const SPECS: Spec[] = [
         paramCards: [card],
         run: () => {
           state.combat!.adaptations.push({ cardId: card, playerId: p.id });
-          log(state, ctx, `${p.name} usa ${d.name} por Adaptação até o fim do combate.`);
+          log(state, ctx, `${p.name} usa ${d.name} (${ab.name}) até o fim do combate.`);
         },
       };
     },
   },
   {
-    key: "brutalidade",
-    race: "orc",
-    limit: "combat",
+    acao: "ignorarEspecial",
     combat: true,
-    discard: 2,
-    costText: "Descarte 2 cartas",
     fields: [{ name: "monster", kind: "monster", label: "Monstro" }],
     check: onSide,
-    prepare: (state, ctx, p, params) => {
-      const { cm, d } = combatMonster(state, params, { notLegendary: true });
+    prepare: (state, ctx, p, params, ab) => {
+      const { cm, d } = combatMonster(state, params, { notLegendary: flag(ab.params, "naoEmLendarios") });
       return {
         run: () => {
           cm.ignoreSpecial = true;
@@ -425,12 +347,8 @@ const SPECS: Spec[] = [
     },
   },
   {
-    key: "pactoDiabolico",
-    race: "diabrete",
-    limit: "round",
+    acao: "passarMaldicao",
     combat: false,
-    discard: 1,
-    costText: "Descarte 1 carta",
     fields: [
       { name: "curse", kind: "ownCurse", label: "Sua maldição" },
       { name: "player", kind: "player", label: "Passar para" },
@@ -444,7 +362,7 @@ const SPECS: Spec[] = [
       return {
         run: () => {
           p.curses = p.curses.filter((c) => c.id !== cid);
-          const final = defendCurse(state, ctx, target, p, "o Pacto Diabólico");
+          const final = defendCurse(state, ctx, target, p, "a maldição passada");
           if (!final) {
             if (curse.cardId) discardCard(state, curse.cardId);
             return;
@@ -457,30 +375,22 @@ const SPECS: Spec[] = [
     },
   },
   {
-    key: "tempestade",
-    race: "elemental",
-    limit: "combat",
+    acao: "monstrosPerdemNivel",
     combat: true,
     againstMonster: true,
-    discard: 2,
-    costText: "Descarte 2 cartas",
     fields: [],
     check: onSide,
-    prepare: (state, ctx, p) => ({
+    prepare: (state, ctx, p, _params, ab) => ({
       run: () => {
-        const v = tier11(p) ? -4 : -2;
-        for (const cm of activeMonsters(state.combat!)) cm.mods.push({ id: uid(state, "m"), value: v, by: p.id, label: "Tempestade Elemental" });
-        state.combat!.playerMods.push({ id: uid(state, "m"), value: 0, by: p.id, label: "Tempestade Elemental (fogo)", fire: true });
+        const v = -Math.abs(scaled(ab.params, "valor", p.level, 2));
+        for (const cm of activeMonsters(state.combat!)) cm.mods.push({ id: uid(state, "m"), value: v, by: p.id, label: ab.name });
+        if (flag(ab.params, "fogo")) state.combat!.playerMods.push({ id: uid(state, "m"), value: 0, by: p.id, label: `${ab.name} (fogo)`, fire: true });
       },
     }),
   },
   {
-    key: "bugiganga",
-    race: "goblin",
-    limit: "ownTurn",
+    acao: "bugiganga",
     combat: false,
-    discard: 1,
-    costText: "Descarte 1 carta",
     fields: [
       { name: "mode", kind: "goblinMode", label: "O que fazer" },
       { name: "card", kind: "discardItem", label: "Item do descarte", optional: true },
@@ -498,10 +408,10 @@ const SPECS: Spec[] = [
         if (owner.hibernating) fail(`${owner.name} está no casco (imune a roubos).`);
         return {
           run: () => {
-            if (reflected(state, ctx, p, owner, "Bugiganga Roubada")) return;
+            if (reflected(state, ctx, p, owner, "o roubo")) return;
             removeFromPlayer(owner, card);
             p.hand.push(card);
-            log(state, ctx, `👺 ${p.name} roubou ${nameOf(state, card)} de ${owner.name}!`);
+            log(state, ctx, `👺 ${p.name} pegou ${nameOf(state, card)} de ${owner.name}!`);
           },
         };
       }
@@ -518,12 +428,8 @@ const SPECS: Spec[] = [
     },
   },
   {
-    key: "galope",
-    race: "centauro",
-    limit: "ownTurn",
+    acao: "abrirOutraPorta",
     combat: false,
-    discard: 1,
-    costText: "Descarte 1 carta",
     fields: [],
     check: (state, p) => {
       const e = ownTurnFree(state, p);
@@ -532,21 +438,18 @@ const SPECS: Spec[] = [
         return "Só depois de vencer ou fugir de um combate.";
       return null;
     },
-    prepare: (state, ctx, p) => ({
+    prepare: (state, ctx, p, _params, ab) => ({
       run: () => {
         state.turnPhase = "KICK";
         state.turn.revealed = null;
         state.turn.lastResult = null;
-        log(state, ctx, `🐎 ${p.name} galopa para a próxima porta!`);
+        log(state, ctx, `🐎 ${p.name} usou ${ab.name}: vai abrir mais uma porta!`);
       },
     }),
   },
   {
-    key: "hibernar",
-    race: "torkle",
-    limit: "ownTurn",
+    acao: "hibernar",
     combat: false,
-    costText: "Sem custo (no lugar de chutar a porta)",
     fields: [],
     check: (state, p) => {
       const e = ownTurnFree(state, p);
@@ -554,24 +457,21 @@ const SPECS: Spec[] = [
       if (state.turnPhase !== "KICK" || state.turn.fought || state.turn.revealed) return "Só no início do turno, antes de chutar a porta.";
       return null;
     },
-    prepare: (state, ctx, p) => ({
+    prepare: (state, ctx, p, _params, ab) => ({
       run: () => {
-        const got = drawTo(state, p, "treasure", 2, ctx);
+        const got = drawTo(state, p, "treasure", scaled(ab.params, "tesouros", p.level, 2), ctx);
         p.hibernating = true;
         state.turnPhase = "END";
-        log(state, ctx, `🐢 ${p.name} entrou no casco: comprou ${got.length} Tesouros e fica imune a maldições e roubos.`);
+        log(state, ctx, `🐢 ${p.name} usou ${ab.name}: comprou ${got.length} Tesouros e fica imune a maldições e roubos.`);
       },
     }),
   },
   {
-    key: "pressagio",
-    race: "owlin",
-    limit: "round",
+    acao: "pressagio",
     combat: false,
-    costText: "Coloque 1 carta de Porta da mão no topo do baralho",
     fields: [{ name: "card", kind: "handDoor", label: "Carta de Porta da mão" }],
     check: (state, p) => (p.hand.some((id) => defOf(state, id).deck === "door") ? null : "Você não tem cartas de Porta na mão."),
-    prepare: (state, ctx, p, params) => {
+    prepare: (state, ctx, p, params, ab) => {
       const card = str(params, "card");
       if (!p.hand.includes(card) || defOf(state, card).deck !== "door") fail("Escolha uma carta de Porta da sua mão.");
       return {
@@ -581,18 +481,14 @@ const SPECS: Spec[] = [
           const bottom = state.decks.door.pop();
           state.decks.door.unshift(card);
           if (bottom) p.hand.push(bottom);
-          log(state, ctx, `🦉 ${p.name} usou Presságio.`);
+          log(state, ctx, `🦉 ${p.name} usou ${ab.name}.`);
         },
       };
     },
   },
   {
-    key: "tridente",
-    race: "tritao",
-    label: "Tridente",
-    limit: "round",
+    acao: "ameacarAjuda",
     combat: true,
-    costText: "Sem custo (ameaça: quem recusar perde 1 nível)",
     fields: [
       { name: "player", kind: "player", label: "Jogador ameaçado" },
       { name: "dealCount", kind: "dealCount", label: "Tesouros oferecidos" },
@@ -605,28 +501,24 @@ const SPECS: Spec[] = [
       if (combatHas(state, state.combat, "semPedirAjuda")) return "Este monstro não deixa você pedir ajuda.";
       return null;
     },
-    prepare: (state, ctx, p, params) => {
+    prepare: (state, ctx, p, params, ab) => {
       const target = otherPlayer(state, p, params);
       const err = canBeHelper(state, target);
       if (err) fail(err);
       const deal = parseDeal(params);
       return {
         run: () => {
-          if (reflected(state, ctx, p, target, "Tridente")) return;
-          createPrompt(state, ctx, "helpRequest", target.id, { fighterId: p.id, deal, threat: true, combatId: state.combat!.id });
-          log(state, ctx, `🔱 ${p.name} ameaça ${target.name}: ajude ou perca 1 nível!`, "combat");
+          if (reflected(state, ctx, p, target, ab.name)) return;
+          const lose = scaled(ab.params, "perdeNiveis", p.level, 1);
+          createPrompt(state, ctx, "helpRequest", target.id, { fighterId: p.id, deal, threat: true, threatLevels: lose, threatName: ab.name, combatId: state.combat!.id });
+          log(state, ctx, `🔱 ${p.name} usou ${ab.name} em ${target.name}: ajude ou perca ${lose} nível(is)!`, "combat");
         },
       };
     },
   },
   {
-    key: "cantoSereia",
-    race: "tritao",
-    label: "Canto da Sereia",
-    limit: "round",
+    acao: "forcarAjuda",
     combat: true,
-    discard: 2,
-    costText: "Descarte 2 cartas",
     fields: [{ name: "player", kind: "player", label: "Jogador encantado" }],
     check: (state, p) => {
       const e = isFighter(state, p);
@@ -634,33 +526,29 @@ const SPECS: Spec[] = [
       if (state.combat!.helperId) return "Você já tem ajudante.";
       return null;
     },
-    prepare: (state, ctx, p, params) => {
+    prepare: (state, ctx, p, params, ab) => {
       const target = otherPlayer(state, p, params);
       const err = canBeHelper(state, target);
       if (err) fail(err);
       return {
         run: () => {
-          if (reflected(state, ctx, p, target, "Canto da Sereia")) return;
-          log(state, ctx, `🧜 O Canto da Sereia obriga ${target.name} a ajudar!`, "combat");
+          if (reflected(state, ctx, p, target, ab.name)) return;
+          log(state, ctx, `🧜 ${ab.name} obriga ${target.name} a ajudar!`, "combat");
           joinHelper(state, ctx, target.id, null, true);
         },
       };
     },
   },
   {
-    key: "truqueFeerico",
-    race: "fada",
-    limit: "ownTurn",
+    acao: "trocarItem",
     combat: false,
-    discard: 2,
-    costText: "Descarte 2 cartas",
     fields: [
       { name: "item", kind: "ownEquipped", label: "Seu item" },
       { name: "player", kind: "player", label: "Jogador" },
       { name: "otherItem", kind: "otherEquipped", label: "Item dele (mesmo slot)" },
     ],
     check: ownTurnFree,
-    prepare: (state, ctx, p, params) => {
+    prepare: (state, ctx, p, params, ab) => {
       const mine = str(params, "item");
       const target = otherPlayer(state, p, params);
       const theirs = str(params, "otherItem");
@@ -671,52 +559,44 @@ const SPECS: Spec[] = [
       if (target.hibernating) fail(`${target.name} está no casco.`);
       return {
         run: () => {
-          if (reflected(state, ctx, p, target, "Truque Feérico")) return;
-          createPrompt(state, ctx, "fairySwap", target.id, { fairyId: p.id, mine, theirs });
+          if (reflected(state, ctx, p, target, ab.name)) return;
+          createPrompt(state, ctx, "fairySwap", target.id, { fairyId: p.id, mine, theirs, blockCost: scaled(ab.params, "custoBloqueio", p.level, 2), abilityName: ab.name });
           log(state, ctx, `🧚 ${p.name} tenta trocar ${nameOf(state, mine)} por ${nameOf(state, theirs)} de ${target.name}.`);
         },
       };
     },
   },
   {
-    key: "mordida",
-    race: "vampirico",
-    limit: "ownTurn",
+    acao: "roubarNivel",
     combat: false,
-    discard: 2,
-    costText: "Descarte 2 cartas",
     fields: [{ name: "player", kind: "player", label: "Vítima (nível ≥ ao seu)" }],
     check: (state, p) => {
       const e = ownTurnFree(state, p);
       if (e) return e;
       if (!state.turn.wonCombat) return "Só depois de vencer um combate neste turno.";
-      if (p.level >= 19) return "A Mordida nunca leva ao nível 20.";
+      if (p.level >= RULES.nivelMaximo - 1) return `Nunca leva ao nível ${RULES.nivelMaximo}.`;
       return null;
     },
-    prepare: (state, ctx, p, params) => {
+    prepare: (state, ctx, p, params, ab) => {
       const target = otherPlayer(state, p, params);
       if (target.level < p.level) fail("A vítima precisa ter nível igual ou maior que o seu.");
       return {
         run: () => {
-          if (reflected(state, ctx, p, target, "Mordida")) {
-            loseLevels(state, p, 1, ctx, "Mordida refletida");
-            gainLevels(state, target, 1, ctx, false, "Mordida refletida");
+          if (reflected(state, ctx, p, target, ab.name)) {
+            loseLevels(state, p, 1, ctx, `${ab.name} refletida`);
+            gainLevels(state, target, 1, ctx, false, `${ab.name} refletida`);
             return;
           }
-          const lost = loseLevels(state, target, 1, ctx, `Mordida de ${p.name}`);
-          if (lost) gainLevels(state, p, 1, ctx, false, "Mordida");
+          const lost = loseLevels(state, target, 1, ctx, `${ab.name} de ${p.name}`);
+          if (lost) gainLevels(state, p, 1, ctx, false, ab.name);
         },
       };
     },
   },
   {
-    key: "desafio",
-    cls: "guerreiro",
-    limit: "combat",
+    acao: "desafio",
     combat: true,
     againstMonster: true,
-    wholeHand: 4,
-    costText: "Descarte a mão (mín. 4) e seu item equipado de maior bônus",
     fields: [],
     check: (state, p) => {
       const e = isFighter(state, p);
@@ -725,7 +605,7 @@ const SPECS: Spec[] = [
       if (p.equipped.length === 0) return "Você precisa de um item equipado.";
       return null;
     },
-    prepare: (state, ctx, p) => ({
+    prepare: (state, ctx, p, _params, ab) => ({
       run: () => {
         const combat = state.combat!;
         const best = [...p.equipped].sort((a, b) => worth(state, b) - worth(state, a))[0];
@@ -733,47 +613,41 @@ const SPECS: Spec[] = [
           log(state, ctx, `${p.name} sacrificou ${nameOf(state, best)}.`);
           discardFromPlayer(state, p, best);
         }
-        if (combat.helperId) removeHelper(state, ctx, "Desafio");
+        if (combat.helperId) removeHelper(state, ctx, ab.name);
         cancelHelpPrompts(state);
         combat.desafio = true;
-        log(state, ctx, `⚔️ ${p.name} lançou um DESAFIO! Ninguém mais pode jogar cartas neste combate.`, "combat");
+        combat.desafioPenalty = scaled(ab.params, "penalidade", p.level, 0);
+        combat.desafioMult = scaled(ab.params, "multiplicadorNiveis", p.level, 1);
+        log(state, ctx, `⚔️ ${p.name} usou ${ab.name}! Ninguém mais pode jogar cartas neste combate.`, "combat");
       },
     }),
   },
   {
-    key: "encantar",
-    cls: "mago",
-    limit: "combat",
+    acao: "mandarMonstroEmbora",
     combat: true,
-    wholeHand: 3,
-    costText: "Descarte a mão inteira (mín. 3)",
     fields: [{ name: "monster", kind: "monster", label: "Monstro" }],
     check: onSide,
-    prepare: (state, ctx, p, params) => {
-      const { cm, d } = combatMonster(state, params, { notLegendary: true });
+    prepare: (state, ctx, p, params, ab) => {
+      const { cm, d } = combatMonster(state, params, { notLegendary: flag(ab.params, "naoEmLendarios") });
       return {
         run: () => {
-          const got = drawTo(state, p, "treasure", d.treasures, ctx);
-          log(state, ctx, `✨ ${p.name} encantou ${d.name} e ganhou ${got.length} tesouro(s).`, "combat");
+          const got = drawTo(state, p, "treasure", Math.floor(d.treasures * scaled(ab.params, "fracaoTesouros", p.level, 1)), ctx);
+          log(state, ctx, `✨ ${p.name} usou ${ab.name}: ${d.name} foi embora e ${p.name} ganhou ${got.length} tesouro(s).`, "combat");
           removeMonster(state, ctx, cm.cardId);
         },
       };
     },
   },
   {
-    key: "cura",
-    cls: "clerigo",
-    limit: "round",
+    acao: "curar",
     combat: false,
-    discard: 2,
-    costText: "Descarte 2 cartas",
     fields: [
       { name: "player", kind: "player", label: "Jogador (você ou outro)" },
       { name: "mode", kind: "curaMode", label: "O que curar" },
       { name: "curse", kind: "targetCurse", label: "Maldição", optional: true },
     ],
     check: () => null,
-    prepare: (state, ctx, p, params) => {
+    prepare: (state, ctx, p, params, ab) => {
       const target = player(state, str(params, "player"));
       if (params.mode === "level") {
         const avail =
@@ -782,7 +656,7 @@ const SPECS: Spec[] = [
         return {
           run: () => {
             target.lostRoundAmount -= 1;
-            gainLevels(state, target, 1, ctx, false, `Cura de ${p.name}`);
+            gainLevels(state, target, 1, ctx, false, `${ab.name} de ${p.name}`);
           },
         };
       }
@@ -799,32 +673,25 @@ const SPECS: Spec[] = [
     },
   },
   {
-    key: "roubo",
-    cls: "ladino",
-    limit: "round",
+    acao: "roubarItem",
     combat: false,
-    discard: 1,
-    costText: "Descarte 1 carta e role 1d6",
     fields: [
       { name: "player", kind: "player", label: "Vítima" },
       { name: "otherItem", kind: "otherEquipped", label: "Item equipado (não Grande)" },
       { name: "kit", kind: "kit", label: "Usar Kit de Ladrão", optional: true },
     ],
     check: () => null,
-    prepare: (state, ctx, p, params) => stealPrepare(state, ctx, p, params),
+    prepare: (state, ctx, p, params, ab) => stealPrepare(state, ctx, p, params, ab),
   },
   {
-    key: "domarFera",
-    cls: "druida",
-    limit: "round",
+    acao: "domarFera",
     combat: true,
-    discard: 2,
-    costText: "Descarte 2 cartas",
     fields: [{ name: "monster", kind: "monster", label: "Monstro Animal" }],
     check: isFighter,
-    prepare: (state, ctx, p, params) => {
-      const { cm, d } = combatMonster(state, params);
-      if (!d.tags.includes("animal")) fail("Só monstros Animal.");
+    prepare: (state, ctx, p, params, ab) => {
+      const { cm, d } = combatMonster(state, params, { notLegendary: true });
+      const tag = typeof ab.params.tag === "string" ? ab.params.tag : null;
+      if (tag && !d.tags.includes(tag as Tag)) fail(`Só monstros com a tag ${tag}.`);
       const lvl = d.level + cm.mods.reduce((a, m) => a + m.value, 0);
       if (lvl > p.level) fail("O monstro precisa ter nível igual ou menor que o seu.");
       return {
@@ -845,17 +712,14 @@ const SPECS: Spec[] = [
     },
   },
   {
-    key: "escudoFe",
-    cls: "paladino",
-    limit: "round",
+    acao: "assumirCoisasRuins",
     combat: true,
-    costText: "Sem custo; depois compre 3 Tesouros",
     fields: [{ name: "player", kind: "victim", label: "Jogador a proteger" }],
     check: (state) => {
       if (!state.combat?.flee) return "Só quando alguém vai sofrer Coisas Ruins.";
       return null;
     },
-    prepare: (state, ctx, p, params) => {
+    prepare: (state, ctx, p, params, ab) => {
       const victim = otherPlayer(state, p, params);
       const flee = state.combat!.flee!;
       if (!flee.results.some((r) => r.playerId === victim.id && !r.success)) fail("Esse jogador não vai sofrer Coisas Ruins.");
@@ -863,20 +727,17 @@ const SPECS: Spec[] = [
       return {
         run: () => {
           flee.substitutes[victim.id] = p.id;
+          flee.substituteTreasures = { ...(flee.substituteTreasures ?? {}), [p.id]: scaled(ab.params, "tesouros", p.level, 0) };
           flee.confirmed = flee.confirmed.filter((id) => id !== p.id);
-          log(state, ctx, `🛡️ ${p.name} vai assumir as Coisas Ruins de ${victim.name}!`, "combat");
+          log(state, ctx, `🛡️ ${p.name} usou ${ab.name}: vai assumir as Coisas Ruins de ${victim.name}!`, "combat");
         },
       };
     },
   },
   {
-    key: "esmagar",
-    cls: "barbaro",
-    limit: "combat",
+    acao: "cancelarBonusMonstro",
     combat: true,
     againstMonster: true,
-    wholeHand: 4,
-    costText: "Descarte a mão inteira (mín. 4)",
     fields: [],
     check: onSide,
     prepare: (state, ctx, p) => ({
@@ -893,41 +754,17 @@ const SPECS: Spec[] = [
         const before = combat.monsterSideMods.length;
         combat.monsterSideMods = combat.monsterSideMods.filter(keep);
         removed += before - combat.monsterSideMods.length;
-        log(state, ctx, `💥 ${p.name} esmagou ${removed} bônus do monstro!`, "combat");
+        log(state, ctx, `💥 ${p.name} cancelou ${removed} bônus do monstro!`, "combat");
       },
     }),
   },
   {
-    key: "labia",
-    cls: "bardo",
-    limit: "round",
+    acao: "polimorfia",
     combat: true,
-    discard: 1,
-    costText: "Descarte 1 carta",
     fields: [{ name: "monster", kind: "monster", label: "Monstro" }],
     check: onSide,
-    prepare: (state, ctx, p, params) => {
-      const { cm, d } = combatMonster(state, params, { notLegendary: true });
-      return {
-        run: () => {
-          const got = drawTo(state, p, "treasure", Math.floor(d.treasures / 2), ctx);
-          log(state, ctx, `🎶 ${p.name} convenceu ${d.name} a ir embora e ganhou ${got.length} tesouro(s).`, "combat");
-          removeMonster(state, ctx, cm.cardId);
-        },
-      };
-    },
-  },
-  {
-    key: "polimorfia",
-    cls: "feiticeiro",
-    limit: "combat",
-    combat: true,
-    discard: 2,
-    costText: "Descarte 2 cartas",
-    fields: [{ name: "monster", kind: "monster", label: "Monstro" }],
-    check: onSide,
-    prepare: (state, ctx, p, params) => {
-      const { cm, d } = combatMonster(state, params, { notLegendary: true });
+    prepare: (state, ctx, p, params, ab) => {
+      const { cm, d } = combatMonster(state, params, { notLegendary: flag(ab.params, "naoEmLendarios") });
       return {
         run: () => {
           let found: string | null = null;
@@ -955,57 +792,45 @@ const SPECS: Spec[] = [
     },
   },
   {
-    key: "maldicaoSombria",
-    cls: "bruxo",
-    limit: "round",
+    acao: "maldicaoForca",
     combat: false,
-    discard: 2,
-    costText: "Descarte 2 cartas",
     fields: [{ name: "player", kind: "player", label: "Alvo" }],
     check: () => null,
-    prepare: (state, ctx, p, params) => {
+    prepare: (state, ctx, p, params, ab) => {
       const target = otherPlayer(state, p, params);
       return {
         run: () => {
           p.curseCastRound = state.round;
-          const final = defendCurse(state, ctx, target, p, "Maldição Sombria");
+          const final = defendCurse(state, ctx, target, p, ab.name);
           if (!final) return;
-          const v = tier11(p) ? 5 : 3;
-          addSpecialCurse(state, final, "special.sombria", v, 1, p.id);
-          log(state, ctx, `🌑 ${final.name} está sob Maldição Sombria (-${v}).`, "curse");
+          const v = scaled(ab.params, "valor", p.level, -3);
+          addSpecialCurse(state, final, "special.forca", v, scaled(ab.params, "turnos", p.level, 1), p.id, ab.name);
+          log(state, ctx, `🌑 ${final.name} está sob ${ab.name} (${v}).`, "curse");
           if (state.combat) onCombatChanged(state, ctx);
         },
       };
     },
   },
   {
-    key: "pazInterior",
-    cls: "monge",
-    limit: "round",
+    acao: "encerrarCombate",
     combat: true,
-    discard: 2,
-    costText: "Descarte 2 cartas",
     fields: [],
     check: (state, p) => {
       const e = onSide(state, p);
       if (e) return e;
-      if (hasLegendary(state, state.combat!)) return "Não funciona em Lendários.";
       return null;
     },
-    prepare: (state, ctx, p) => ({
+    prepare: (state, ctx, p, _params, ab) => ({
       run: () => {
-        log(state, ctx, `☮️ ${p.name} encontrou a Paz Interior: o combate termina sem vencedor.`, "combat");
+        if (flag(ab.params, "naoEmLendarios") && hasLegendary(state, state.combat!)) fail("Não funciona em Lendários.");
+        log(state, ctx, `☮️ ${p.name} usou ${ab.name}: o combate termina sem vencedor.`, "combat");
         endCombat(state, ctx, "ended");
       },
     }),
   },
   {
-    key: "armadilha",
-    cls: "patrulheiro",
-    limit: "round",
+    acao: "anularErrante",
     combat: true,
-    discard: 2,
-    costText: "Descarte 2 cartas",
     fields: [{ name: "monster", kind: "wandering", label: "Monstro Errante" }],
     check: (state) => {
       if (!state.combat) return "Só durante um combate.";
@@ -1018,20 +843,16 @@ const SPECS: Spec[] = [
       if (!cm) fail("Escolha um Monstro Errante.");
       return {
         run: () => {
-          log(state, ctx, `🪤 ${p.name} prendeu ${nameOf(state, id)} numa armadilha!`, "combat");
+          log(state, ctx, `🪤 ${p.name} anulou ${nameOf(state, id)}!`, "combat");
           removeMonster(state, ctx, id);
         },
       };
     },
   },
   {
-    key: "duplicata",
-    cls: "ilusionista",
-    limit: "combat",
+    acao: "duplicata",
     combat: true,
     againstMonster: true,
-    discard: 2,
-    costText: "Descarte 2 cartas + 1 monstro da mão",
     fields: [{ name: "handMonster", kind: "handMonster", label: "Monstro da mão" }],
     check: (state, p) => {
       const e = isFighter(state, p);
@@ -1051,19 +872,15 @@ const SPECS: Spec[] = [
           if (!combat.isolated.includes(p.id)) combat.isolated.push(p.id);
           cancelHelpPrompts(state);
           const d = def(state.cards[card].defId) as MonsterCard;
-          log(state, ctx, `👥 Duplicata: ${d.name} luta ao lado de ${p.name} (+${Math.ceil(d.level / 2)}).`, "combat");
+          log(state, ctx, `👥 ${d.name} luta ao lado de ${p.name} (+${Math.ceil(d.level / 2)}).`, "combat");
         },
       };
     },
   },
   {
-    key: "furiaSangrenta",
-    cls: "berserker",
-    limit: "combat",
+    acao: "dobrarFuria",
     combat: true,
     againstMonster: true,
-    discard: 4,
-    costText: "Descarte 4 cartas",
     fields: [],
     check: (state, p) => {
       const e = onSide(state, p);
@@ -1078,13 +895,9 @@ const SPECS: Spec[] = [
     }),
   },
   {
-    key: "infusao",
-    cls: "artifice",
-    limit: "combat",
+    acao: "dobrarItem",
     combat: true,
     againstMonster: true,
-    discard: 3,
-    costText: "Descarte 3 cartas",
     fields: [{ name: "item", kind: "combatItem", label: "Item equipado (seu ou do aliado)" }],
     check: onSide,
     prepare: (state, ctx, p, params) => {
@@ -1095,18 +908,14 @@ const SPECS: Spec[] = [
       return {
         run: () => {
           state.combat!.infusions.push(card);
-          log(state, ctx, `🔧 Infusão: ${nameOf(state, card)} tem o bônus dobrado.`, "combat");
+          log(state, ctx, `🔧 ${nameOf(state, card)} tem o bônus dobrado.`, "combat");
         },
       };
     },
   },
   {
-    key: "transmutar",
-    cls: "alquimista",
-    limit: "ownTurn",
+    acao: "buscarPocao",
     combat: false,
-    discard: 2,
-    costText: "Descarte 2 cartas",
     fields: [],
     check: (state, p) => {
       if (state.phase !== "PLAYING" || !isCurrent(state, p.id)) return "Só no seu turno.";
@@ -1119,7 +928,7 @@ const SPECS: Spec[] = [
         const [card] = state.decks.treasure.splice(idx, 1);
         p.hand.push(card);
         shuffle(state.decks.treasure, ctx);
-        log(state, ctx, `⚗️ ${p.name} transmutou uma poção.`);
+        log(state, ctx, `⚗️ ${p.name} pegou uma poção do baralho.`);
       },
     }),
   },
@@ -1131,32 +940,33 @@ function worth(state: GameState, cardId: string): number {
   return bonus * 10000 + ("price" in d ? d.price : 0);
 }
 
-function stealPrepare(state: GameState, ctx: Ctx, p: PlayerState, params: Params) {
+function stealPrepare(state: GameState, ctx: Ctx, p: PlayerState, params: Params, ab: AbilityDef) {
   const target = otherPlayer(state, p, params);
   const card = str(params, "otherItem");
   if (!target.equipped.includes(card)) fail("Escolha um item equipado da vítima.");
   const d = itemDef(state, card);
   if (d?.big) fail("Não dá para roubar itens Grandes.");
-  if (hasClass(state, target, "ladino")) fail(`${target.name} é Ladino: os itens dele não podem ser roubados.`);
+  if (hasPassive(state, target, "itensNaoRoubaveis")) fail(`Os itens equipados de ${target.name} não podem ser roubados.`);
   if (target.hibernating) fail(`${target.name} está no casco (imune a roubos).`);
   if (runeFx(state, card, "naoRoubavel").length > 0) fail("Uma runa impede que esse item seja roubado.");
   const kitId = optStr(params, "kit");
-  const isThief = hasClass(state, p, "ladino");
+  // Quem tem a ativa por raça/classe é "ladrão"; quem só tem o kit usa o sucesso do kit
+  const isThief = !ab.fromItem;
   if (kitId && !(p.hand.includes(kitId) || p.carried.includes(kitId))) fail("Kit de Ladrão inválido.");
   const kitFx = kitId ? cardFx(state, kitId, "kitLadrao") : undefined;
   if (kitId && !kitFx) fail("Kit de Ladrão inválido.");
-  if (!isThief && !kitId) fail("Sem ser Ladino, você precisa de um Kit de Ladrão.");
+  if (!isThief && !kitId) fail("Você precisa de uma carta que permita roubar.");
   return {
     paramCards: kitId ? [kitId] : [],
     run: () => {
       if (kitId) discardFromPlayer(state, p, kitId);
-      if (reflected(state, ctx, p, target, "Roubo")) {
-        loseLevels(state, p, 1, ctx, "Roubo refletido");
+      if (reflected(state, ctx, p, target, ab.name)) {
+        loseLevels(state, p, 1, ctx, `${ab.name} refletido`);
         return;
       }
-      const r = rollD6(state, p, ctx, `Roubo em ${target.name}`);
+      const r = rollD6(state, p, ctx, `${ab.name} em ${target.name}`);
       const bonus = kitFx && isThief ? num(kitFx, "bonus", 2) : 0;
-      const need = isThief ? 4 : num(kitFx, "sucessoSemLadino", 5);
+      const need = isThief ? scaled(ab.params, "sucesso", p.level, 4) : num(kitFx, "sucessoSemLadino", 5);
       if (r.total + bonus >= need) {
         removeFromPlayer(target, card);
         delete state.cards[card].artificeSecond;
@@ -1164,115 +974,132 @@ function stealPrepare(state: GameState, ctx: Ctx, p: PlayerState, params: Params
         log(state, ctx, `🗡️ ${p.name} roubou ${nameOf(state, card)} de ${target.name}!`);
       } else {
         log(state, ctx, `🗡️ ${p.name} foi pego tentando roubar ${target.name}.`);
-        loseLevels(state, p, 1, ctx, "Roubo fracassado");
+        loseLevels(state, p, 1, ctx, `${ab.name} fracassado`);
       }
     },
   };
 }
 
-export const ABILITY_SPECS: Record<AbilityKey, Spec> = Object.fromEntries(SPECS.map((s) => [s.key, s])) as Record<AbilityKey, Spec>;
+export const ACTION_SPECS: Record<string, Spec> = Object.fromEntries(SPECS.map((s) => [s.acao, s]));
 
-export function abilityName(key: AbilityKey): string {
-  const s = ABILITY_SPECS[key];
-  if (s.label) return s.label;
-  if (s.race) return raceDef(s.race).active.name;
-  if (s.cls) return classDef(s.cls).active.name;
-  return key;
+/** Uma ativa que o jogador tem (de raça, classe ou de uma carta como o Kit de Ladrão). */
+export interface OwnedAbility {
+  key: AbilityKey;
+  ab: AbilityDef;
+  source: string;
 }
 
-/** Habilidades que o jogador possui (por raça/classe ou Kit de Ladrão). */
-export function abilitiesOf(state: GameState, p: PlayerState): AbilityKey[] {
-  const out: AbilityKey[] = [];
-  for (const s of SPECS) {
-    if (s.race && hasRace(state, p, s.race)) out.push(s.key);
-    else if (s.cls && hasClass(state, p, s.cls)) out.push(s.key);
+/** Ativas do jogador: tudo vem das cartas (JSON). */
+export function abilitiesOf(state: GameState, p: PlayerState): OwnedAbility[] {
+  const out: OwnedAbility[] = [];
+  for (const id of identityCards(state, p)) {
+    const d = def(state.cards[id].defId);
+    if (d.kind !== "race" && d.kind !== "class") continue;
+    for (const ab of d.actives) if (ACTION_SPECS[ab.acao]) out.push({ key: `${d.id}#${ab.id}`, ab, source: d.name });
   }
-  if (!out.includes("roubo") && heldFx(state, p, "kitLadrao"))
-    out.push("roubo");
+  // Cartas que permitem roubar (ex.: Kit de Ladrão) concedem a ação de roubo a quem não a tem
+  const kit = heldFx(state, p, "kitLadrao");
+  if (kit && !out.some((o) => o.ab.acao === "roubarItem")) {
+    const kd = defOf(state, kit.cardId);
+    out.push({
+      key: `${kd.id}#kit`,
+      ab: { id: "kit", name: kd.name, text: "text" in kd ? kd.text : "", acao: "roubarItem", limite: "rodada", custo: { descartar: 1 }, params: { tipo: "roubarItem" } as Fx, fromItem: true },
+      source: kd.name,
+    });
+  }
   return out;
 }
 
-function usageUsed(state: GameState, p: PlayerState, s: Spec): boolean {
-  const k = s.key;
-  switch (s.limit) {
-    case "combat":
+function findOwned(state: GameState, p: PlayerState, key: AbilityKey): OwnedAbility | undefined {
+  return abilitiesOf(state, p).find((o) => o.key === key);
+}
+
+function usageUsed(state: GameState, p: PlayerState, o: OwnedAbility): boolean {
+  const k = o.key;
+  switch (o.ab.limite) {
+    case "combate":
       return !!state.combat?.used.includes(`${p.id}:${k}`);
-    case "round":
+    case "rodada":
       return p.usage[k] === state.round;
-    case "turn":
+    case "turno":
       return p.usage[k] === state.turnSerial;
-    case "ownTurn":
+    case "turnoProprio":
       return p.usage[k] !== undefined && p.lastTurnStart > 0 && p.usage[k] >= p.lastTurnStart;
   }
 }
 
-function markUsage(state: GameState, p: PlayerState, s: Spec) {
-  switch (s.limit) {
-    case "combat":
-      state.combat?.used.push(`${p.id}:${s.key}`);
+function markUsage(state: GameState, p: PlayerState, o: OwnedAbility) {
+  switch (o.ab.limite) {
+    case "combate":
+      state.combat?.used.push(`${p.id}:${o.key}`);
       break;
-    case "round":
-      p.usage[s.key] = state.round;
+    case "rodada":
+      p.usage[o.key] = state.round;
       break;
-    case "turn":
-      p.usage[s.key] = state.turnSerial;
-      break;
-    case "ownTurn":
-      p.usage[s.key] = state.turnSerial;
+    case "turno":
+    case "turnoProprio":
+      p.usage[o.key] = state.turnSerial;
       break;
   }
 }
 
-/** Erro geral de disponibilidade (sem parâmetros), ou null. */
-export function abilityBlocked(state: GameState, p: PlayerState, key: AbilityKey): string | null {
-  const s = ABILITY_SPECS[key];
-  if (!abilitiesOf(state, p).includes(key)) return "Você não tem essa habilidade.";
+function unmark(state: GameState, p: PlayerState, o: OwnedAbility) {
+  if (o.ab.limite === "combate" && state.combat) state.combat.used = state.combat.used.filter((u) => u !== `${p.id}:${o.key}`);
+  else delete p.usage[o.key];
+}
+
+function blockedFor(state: GameState, p: PlayerState, o: OwnedAbility): string | null {
+  const s = ACTION_SPECS[o.ab.acao];
+  if (!s) return "Ação desconhecida.";
   if (state.phase !== "PLAYING") return "Só durante a partida.";
   if (state.reward && s.combat) return "Aguarde a divisão dos tesouros.";
-  if (usageUsed(state, p, s)) {
-    return s.limit === "combat"
-      ? "Já usada neste combate."
-      : s.limit === "round"
-        ? "Já usada nesta rodada."
-        : "Já usada neste turno.";
+  if (usageUsed(state, p, o)) {
+    return o.ab.limite === "combate" ? "Já usada neste combate." : o.ab.limite === "rodada" ? "Já usada nesta rodada." : "Já usada neste turno.";
   }
   const combat = state.combat;
   if (combat) {
     if (s.combat && combatHas(state, combat, "imuneMagia")) return "Nenhuma habilidade ativa funciona neste combate.";
-    if (combatHas(state, combat, "paralisaAtivas") && playerSide(state, combat).includes(p.id) && !hasClass(state, p, "clerigo"))
-      return "Carniçal: ninguém do lado dos jogadores usa ativas.";
-    if (combat.silenced.includes(p.id)) return "Silêncio Arcano: você não pode usar ativas.";
+    for (const { fx } of combatFx(state, combat, "paralisaAtivas")) {
+      const immune = strs(fx, "excetoClasses").some((c) => hasClass(state, p, c));
+      if (!immune && playerSide(state, combat).includes(p.id)) return "Um monstro impede o uso de ativas do lado dos jogadores.";
+    }
+    if (combat.silenced.includes(p.id)) return "Uma maldição impede você de usar ativas.";
     if (s.combat && combat.desafio && combat.fighterId !== p.id) return "Desafio: ninguém mais pode jogar neste combate.";
     if (s.combat && combatHas(state, combat, "detectaMentiras") && p.curseCastRound === state.round && !playerSide(state, combat).includes(p.id))
-      return "Planetar: quem lançou maldição nesta rodada não interfere.";
+      return "Quem lançou maldição nesta rodada não interfere neste combate.";
   }
-  if (s.discard && p.hand.length < s.discard) return `Precisa de ${s.discard} carta(s) na mão.`;
-  if (s.wholeHand && p.hand.length < s.wholeHand) return `Precisa de pelo menos ${s.wholeHand} cartas na mão.`;
-  return s.check(state, p);
+  const discard = o.ab.custo.descartar ?? 0;
+  const wholeHand = o.ab.custo.descartarMao ?? 0;
+  if (discard && p.hand.length < discard) return `Precisa de ${discard} carta(s) na mão.`;
+  if (wholeHand && p.hand.length < wholeHand) return `Precisa de pelo menos ${wholeHand} cartas na mão.`;
+  return s.check(state, p, o.ab);
 }
 
-export function activateAbility(
-  state: GameState,
-  ctx: Ctx,
-  p: PlayerState,
-  key: AbilityKey,
-  discard: string[],
-  params: Params,
-) {
-  const s = ABILITY_SPECS[key];
-  if (!s) fail("Habilidade desconhecida.");
-  const blocked = abilityBlocked(state, p, key);
+/** Erro geral de disponibilidade (sem parâmetros), ou null. */
+export function abilityBlocked(state: GameState, p: PlayerState, key: AbilityKey): string | null {
+  const o = findOwned(state, p, key);
+  if (!o) return "Você não tem essa habilidade.";
+  return blockedFor(state, p, o);
+}
+
+export function activateAbility(state: GameState, ctx: Ctx, p: PlayerState, key: AbilityKey, discard: string[], params: Params) {
+  const o = findOwned(state, p, key);
+  if (!o) fail("Você não tem essa habilidade.");
+  const s = ACTION_SPECS[o.ab.acao];
+  const blocked = blockedFor(state, p, o);
   if (blocked) fail(blocked);
-  const prepared = s.prepare(state, ctx, p, params);
+  const prepared = s.prepare(state, ctx, p, params, o.ab);
   const reserved = new Set(prepared.paramCards ?? []);
   // Custo de descarte
   let toDiscard: string[] = [];
-  if (s.wholeHand) {
+  const wholeHand = o.ab.custo.descartarMao ?? 0;
+  const need = o.ab.custo.descartar ?? 0;
+  if (wholeHand) {
     toDiscard = p.hand.filter((id) => !reserved.has(id));
-    if (toDiscard.length < s.wholeHand) fail(`Precisa descartar pelo menos ${s.wholeHand} cartas.`);
-  } else if (s.discard) {
+    if (toDiscard.length < wholeHand) fail(`Precisa descartar pelo menos ${wholeHand} cartas.`);
+  } else if (need) {
     const uniq = [...new Set(discard)];
-    if (uniq.length !== s.discard) fail(`Escolha exatamente ${s.discard} carta(s) para descartar.`);
+    if (uniq.length !== need) fail(`Escolha exatamente ${need} carta(s) para descartar.`);
     for (const id of uniq) {
       if (!p.hand.includes(id)) fail("Só cartas da sua mão podem ser descartadas.");
       if (reserved.has(id)) fail("Você não pode descartar a carta usada como alvo.");
@@ -1280,29 +1107,23 @@ export function activateAbility(
     toDiscard = uniq;
   }
   for (const id of toDiscard) discardFromPlayer(state, p, id);
-  markUsage(state, p, s);
-  const name = abilityName(key);
-  log(state, ctx, `✴️ ${p.name} usou ${name}.`, "combat", p.id);
+  markUsage(state, p, o);
+  log(state, ctx, `✴️ ${p.name} usou ${o.ab.name}.`, "combat", p.id);
 
-  // Magia Selvagem (Feiticeiro)
-  if (hasClass(state, p, "feiticeiro")) {
-    const r = rollD6(state, p, ctx, "Magia Selvagem");
-    if (r.total >= 6) {
-      unmark(state, p, s);
-      log(state, ctx, `✨ Magia Selvagem: ${name} não conta para o limite.`);
+  // Passiva "magiaSelvagem": com sorte, a ativa não conta no limite
+  for (const { fx, source } of passiveFxSrc(state, p, "magiaSelvagem")) {
+    const r = rollD6(state, p, ctx, source);
+    if (r.total >= scaled(fx, "dado", p.level, 6)) {
+      unmark(state, p, o);
+      log(state, ctx, `✨ ${source}: ${o.ab.name} não conta para o limite.`);
+      break;
     }
   }
   // Resistência Lendária
   const combat = state.combat;
-  if (
-    combat &&
-    s.againstMonster &&
-    hasLegendary(state, combat) &&
-    !combat.legendaryResistanceUsed &&
-    playerSide(state, combat).includes(p.id)
-  ) {
+  if (combat && s.againstMonster && hasLegendary(state, combat) && !combat.legendaryResistanceUsed && playerSide(state, combat).includes(p.id)) {
     combat.legendaryResistanceUsed = true;
-    log(state, ctx, `🛡️ Resistência Lendária anulou ${name}!`, "combat");
+    log(state, ctx, `🛡️ Resistência Lendária anulou ${o.ab.name}!`, "combat");
     onCombatChanged(state, ctx);
     return;
   }
@@ -1310,16 +1131,9 @@ export function activateAbility(
   if (state.combat) onCombatChanged(state, ctx);
 }
 
-function unmark(state: GameState, p: PlayerState, s: Spec) {
-  if (s.limit === "combat" && state.combat) {
-    state.combat.used = state.combat.used.filter((u) => u !== `${p.id}:${s.key}`);
-  } else {
-    delete p.usage[s.key];
-  }
-}
-
 export interface AbilityInfo {
   key: AbilityKey;
+  acao: string;
   name: string;
   source: string;
   text: string;
@@ -1331,28 +1145,27 @@ export interface AbilityInfo {
   reason: string | null;
 }
 
+function costText(ab: AbilityDef): string {
+  const parts: string[] = [];
+  if (ab.custo.descartar) parts.push(`Descarte ${ab.custo.descartar} carta(s)`);
+  if (ab.custo.descartarMao) parts.push(`Descarte a mão inteira (mín. ${ab.custo.descartarMao})`);
+  const limit = { combate: "1x por combate", rodada: "1x por rodada", turno: "1x por turno", turnoProprio: "1x por turno seu" }[ab.limite];
+  return [...parts, limit].join(" · ");
+}
+
 export function abilityInfos(state: GameState, p: PlayerState): AbilityInfo[] {
-  return abilitiesOf(state, p).map((key) => {
-    const s = ABILITY_SPECS[key];
-    const reason = abilityBlocked(state, p, key);
-    let source = "Kit de Ladrão";
-    let text = "Roube 1 item equipado (não Grande): sucesso com 5+ sem ser Ladino; falha perde 1 nível.";
-    if (s.race && hasRace(state, p, s.race)) {
-      source = raceDef(s.race).name;
-      text = raceDef(s.race).active.text;
-    } else if (s.cls && hasClass(state, p, s.cls)) {
-      source = classDef(s.cls).name;
-      text = classDef(s.cls).active.text;
-    }
+  return abilitiesOf(state, p).map((o) => {
+    const reason = blockedFor(state, p, o);
     return {
-      key,
-      name: abilityName(key),
-      source,
-      text,
-      costText: s.costText,
-      discard: s.discard ?? 0,
-      wholeHand: s.wholeHand ?? 0,
-      fields: s.fields,
+      key: o.key,
+      acao: o.ab.acao,
+      name: o.ab.name,
+      source: o.source,
+      text: o.ab.text,
+      costText: costText(o.ab),
+      discard: o.ab.custo.descartar ?? 0,
+      wholeHand: o.ab.custo.descartarMao ?? 0,
+      fields: ACTION_SPECS[o.ab.acao]?.fields ?? [],
       available: reason === null,
       reason,
     };

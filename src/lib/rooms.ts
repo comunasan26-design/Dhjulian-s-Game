@@ -2,12 +2,13 @@ import "server-only";
 import { randomInt } from "node:crypto";
 import type { Prisma } from "@/generated/prisma/client";
 import { botName, stepBots } from "@/game/bot/ai";
+import { RULES } from "@/game/catalog";
 import { type Action, applyAction, createGame, type Ctx, type GameState, type GameView, nextDeadline, tick, viewFor } from "@/game/engine";
 import { db } from "./db";
 import { HttpError } from "./http";
 
-export const MIN_PLAYERS = 2;
-export const MAX_PLAYERS = 9;
+export const MIN_PLAYERS = RULES.jogadoresMinimo;
+export const MAX_PLAYERS = RULES.jogadoresMaximo;
 /** Um jogador é considerado online se deu sinal de vida nos últimos N ms. */
 export const ONLINE_WINDOW_MS = 25_000;
 

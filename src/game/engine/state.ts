@@ -1,8 +1,6 @@
 // Estado completo do jogo (guardado como JSON no banco).
 import type { Slot } from "../catalog/types";
 
-export const MAX_LEVEL = 20;
-export const START_HAND = 4;
 
 /** Tempos (ms) das janelas de reação. */
 export const TIMERS = {
@@ -18,7 +16,8 @@ export const TIMERS = {
 export interface CardInst {
   id: string;
   defId: string;
-  reforged?: boolean;
+  /** Bônus permanente ganho ao ser reforjado. */
+  reforged?: number | boolean;
   runes?: string[];
   charges?: number;
   /** Criada por efeito (ex.: "você vira Humano"); some ao ser descartada. */
@@ -38,6 +37,8 @@ export interface ActiveCurse {
   /** Turnos do alvo restantes (para maldições com duração). */
   remaining?: number;
   value?: number;
+  /** Nome exibido (para maldições criadas por ativas/monstros). */
+  label?: string;
   casterId: string | null;
 }
 
@@ -134,8 +135,17 @@ export interface CombatState {
   stage: "fight" | "resolving" | "badstuff";
   resolveDeadline: number | null;
   passed: string[];
-  flee: { results: FleeResult[]; deadline: number; confirmed: string[]; substitutes: Record<string, string> } | null;
+  flee: {
+    results: FleeResult[];
+    deadline: number;
+    confirmed: string[];
+    substitutes: Record<string, string>;
+    /** Tesouros que quem assumiu as Coisas Ruins compra depois. */
+    substituteTreasures?: Record<string, number>;
+  } | null;
   desafio: boolean;
+  desafioPenalty?: number;
+  desafioMult?: number;
   glabrezuAccepted: boolean;
   legendaryResistanceUsed: boolean;
   oniDoubled: boolean;

@@ -1,10 +1,9 @@
-import { def, fxOf, type CardDef, type ClassId, type ItemCard, type RaceId } from "../catalog";
+import { def, fxOf, RULES, type CardDef, type ClassId, type Fx, type ItemCard, type RaceId } from "../catalog";
 import {
   type CardInst,
   type Ctx,
   type GameState,
   type LogEntry,
-  MAX_LEVEL,
   type PlayerState,
   fail,
 } from "./state";
@@ -81,17 +80,18 @@ export function pickRandom<T>(arr: T[], ctx: Ctx): T {
 // Raça e classe
 // ----------------------------------------------------------------------------
 
+/** Id da raça do jogador (o "id" da carta em racas.json). */
 export function raceOf(state: GameState, p: PlayerState): RaceId | null {
   if (!p.race) return null;
   const d = defOf(state, p.race);
-  return d.kind === "race" ? d.race : null;
+  return d.kind === "race" ? d.id.slice("race.".length) : null;
 }
 
 export function classesOf(state: GameState, p: PlayerState): ClassId[] {
   return p.classes
     .map((id) => defOf(state, id))
     .filter((d) => d.kind === "class")
-    .map((d) => (d.kind === "class" ? d.cls : ("" as ClassId)));
+    .map((d) => d.id.slice("class.".length));
 }
 
 export function hasRace(state: GameState, p: PlayerState, r: RaceId): boolean {
@@ -102,8 +102,64 @@ export function hasClass(state: GameState, p: PlayerState, c: ClassId): boolean 
   return classesOf(state, p).includes(c);
 }
 
+/** Cartas de raça e classe do jogador (de onde vêm passivas e ativas). */
+export function identityCards(state: GameState, p: PlayerState): string[] {
+  return [p.race, ...p.classes].filter((x): x is string => !!x && !!state.cards[x]);
+}
+
+/** Efeitos passivos (raça + classes) do jogador. */
+export function passiveFx(state: GameState, p: PlayerState, tipo: string): Fx[] {
+  const out: Fx[] = [];
+  for (const id of identityCards(state, p)) for (const fx of fxOf(state.cards[id].defId)) if (fx.tipo === tipo) out.push(fx);
+  return out;
+}
+
+/** Passivas com o nome da passiva de origem (para mostrar no cálculo). */
+export function passiveFxSrc(state: GameState, p: PlayerState, tipo: string): { fx: Fx; source: string }[] {
+  const out: { fx: Fx; source: string }[] = [];
+  for (const id of identityCards(state, p)) {
+    const d = def(state.cards[id].defId);
+    const source = d.kind === "race" || d.kind === "class" ? d.passive.name || d.name : d.name;
+    for (const fx of fxOf(d.id)) if (fx.tipo === tipo) out.push({ fx, source });
+  }
+  return out;
+}
+
+export function hasPassive(state: GameState, p: PlayerState, tipo: string): boolean {
+  return passiveFx(state, p, tipo).length > 0;
+}
+
+/**
+ * Valor de um parâmetro considerando "<param>PorNivel" (ex.: valorPorNivel { "11": 4 }).
+ */
+export function scaled(fx: Fx | undefined, key: string, level: number, fallback = 0): number {
+  if (!fx) return fallback;
+  let v = typeof fx[key] === "number" ? (fx[key] as number) : fallback;
+  const table = fx[`${key}PorNivel`];
+  if (table && typeof table === "object") {
+    let best = -1;
+    for (const [lv, val] of Object.entries(table as Record<string, number>)) {
+      const n = Number(lv);
+      if (level >= n && n > best && typeof val === "number") {
+        best = n;
+        v = val;
+      }
+    }
+  }
+  return v;
+}
+
+/** Soma um parâmetro (com escala por nível) de todas as passivas de um tipo. */
+export function passiveSum(state: GameState, p: PlayerState, tipo: string, key = "valor"): number {
+  return passiveFx(state, p, tipo).reduce((a, fx) => a + scaled(fx, key, p.level), 0);
+}
+
 export function maxClasses(state: GameState, p: PlayerState): number {
-  return hasRace(state, p, "humano") && p.level >= 11 ? 2 : 1;
+  let n = 1;
+  for (const fx of passiveFx(state, p, "classesExtras")) {
+    if (p.level >= scaled(fx, "nivelMinimo", p.level, 0)) n += scaled(fx, "quantidade", p.level, 1);
+  }
+  return n;
 }
 
 // ----------------------------------------------------------------------------
@@ -262,16 +318,16 @@ export function rollD6(state: GameState, p: PlayerState | null, ctx: Ctx, label:
  */
 export function gainLevels(state: GameState, p: PlayerState, n: number, ctx: Ctx, fromMonster: boolean, reason: string) {
   if (n <= 0) return;
-  const cap = fromMonster ? MAX_LEVEL : MAX_LEVEL - 1;
+  const cap = fromMonster ? RULES.nivelMaximo : RULES.nivelMaximo - 1;
   const before = p.level;
   p.level = Math.min(cap, Math.max(p.level, p.level + n));
   if (p.level !== before) {
     log(state, ctx, `⬆️ ${p.name} subiu para o nível ${p.level} (${reason}).`, "level", p.id);
   }
-  if (p.level >= MAX_LEVEL && fromMonster && !state.winnerId) {
+  if (p.level >= RULES.nivelMaximo && fromMonster && !state.winnerId) {
     state.winnerId = p.id;
     state.phase = "FINISHED";
-    log(state, ctx, `🏆 ${p.name} chegou ao nível ${MAX_LEVEL} e venceu o jogo!`, "system");
+    log(state, ctx, `🏆 ${p.name} chegou ao nível ${RULES.nivelMaximo} e venceu o jogo!`, "system");
   }
 }
 

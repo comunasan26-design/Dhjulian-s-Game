@@ -9,9 +9,12 @@ import monstrosJson from "../../../cartas/monstros.json";
 import pocoesJson from "../../../cartas/pocoes.json";
 import racasJson from "../../../cartas/racas.json";
 import runasJson from "../../../cartas/runas.json";
+import regrasJson from "../../../cartas/regras.json";
 import subirJson from "../../../cartas/subir-nivel.json";
 import {
+  ACTIONS,
   BAD_STUFF_TYPES,
+  PLAYER_EFFECTS,
   CURSE_EFFECTS,
   type EffectSpec,
   type Fx,
@@ -22,9 +25,11 @@ import {
   RUNE_EFFECTS,
 } from "./effects";
 import type {
+  AbilityDef,
+  AbilityLimit,
   BadEffect,
+  GameRules,
   ClassCard,
-  ClassId,
   CurseCard,
   ItemCard,
   LevelUpCard,
@@ -33,7 +38,6 @@ import type {
   MonsterCard,
   PotionCard,
   RaceCard,
-  RaceId,
   Rarity,
   RuneCard,
   Slot,
@@ -41,14 +45,10 @@ import type {
   WanderingCard,
 } from "./types";
 
-export const RACE_IDS: RaceId[] = [
-  "divino", "anao", "draconato", "elfo", "gnomo", "gigante", "humano", "orc", "diabrete",
-  "elemental", "goblin", "centauro", "torkle", "owlin", "tritao", "fada", "vampirico",
-];
-export const CLASS_IDS: ClassId[] = [
-  "guerreiro", "mago", "clerigo", "ladino", "druida", "paladino", "barbaro", "bardo",
-  "feiticeiro", "bruxo", "monge", "patrulheiro", "ilusionista", "berserker", "artifice", "alquimista",
-];
+/** Ids de raças/classes existentes (lidos dos próprios JSON antes de validar). */
+let knownRaces: string[] = [];
+let knownClasses: string[] = [];
+
 const RARITIES: Rarity[] = ["comum", "incomum", "raro", "epico", "lendario"];
 const TAGS: Tag[] = ["morto-vivo", "demonio", "dragao", "fogo", "aquatico", "animal", "voador", "sagrado"];
 const SLOTS: Record<string, Slot> = {
@@ -164,7 +164,10 @@ function effects(p: Problems, file: string, c: Raw, key: string, registry: Recor
         continue;
       }
       const ok =
-        ps.tipo === "numero"
+        ps.tipo === "porNivel"
+          ? !!val && typeof val === "object" && !Array.isArray(val) &&
+            Object.entries(val as Raw).every(([lv, n]) => /^\d+$/.test(lv) && typeof n === "number")
+          : ps.tipo === "numero"
           ? typeof val === "number"
           : ps.tipo === "sim/nao"
             ? typeof val === "boolean"
@@ -175,10 +178,14 @@ function effects(p: Problems, file: string, c: Raw, key: string, registry: Recor
       if (ps.opcoes && typeof val === "string" && !ps.opcoes.includes(val))
         p.add(file, c, `no efeito "${fx.tipo}", "${k}" = "${val}" não é válido. Opções: ${ps.opcoes.join(", ")}.`);
       if ((k === "racas" || k === "classes" || k === "excetoClasses") && Array.isArray(val)) {
-        const valid: readonly string[] = k === "racas" ? RACE_IDS : CLASS_IDS;
+        const valid: readonly string[] = k === "racas" ? knownRaces : knownClasses;
         for (const x of val) if (!valid.includes(x)) p.add(file, c, `"${x}" não é uma ${k === "racas" ? "raça" : "classe"} válida.`);
       }
-      if (k === "tags" && Array.isArray(val)) for (const x of val) if (!TAGS.includes(x)) p.add(file, c, `tag "${x}" inválida.`);
+      if ((k === "tags" || k === "dobraContraTags") && Array.isArray(val)) for (const x of val) if (!TAGS.includes(x)) p.add(file, c, `tag "${x}" inválida.`);
+      if ((k === "slot" || k === "slots") && file !== "monstros.json" && file !== "maldicoes.json") {
+        for (const x of Array.isArray(val) ? val : [val]) if (!Object.keys(SLOTS).includes(String(x)) && x !== "maos") p.add(file, c, `slot "${x}" inválido. Opções: ${Object.keys(SLOTS).join(", ")}, maos.`);
+      }
+      if ((k === "raca" && typeof val === "string") && !knownRaces.includes(val)) p.add(file, c, `a raça "${val}" não existe em racas.json.`);
     }
     for (const [k, ps] of Object.entries(spec.params ?? {})) {
       if (ps.obrigatorio && fx[k] === undefined) p.add(file, c, `o efeito "${fx.tipo}" precisa do parâmetro "${k}".`);
@@ -196,16 +203,55 @@ function arr(file: string, data: unknown, p: Problems): Raw[] {
   return data as Raw[];
 }
 
-const ABILITY_KEYS = ["nome", "texto"];
+const LIMITS: AbilityLimit[] = ["combate", "rodada", "turno", "turnoProprio"];
 
-function ability(p: Problems, file: string, c: Raw, key: string) {
-  const v = c[key];
+function passive(p: Problems, file: string, c: Raw): { text: { name: string; text: string }; fx: Fx[] } {
+  const v = c.passiva;
   if (!v || typeof v !== "object") {
-    p.add(file, c, `falta "${key}": { "nome": "...", "texto": "..." }.`);
-    return { name: "", text: "" };
+    p.add(file, c, `falta "passiva": { "nome": "...", "texto": "...", "efeitos": [...] }.`);
+    return { text: { name: "", text: "" }, fx: [] };
   }
-  checkKeys(p, file, v as Raw, ABILITY_KEYS);
-  return { name: str(p, file, v as Raw, "nome"), text: str(p, file, v as Raw, "texto") };
+  const o = v as Raw;
+  checkKeys(p, file, o, ["nome", "texto", "efeitos"]);
+  return { text: { name: str(p, file, o, "nome"), text: str(p, file, o, "texto") }, fx: effects(p, file, o, "efeitos", PLAYER_EFFECTS) };
+}
+
+function actives(p: Problems, file: string, c: Raw): AbilityDef[] {
+  const v = c.ativas;
+  if (v === undefined) return [];
+  if (!Array.isArray(v)) {
+    p.add(file, c, `"ativas" precisa ser uma lista de ativas.`);
+    return [];
+  }
+  const out: AbilityDef[] = [];
+  const ids = new Set<string>();
+  for (const a of v as Raw[]) {
+    if (!a || typeof a !== "object") continue;
+    const ctx = { id: `${String(c.id)} / ativa ${String(a.id ?? "?")}` };
+    const id = typeof a.id === "string" && a.id.trim() ? a.id : "";
+    if (!id) p.add(file, ctx, `toda ativa precisa de um "id" (texto).`);
+    if (ids.has(id)) p.add(file, c, `duas ativas com o id "${id}".`);
+    ids.add(id);
+    const acao = str(p, file, ctx as Raw, "acao", false) || String(a.acao ?? "");
+    const spec = ACTIONS[acao];
+    if (!spec) {
+      p.add(file, ctx, `"acao" = "${acao}" não existe. Veja as ações em cartas/EFEITOS.md.`);
+      continue;
+    }
+    const known = ["id", "nome", "texto", "acao", "limite", "custo", ...Object.keys(spec.params ?? {})];
+    checkKeys(p, file, { ...a, id: ctx.id }, known);
+    const limite = one(p, file, { ...a, id: ctx.id }, "limite", LIMITS);
+    const custoRaw = (a.custo ?? {}) as Raw;
+    if (a.custo !== undefined) checkKeys(p, file, { ...custoRaw, id: ctx.id }, ["descartar", "descartarMao", "id"]);
+    const custo: AbilityDef["custo"] = {};
+    if (custoRaw.descartar !== undefined) custo.descartar = num(p, file, { ...custoRaw, id: ctx.id }, "descartar");
+    if (custoRaw.descartarMao !== undefined) custo.descartarMao = num(p, file, { ...custoRaw, id: ctx.id }, "descartarMao");
+    const paramsFx = { tipo: acao, ...Object.fromEntries(Object.entries(a).filter(([k]) => !["id", "nome", "texto", "acao", "limite", "custo"].includes(k))) } as Fx;
+    // valida os parâmetros da ação com o mesmo validador dos efeitos
+    effects(p, file, { id: ctx.id, x: [paramsFx] }, "x", ACTIONS);
+    out.push({ id, name: str(p, file, { ...a, id: ctx.id }, "nome"), text: str(p, file, { ...a, id: ctx.id }, "texto"), acao, limite, custo, params: paramsFx });
+  }
+  return out;
 }
 
 export interface LoadedCatalog {
@@ -220,6 +266,9 @@ export interface LoadedCatalog {
   curses: CurseCard[];
   bonuses: MonsterBonusCard[];
   wandering: WanderingCard[];
+  rules: GameRules;
+  raceIds: string[];
+  classIds: string[];
   problems: string[];
 }
 
@@ -230,8 +279,52 @@ function tierOf(level: number): 1 | 2 | 3 | 4 {
   return 4;
 }
 
+function parseRules(p: Problems): GameRules {
+  const f = "regras.json";
+  const r = (regrasJson ?? {}) as Raw;
+  const c = { ...r, id: "regras" } as Raw;
+  const n = (k: string) => num(p, f, c, k);
+  const pair = (k: string) => {
+    const v = (r[k] ?? {}) as Raw;
+    return { portas: num(p, f, { ...v, id: k }, "portas"), tesouros: num(p, f, { ...v, id: k }, "tesouros") };
+  };
+  const rec = (k: string): Record<string, number> => {
+    const v = r[k];
+    if (!v || typeof v !== "object") {
+      p.add(f, c, `falta "${k}".`);
+      return {};
+    }
+    const out: Record<string, number> = {};
+    for (const [key, val] of Object.entries(v as Raw)) {
+      if (typeof val !== "number") p.add(f, c, `"${k}.${key}" precisa ser um número.`);
+      else out[key] = val;
+    }
+    return out;
+  };
+  return {
+    nivelInicial: n("nivelInicial"),
+    nivelMaximo: n("nivelMaximo"),
+    cartasIniciais: pair("cartasIniciais"),
+    cartasAoMorrer: pair("cartasAoMorrer"),
+    limiteMao: n("limiteMao"),
+    fugirCom: n("fugirCom"),
+    ouroPorNivel: n("ouroPorNivel"),
+    limiteItensGrandes: n("limiteItensGrandes"),
+    limiteItensLendarios: n("limiteItensLendarios"),
+    limiteFugirAneis: n("limiteFugirAneis"),
+    slots: rec("slots"),
+    encaixesDeRuna: rec("encaixesDeRuna"),
+    jogadoresMinimo: n("jogadoresMinimo"),
+    jogadoresMaximo: n("jogadoresMaximo"),
+  };
+}
+
 export function loadCatalog(): LoadedCatalog {
   const p = new Problems();
+  const idsOf = (data: unknown) => (Array.isArray(data) ? (data as Raw[]).map((x) => String(x?.id ?? "")) : []);
+  knownRaces = idsOf(racasJson);
+  knownClasses = idsOf(classesJson);
+  const rules = parseRules(p);
   const ids = new Set<string>();
   const uniq = (file: string, c: Raw, full: string) => {
     if (ids.has(full)) p.add(file, c, `id repetido. Cada carta precisa de um "id" único no arquivo.`);
@@ -239,36 +332,24 @@ export function loadCatalog(): LoadedCatalog {
     if (typeof c.id === "string" && !/^[a-z0-9-]+$/.test(c.id)) p.add(file, c, `o "id" deve ter só letras minúsculas sem acento, números e hífen.`);
   };
 
-  const races: RaceCard[] = arr("racas.json", racasJson, p).map((c) => {
-    const f = "racas.json";
-    checkKeys(p, f, c, ["id", "nome", "habilidadesDe", "copias", "passiva", "ativa"]);
-    uniq(f, c, `race.${c.id}`);
-    return {
-      id: `race.${str(p, f, c, "id")}`,
-      name: str(p, f, c, "nome"),
-      kind: "race",
-      deck: "door",
-      copies: copies(p, f, c),
-      race: one(p, f, c, "habilidadesDe", RACE_IDS),
-      passive: ability(p, f, c, "passiva"),
-      active: ability(p, f, c, "ativa"),
-    };
-  });
-  const classes: ClassCard[] = arr("classes.json", classesJson, p).map((c) => {
-    const f = "classes.json";
-    checkKeys(p, f, c, ["id", "nome", "habilidadesDe", "copias", "passiva", "ativa"]);
-    uniq(f, c, `class.${c.id}`);
-    return {
-      id: `class.${str(p, f, c, "id")}`,
-      name: str(p, f, c, "nome"),
-      kind: "class",
-      deck: "door",
-      copies: copies(p, f, c),
-      cls: one(p, f, c, "habilidadesDe", CLASS_IDS),
-      passive: ability(p, f, c, "passiva"),
-      active: ability(p, f, c, "ativa"),
-    };
-  });
+  const playerCard = <K extends "race" | "class">(file: string, data: unknown, kind: K, prefix: string) =>
+    arr(file, data, p).map((c) => {
+      checkKeys(p, file, c, ["id", "nome", "copias", "passiva", "ativas"]);
+      uniq(file, c, `${prefix}.${c.id}`);
+      const pas = passive(p, file, c);
+      return {
+        id: `${prefix}.${str(p, file, c, "id")}`,
+        name: str(p, file, c, "nome"),
+        kind,
+        deck: "door" as const,
+        copies: copies(p, file, c),
+        passive: pas.text,
+        fx: pas.fx,
+        actives: actives(p, file, c),
+      };
+    });
+  const races = playerCard("racas.json", racasJson, "race", "race") as RaceCard[];
+  const classes = playerCard("classes.json", classesJson, "class", "class") as ClassCard[];
   const restriction = (f: string, c: Raw, key: string) => {
     const v = c[key];
     if (v === undefined) return undefined;
@@ -277,7 +358,7 @@ export function loadCatalog(): LoadedCatalog {
       return undefined;
     }
     checkKeys(p, f, v as Raw, ["racas", "classes"]);
-    return { races: list(p, f, v as Raw, "racas", RACE_IDS), classes: list(p, f, v as Raw, "classes", CLASS_IDS) };
+    return { races: list(p, f, v as Raw, "racas", knownRaces), classes: list(p, f, v as Raw, "classes", knownClasses) };
   };
   const items: ItemCard[] = arr("itens.json", itensJson, p).map((c) => {
     const f = "itens.json";
@@ -346,7 +427,7 @@ export function loadCatalog(): LoadedCatalog {
   });
   const monsters: MonsterCard[] = arr("monstros.json", monstrosJson, p).map((c) => {
     const f = "monstros.json";
-    checkKeys(p, f, c, ["id", "nome", "nivel", "tags", "tesouros", "niveis", "copias", "fugir", "naoDaPraFugir", "acido", "veneno", "gigante", "goblinoide", "especial", "efeitos", "coisasRuinsTexto", "coisasRuins"]);
+    checkKeys(p, f, c, ["id", "nome", "nivel", "lendario", "tags", "tesouros", "niveis", "copias", "fugir", "naoDaPraFugir", "acido", "veneno", "gigante", "goblinoide", "especial", "efeitos", "coisasRuinsTexto", "coisasRuins"]);
     uniq(f, c, `monster.${c.id}`);
     const level = num(p, f, c, "nivel");
     const badRaw = c.coisasRuins;
@@ -365,10 +446,10 @@ export function loadCatalog(): LoadedCatalog {
           case "perderItensAleatorios": badStuff.push({ t: "randomEquipped", n }); break;
           case "perderGrandeOuDoisItens": badStuff.push({ t: "bigOrChoose2" }); break;
           case "perderGrandeOuNiveis": badStuff.push({ t: "bigOrLevels", n: Number(fx.niveis) || 1 }); break;
-          case "podridaoDeMumia": badStuff.push({ t: "mummyRot" }); break;
+          case "penalidadeTemporaria": badStuff.push({ t: "tempPenalty", name: String(fx.nome), value: Number(fx.valor) || 0, turns: Number(fx.rodadas) || 1 }); break;
           case "possessao": badStuff.push({ t: "possession" }); break;
-          case "quimera": badStuff.push({ t: "chimera" }); break;
-          case "virarVampirico": badStuff.push({ t: "vampirize" }); break;
+          case "perderNiveisNoDado": badStuff.push({ t: "rollLevels", rolls: Number(fx.rolagens) || 1, upTo: Number(fx.dadoAte) || 3 }); break;
+          case "virarRacaSeMorrer": badStuff.push({ t: "becomeRace", race: String(fx.raca) }); break;
           case "perderItensNaoEquipados": badStuff.push({ t: "carried" }); break;
           case "outrosPerdemNiveis": badStuff.push({ t: "othersLoseLevels", n }); break;
         }
@@ -387,7 +468,7 @@ export function loadCatalog(): LoadedCatalog {
       treasures: num(p, f, c, "tesouros"),
       levels: num(p, f, c, "niveis"),
       tier: tierOf(level),
-      legendary: level >= 31,
+      legendary: bool(p, f, c, "lendario"),
       fleeMod: c.fugir === undefined ? undefined : num(p, f, c, "fugir"),
       cantFlee: bool(p, f, c, "naoDaPraFugir") || undefined,
       acidRust: bool(p, f, c, "acido") || undefined,
@@ -455,9 +536,23 @@ export function loadCatalog(): LoadedCatalog {
     for (const fx of m.fx ?? [])
       if (typeof fx.itemEquipado === "string" && !itemIds.has(fx.itemEquipado))
         p.list.push(`cartas/monstros.json → carta "${m.id.slice(8)}": "itemEquipado" aponta para o item "${fx.itemEquipado}", que não existe.`);
-  for (const k of RACE_IDS) if (!races.some((r) => r.race === k)) p.list.push(`cartas/racas.json: nenhuma raça usa "habilidadesDe": "${k}" (a raça padrão precisa existir).`);
-  if (!races.some((r) => r.id === "race.humano")) p.list.push(`cartas/racas.json: a raça "humano" precisa existir (usada pela maldição Crise de Identidade).`);
-  if (!races.some((r) => r.id === "race.vampirico")) p.list.push(`cartas/racas.json: a raça "vampirico" precisa existir (usada pelo Vampiro Ancestral).`);
-
-  return { races, classes, items, potions, runes, misc, levelUps, monsters, curses, bonuses, wandering, problems: p.list };
+  if (races.length === 0) p.list.push("cartas/racas.json: precisa ter pelo menos uma raça.");
+  if (classes.length === 0) p.list.push("cartas/classes.json: precisa ter pelo menos uma classe.");
+  return {
+    races,
+    classes,
+    items,
+    potions,
+    runes,
+    misc,
+    levelUps,
+    monsters,
+    curses,
+    bonuses,
+    wandering,
+    rules,
+    raceIds: knownRaces,
+    classIds: knownClasses,
+    problems: p.list,
+  };
 }

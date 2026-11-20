@@ -1,14 +1,14 @@
 // IA dos bots. Os bots decidem simulando ações no motor (que é puro) e escolhendo a que mais melhora
 // a situação deles: ganhar níveis e poder, vencer monstros, atrapalhar jogadores humanos e o líder,
 // aliar-se a outros bots (menos os que estão quase ganhando) e negociar itens exclusivos da sua classe.
-import { CARD_DEFS, type CardDef, findFx, type ItemCard, type MonsterCard } from "../catalog";
+import { CARD_DEFS, type CardDef, findFx, type ItemCard, type MonsterCard, RULES } from "../catalog";
 import { abilityInfos } from "../engine/abilities";
 import { type Action, applyAction } from "../engine/actions";
-import { type Ctx, type GameState, GameError, MAX_LEVEL, type PlayerState, type Prompt } from "../engine/state";
+import { type Ctx, type GameState, GameError, type PlayerState, type Prompt } from "../engine/state";
 import { freeTreasures } from "../engine/core";
 import { combatHas } from "../engine/fx";
 import { computeCombat, equipCheck, fleeInfo, playerPower, playerSide, slotOf } from "../engine/stats";
-import { isCurrent } from "../engine/util";
+import { hasPassive, isCurrent } from "../engine/util";
 
 export const BOT_DELAY_MS = 900;
 
@@ -106,7 +106,7 @@ function weight(state: GameState, me: string, other: PlayerState): number {
   const leaderLevel = maxOtherLevel(state, me);
   let w = other.bot ? 0.6 : 1;
   if (other.level === leaderLevel && other.level >= P(state, me).level && other.level > 1) w *= 1.8;
-  if (other.level >= 16) w = Math.max(w, 1.6);
+  if (other.level >= RULES.nivelMaximo - 4) w = Math.max(w, 1.6);
   return w;
 }
 
@@ -192,10 +192,10 @@ function abilityCandidates(state: GameState, me: PlayerState, mode: Mode): Actio
   const monsters = c ? c.monsters.filter((m) => !m.defeated).map((m) => m.cardId) : [];
   for (const ab of abilityInfos(state, me)) {
     if (!ab.available) continue;
-    const combatOnly = ["luzSagrada", "baforada", "disparoDuplo", "arremesso", "tempestade", "brutalidade", "encantar", "labia", "polimorfia", "domarFera", "duplicata", "furiaSangrenta", "infusao", "esmagar", "engenhoca"];
-    if (mode === "manage" && combatOnly.includes(ab.key)) continue;
-    if (mode !== "manage" && !combatOnly.includes(ab.key) && ab.key !== "maldicaoSombria") continue;
-    if (ab.key === "desafio" || ab.key === "pazInterior" || ab.key === "escudoFe" || ab.key === "tridente" || ab.key === "cantoSereia") continue;
+    const combatOnly = ["bonusCombate", "nivelDobradoAjudando", "arremesso", "monstrosPerdemNivel", "ignorarEspecial", "mandarMonstroEmbora", "polimorfia", "domarFera", "duplicata", "dobrarFuria", "dobrarItem", "cancelarBonusMonstro", "itemDaMaoParaLado"];
+    if (mode === "manage" && combatOnly.includes(ab.acao)) continue;
+    if (mode !== "manage" && !combatOnly.includes(ab.acao) && ab.acao !== "maldicaoForca") continue;
+    if (["desafio", "encerrarCombate", "assumirCoisasRuins", "ameacarAjuda", "forcarAjuda", "usarItemRestrito"].includes(ab.acao)) continue;
     const base = (params: Record<string, unknown>, reserved: string[] = []) => {
       if (ab.wholeHand) return { type: "ABILITY", key: ab.key, discard: [], params } as Action;
       const disc = cheapest(state, me, ab.discard, reserved);
@@ -212,71 +212,71 @@ function abilityCandidates(state: GameState, me: PlayerState, mode: Mode): Actio
       for (const m of monsters) push(base({ monster: m }));
       continue;
     }
-    if (ab.key === "engenhoca") {
+    if (ab.acao === "itemDaMaoParaLado") {
       const items = me.hand.filter((id) => itemDefOf(state, id));
       items.sort((a, b) => (itemDefOf(state, b)?.bonus ?? 0) - (itemDefOf(state, a)?.bonus ?? 0));
-      if (items[0]) push({ type: "ABILITY", key: "engenhoca", discard: [], params: { handItem: items[0], side: mode === "hinder" ? "monster" : "player" } });
+      if (items[0]) push({ type: "ABILITY", key: ab.key, discard: [], params: { handItem: items[0], side: mode === "hinder" ? "monster" : "player" } });
       continue;
     }
-    if (ab.key === "arremesso") {
+    if (ab.acao === "arremesso") {
       const bigs = [...me.hand, ...me.carried, ...me.equipped].filter((id) => itemDefOf(state, id)?.big);
-      for (const b of bigs) push({ type: "ABILITY", key: "arremesso", discard: [], params: { bigItem: b } });
+      for (const b of bigs) push({ type: "ABILITY", key: ab.key, discard: [], params: { bigItem: b } });
       continue;
     }
-    if (ab.key === "infusao" && c) {
+    if (ab.acao === "dobrarItem" && c) {
       const items = playerSide(state, c).flatMap((pid) => P(state, pid).equipped);
       items.sort((a, b) => (itemDefOf(state, b)?.bonus ?? 0) - (itemDefOf(state, a)?.bonus ?? 0));
       if (items[0]) push(base({ item: items[0] }));
       continue;
     }
-    if (ab.key === "duplicata") {
+    if (ab.acao === "duplicata") {
       const ms = me.hand.filter((id) => d(state, id).kind === "monster");
       ms.sort((a, b) => (d(state, b) as MonsterCard).level - (d(state, a) as MonsterCard).level);
       if (ms[0]) push(base({ handMonster: ms[0] }, [ms[0]]));
       continue;
     }
-    if (ab.key === "maldicaoSombria") {
+    if (ab.acao === "maldicaoForca") {
       for (const o of state.players) if (o.id !== me.id) push(base({ player: o.id }));
       continue;
     }
-    if (ab.key === "mordida") {
+    if (ab.acao === "roubarNivel") {
       for (const o of state.players) if (o.id !== me.id && o.level >= me.level) push(base({ player: o.id }));
       continue;
     }
-    if (ab.key === "reforjar") {
+    if (ab.acao === "reforjar") {
       const cost = [...me.hand, ...me.carried].filter((id) => itemDefOf(state, id)).sort((a, b) => cardValue(state, a) - cardValue(state, b))[0];
       const target = me.equipped
         .filter((id) => slotOf(state, id) !== "ring" && !state.cards[id].reforged)
         .sort((a, b) => cardValue(state, b) - cardValue(state, a))[0];
-      if (cost && target) push({ type: "ABILITY", key: "reforjar", discard: [], params: { costItem: cost, item: target } });
+      if (cost && target) push({ type: "ABILITY", key: ab.key, discard: [], params: { costItem: cost, item: target } });
       continue;
     }
-    if (ab.key === "cura") {
+    if (ab.acao === "curar") {
       for (const cu of me.curses) push(base({ player: me.id, mode: "curse", curse: cu.id }));
       push(base({ player: me.id, mode: "level" }));
       continue;
     }
-    if (ab.key === "pactoDiabolico") {
+    if (ab.acao === "passarMaldicao") {
       for (const cu of me.curses)
         for (const o of state.players) if (o.id !== me.id && !isAlly(state, me.id, o)) push(base({ curse: cu.id, player: o.id }));
       continue;
     }
-    if (ab.key === "roubo") {
+    if (ab.acao === "roubarItem") {
       for (const o of state.players) {
         if (o.id === me.id || isAlly(state, me.id, o)) continue;
         for (const it of o.equipped) if (!itemDefOf(state, it)?.big) push(base({ player: o.id, otherItem: it }));
       }
       continue;
     }
-    if (ab.key === "bugiganga") {
+    if (ab.acao === "bugiganga") {
       const best = state.decks.treasureDiscard
         .filter((id) => itemDefOf(state, id))
         .sort((a, b) => cardValue(state, b) - cardValue(state, a))[0];
       if (best) push(base({ mode: "discard", card: best }));
       continue;
     }
-    if (ab.key === "transmutar" || ab.key === "galope" || ab.key === "hibernar") {
-      if (ab.key === "galope") push(base({}));
+    if (ab.acao === "buscarPocao" || ab.acao === "abrirOutraPorta" || ab.acao === "hibernar") {
+      if (ab.acao === "abrirOutraPorta") push(base({}));
       continue;
     }
   }
@@ -353,8 +353,8 @@ function manageCandidates(state: GameState, me: PlayerState, ownTurn: boolean): 
   if (state.phase !== "PLAYING") return out;
   for (const id of me.hand) {
     const df = d(state, id);
-    if (df.kind === "levelup" && me.level < MAX_LEVEL - 1) out.push({ type: "PLAY_LEVELUP", cardId: id });
-    if (fxIs(state, id, "subirNivel") && me.level < MAX_LEVEL - 1) out.push({ type: "USE_CARD", cardId: id });
+    if (df.kind === "levelup" && me.level < RULES.nivelMaximo - 1) out.push({ type: "PLAY_LEVELUP", cardId: id });
+    if (fxIs(state, id, "subirNivel") && me.level < RULES.nivelMaximo - 1) out.push({ type: "USE_CARD", cardId: id });
     if (df.kind === "curse") {
       for (const o of state.players) if (o.id !== me.id && !isAlly(state, me.id, o)) out.push({ type: "PLAY_CURSE", cardId: id, targetId: o.id });
     }
@@ -425,11 +425,11 @@ function answerFor(state: GameState, me: PlayerState, pr: Prompt, ctx: Ctx): Act
       const wouldWin = !!calc && calc.playerTotal + playerPower(state, me) > calc.monsterTotal;
       const stake = monsterStake(state);
       // Ganho para mim (tesouros + nível do Elfo) contra o quanto o lutador avança
-      const myGain = deal.count * 40 + (me.race && state.cards[me.race]?.defId === "race.elfo" ? 100 : 0);
+      const myGain = deal.count * 40 + (hasPassive(state, me, "nivelAoAjudar") ? 100 : 0);
       const theirGain = weight(state, me.id, fighter) * stake.levels * 60;
       let accept = wouldWin && (isAlly(state, me.id, fighter) || myGain >= theirGain);
-      if (fighter.level >= 18 && !isAlly(state, me.id, fighter)) accept = false;
-      if (data.threat && !accept && wouldWin && me.level > 1 && fighter.level < 18) accept = true;
+      if (fighter.level >= RULES.nivelMaximo - 2 && !isAlly(state, me.id, fighter)) accept = false;
+      if (data.threat && !accept && wouldWin && me.level > 1 && fighter.level < RULES.nivelMaximo - 2) accept = true;
       return answer({ accept });
     }
     case "threat": {
@@ -604,7 +604,7 @@ function decideFighter(state: GameState, me: PlayerState, ctx: Ctx): Action | nu
   if (danger) {
     const escapes: Action[] = [];
     for (const ab of abilityInfos(state, me)) {
-      if (!ab.available || !["pazInterior", "labia", "encantar"].includes(ab.key)) continue;
+      if (!ab.available || !["encerrarCombate", "mandarMonstroEmbora"].includes(ab.acao)) continue;
       const disc = ab.wholeHand ? [] : cheapest(state, me, ab.discard);
       if (!disc) continue;
       const params = ab.fields.some((f) => f.kind === "monster") ? { monster: c.monsters[0].cardId } : {};
@@ -668,8 +668,8 @@ function decideOtherCombat(state: GameState, me: PlayerState, ctx: Ctx): Action 
 function tradeIdea(state: GameState, me: PlayerState): Action | null {
   if (state.combat || state.phase !== "PLAYING") return null;
   const m = mem(state);
-  const myRace = me.race ? (CARD_DEFS[state.cards[me.race].defId] as { race?: string }).race : undefined;
-  const myClasses = me.classes.map((c) => (CARD_DEFS[state.cards[c].defId] as { cls?: string }).cls);
+  const myRace = me.race ? state.cards[me.race].defId.slice("race.".length) : undefined;
+  const myClasses = me.classes.map((c) => state.cards[c].defId.slice("class.".length));
   for (const o of state.players) {
     if (o.id === me.id) continue;
     for (const it of [...o.equipped, ...o.carried]) {
@@ -699,7 +699,7 @@ function tradeIdea(state: GameState, me: PlayerState): Action | null {
 }
 
 function sellIdea(state: GameState, me: PlayerState): Action | null {
-  if (me.level >= MAX_LEVEL - 1) return null;
+  if (me.level >= RULES.nivelMaximo - 1) return null;
   const junk = [...me.hand, ...me.carried].filter((id) => {
     const df = itemDefOf(state, id);
     if (!df) return false;
@@ -713,7 +713,7 @@ function sellIdea(state: GameState, me: PlayerState): Action | null {
   for (const id of junk) {
     pick.push(id);
     gold += itemDefOf(state, id)!.price;
-    if (gold >= 1000) return { type: "SELL", cardIds: pick };
+    if (gold >= RULES.ouroPorNivel) return { type: "SELL", cardIds: pick };
   }
   return null;
 }

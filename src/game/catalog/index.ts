@@ -1,6 +1,6 @@
 import type { Fx } from "./effects";
 import { loadCatalog } from "./load";
-import type { CardDef, ClassCard, ClassId, CurseCard, ItemCard, MonsterCard, RaceCard, RaceId } from "./types";
+import type { CardDef, ClassCard, ClassId, CurseCard, GameRules, ItemCard, MonsterCard, RaceCard, RaceId } from "./types";
 
 export * from "./types";
 export type { Fx } from "./effects";
@@ -10,6 +10,7 @@ if (loaded.problems.length > 0) {
   throw new Error(`Há problemas nos arquivos de cartas (pasta /cartas):\n- ${loaded.problems.join("\n- ")}`);
 }
 
+export const RULES: GameRules = loaded.rules;
 export const RACES = loaded.races;
 export const CLASSES = loaded.classes;
 export const ITEMS = loaded.items;
@@ -44,13 +45,12 @@ export function def(defId: string): CardDef {
   return d;
 }
 
-/** Primeira raça/classe (carta) com essas habilidades. */
-export function raceDef(id: RaceId): RaceCard {
-  return (CARD_DEFS[`race.${id}`] as RaceCard) ?? RACES.find((r) => r.race === id)!;
+export function raceDef(id: RaceId): RaceCard | undefined {
+  return CARD_DEFS[`race.${id}`] as RaceCard | undefined;
 }
 
-export function classDef(id: ClassId): ClassCard {
-  return (CARD_DEFS[`class.${id}`] as ClassCard) ?? CLASSES.find((c) => c.cls === id)!;
+export function classDef(id: ClassId): ClassCard | undefined {
+  return CARD_DEFS[`class.${id}`] as ClassCard | undefined;
 }
 
 export function isItem(d: CardDef): d is ItemCard {

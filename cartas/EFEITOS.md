@@ -8,6 +8,795 @@ Classes válidas (para `classes`): `guerreiro`, `mago`, `clerigo`, `ladino`, `dr
 
 Tags de monstro (para `tags`): `morto-vivo`, `demonio`, `dragao`, `fogo`, `aquatico`, `animal`, `voador`, `sagrado`.
 
+## Passivas de raças e classes
+
+Usados em `racas.json / classes.json (campo "passiva.efeitos")`.
+
+### `forca`
+
+Bônus (ou penalidade) de combate sempre.
+
+| Parâmetro | Tipo | Obrigatório | O que faz |
+|---|---|---|---|
+| `valor` | numero | sim | quanto soma (use número negativo para tirar) |
+| `valorPorNivel` | porNivel | não | muda "valor" a partir de certos níveis, ex.: { "11": 4 } |
+| `seMaosLivres` | sim/nao | não | só sem itens nas mãos |
+
+```json
+{"tipo":"forca","valor":2}
+```
+
+### `fugir`
+
+Bônus (ou penalidade) em Fugir.
+
+| Parâmetro | Tipo | Obrigatório | O que faz |
+|---|---|---|---|
+| `valor` | numero | sim | quanto soma (use número negativo para tirar) |
+| `valorPorNivel` | porNivel | não | muda "valor" a partir de certos níveis, ex.: { "11": 4 } |
+| `seMaosLivres` | sim/nao | não | só sem itens nas mãos |
+
+```json
+{"tipo":"fugir","valor":2}
+```
+
+### `bonusContra`
+
+Bônus de combate contra monstros com certas tags.
+
+| Parâmetro | Tipo | Obrigatório | O que faz |
+|---|---|---|---|
+| `tags` | lista | sim | tags |
+| `valor` | numero | sim | quanto soma (use número negativo para tirar) |
+| `valorPorNivel` | porNivel | não | muda "valor" a partir de certos níveis, ex.: { "11": 4 } |
+
+```json
+{"tipo":"bonusContra","tags":["fogo"],"valor":2}
+```
+
+### `fugirContra`
+
+Bônus em Fugir contra monstros com certas tags.
+
+| Parâmetro | Tipo | Obrigatório | O que faz |
+|---|---|---|---|
+| `tags` | lista | sim | tags |
+| `valor` | numero | sim | quanto soma (use número negativo para tirar) |
+
+```json
+{"tipo":"fugirContra","tags":["fogo"],"valor":2}
+```
+
+### `fugaAutomaticaContra`
+
+Foge automaticamente de monstros com certas tags.
+
+| Parâmetro | Tipo | Obrigatório | O que faz |
+|---|---|---|---|
+| `tags` | lista | sim | tags |
+
+```json
+{"tipo":"fugaAutomaticaContra","tags":["fogo"]}
+```
+
+### `imuneCoisasRuins`
+
+Imune às Coisas Ruins de monstros com certas tags.
+
+| Parâmetro | Tipo | Obrigatório | O que faz |
+|---|---|---|---|
+| `tags` | lista | sim | tags |
+| `excetoLendarios` | sim/nao | não | não vale contra Lendários |
+
+```json
+{"tipo":"imuneCoisasRuins","tags":["fogo"],"excetoLendarios":true}
+```
+
+### `limiteMao`
+
+Soma ao limite de cartas na mão.
+
+| Parâmetro | Tipo | Obrigatório | O que faz |
+|---|---|---|---|
+| `valor` | numero | sim | quanto soma (use número negativo para tirar) |
+| `valorPorNivel` | porNivel | não | muda "valor" a partir de certos níveis, ex.: { "11": 4 } |
+
+```json
+{"tipo":"limiteMao","valor":2,"valorPorNivel":"exemplo"}
+```
+
+### `semItensGrandes`
+
+Não pode equipar itens Grandes.
+
+```json
+{"tipo":"semItensGrandes"}
+```
+
+### `grandesExtras`
+
+Pode equipar mais itens Grandes.
+
+| Parâmetro | Tipo | Obrigatório | O que faz |
+|---|---|---|---|
+| `quantidade` | numero | sim | quantidade |
+
+```json
+{"tipo":"grandesExtras","quantidade":2}
+```
+
+### `slotExtra`
+
+Ganha espaços a mais num slot.
+
+| Parâmetro | Tipo | Obrigatório | O que faz |
+|---|---|---|---|
+| `slot` | texto | sim | capacete, peitoral, calcas, botas, maos, anel, colar ou montaria |
+| `quantidade` | numero | sim | quantidade |
+
+```json
+{"tipo":"slotExtra","slot":"exemplo","quantidade":2}
+```
+
+### `semSlot`
+
+Não pode usar um slot.
+
+| Parâmetro | Tipo | Obrigatório | O que faz |
+|---|---|---|---|
+| `slot` | texto | sim | capacete, peitoral, calcas, botas, maos, anel, colar ou montaria |
+
+```json
+{"tipo":"semSlot","slot":"exemplo"}
+```
+
+### `casco`
+
+Conta como um peitoral com esse bônus, que não pode ser perdido nem roubado.
+
+| Parâmetro | Tipo | Obrigatório | O que faz |
+|---|---|---|---|
+| `valor` | numero | sim | quanto soma (use número negativo para tirar) |
+| `valorPorNivel` | porNivel | não | muda "valor" a partir de certos níveis, ex.: { "11": 4 } |
+
+```json
+{"tipo":"casco","valor":2,"valorPorNivel":"exemplo"}
+```
+
+### `encaixesExtras`
+
+Cada item tem encaixes de runa a mais.
+
+| Parâmetro | Tipo | Obrigatório | O que faz |
+|---|---|---|---|
+| `quantidade` | numero | sim | quantidade |
+
+```json
+{"tipo":"encaixesExtras","quantidade":2}
+```
+
+### `bonusPorRuna`
+
+Bônus para cada runa engastada em itens equipados.
+
+| Parâmetro | Tipo | Obrigatório | O que faz |
+|---|---|---|---|
+| `valor` | numero | sim | quanto soma (use número negativo para tirar) |
+| `maximo` | numero | não | bônus máximo |
+
+```json
+{"tipo":"bonusPorRuna","valor":2,"maximo":2}
+```
+
+### `bonusPorItem`
+
+Bônus para cada item equipado num slot.
+
+| Parâmetro | Tipo | Obrigatório | O que faz |
+|---|---|---|---|
+| `slot` | texto | sim | slot (ex.: anel, montaria) |
+| `valor` | numero | sim | quanto soma (use número negativo para tirar) |
+
+```json
+{"tipo":"bonusPorItem","slot":"exemplo","valor":2}
+```
+
+### `bonusPorSlotVazio`
+
+Bônus para cada slot de armadura vazio (capacete, peitoral, calças, botas).
+
+| Parâmetro | Tipo | Obrigatório | O que faz |
+|---|---|---|---|
+| `valor` | numero | sim | quanto soma (use número negativo para tirar) |
+| `valorPorNivel` | porNivel | não | muda "valor" a partir de certos níveis, ex.: { "11": 4 } |
+
+```json
+{"tipo":"bonusPorSlotVazio","valor":2,"valorPorNivel":"exemplo"}
+```
+
+### `furia`
+
+Bônus acumulado por combate vencido em sequência (zera ao perder ou morrer).
+
+| Parâmetro | Tipo | Obrigatório | O que faz |
+|---|---|---|---|
+| `valor` | numero | sim | quanto soma (use número negativo para tirar) |
+| `valorPorNivel` | porNivel | não | muda "valor" a partir de certos níveis, ex.: { "11": 4 } |
+
+```json
+{"tipo":"furia","valor":2,"valorPorNivel":"exemplo"}
+```
+
+### `naoPodeFugir`
+
+Nunca pode fugir de um combate.
+
+```json
+{"tipo":"naoPodeFugir"}
+```
+
+### `aura`
+
+Cada jogador do seu lado no combate ganha o valor.
+
+| Parâmetro | Tipo | Obrigatório | O que faz |
+|---|---|---|---|
+| `valor` | numero | sim | quanto soma (use número negativo para tirar) |
+| `valorPorNivel` | porNivel | não | muda "valor" a partir de certos níveis, ex.: { "11": 4 } |
+
+```json
+{"tipo":"aura","valor":2,"valorPorNivel":"exemplo"}
+```
+
+### `venceEmpates`
+
+Vence empates em combate.
+
+```json
+{"tipo":"venceEmpates"}
+```
+
+### `perdeMenosItens`
+
+Coisas Ruins que tiram itens tiram menos.
+
+| Parâmetro | Tipo | Obrigatório | O que faz |
+|---|---|---|---|
+| `quantidade` | numero | sim | quantidade |
+
+```json
+{"tipo":"perdeMenosItens","quantidade":2}
+```
+
+### `anulaMaldicaoNoDado`
+
+Ao ser alvo de maldição, role 1d6: com o valor ou mais ela é anulada.
+
+| Parâmetro | Tipo | Obrigatório | O que faz |
+|---|---|---|---|
+| `dado` | numero | sim | resultado mínimo |
+| `dadoPorNivel` | porNivel | não | muda "dado" a partir de certos níveis, ex.: { "11": 4 } |
+
+```json
+{"tipo":"anulaMaldicaoNoDado","dado":2,"dadoPorNivel":"exemplo"}
+```
+
+### `refleteNoDado`
+
+Quando outro jogador usa ativa ou maldição contra você, role 1d6: com o valor ou mais ela volta para ele.
+
+| Parâmetro | Tipo | Obrigatório | O que faz |
+|---|---|---|---|
+| `dado` | numero | sim | resultado mínimo |
+| `dadoPorNivel` | porNivel | não | muda "dado" a partir de certos níveis, ex.: { "11": 4 } |
+
+```json
+{"tipo":"refleteNoDado","dado":2,"dadoPorNivel":"exemplo"}
+```
+
+### `naoMorreNoDado`
+
+Ao morrer, role 1d6: com o valor ou mais não morre (mas o turno acaba).
+
+| Parâmetro | Tipo | Obrigatório | O que faz |
+|---|---|---|---|
+| `dado` | numero | sim | resultado mínimo |
+
+```json
+{"tipo":"naoMorreNoDado","dado":2}
+```
+
+### `nivelAoAjudar`
+
+Sobe níveis ao ajudar outro jogador a vencer (1x por rodada).
+
+| Parâmetro | Tipo | Obrigatório | O que faz |
+|---|---|---|---|
+| `quantidade` | numero | sim | quantidade |
+
+```json
+{"tipo":"nivelAoAjudar","quantidade":2}
+```
+
+### `nivelExtraSozinhoContraMaior`
+
+Ao vencer sozinho um monstro de nível maior que o seu, sobe níveis extras (1x por rodada).
+
+| Parâmetro | Tipo | Obrigatório | O que faz |
+|---|---|---|---|
+| `quantidade` | numero | sim | quantidade |
+
+```json
+{"tipo":"nivelExtraSozinhoContraMaior","quantidade":2}
+```
+
+### `comprarAoAmaldicoar`
+
+Ao lançar maldição em outro jogador, compra cartas de Porta (1x por rodada).
+
+| Parâmetro | Tipo | Obrigatório | O que faz |
+|---|---|---|---|
+| `portas` | numero | sim | quantas |
+
+```json
+{"tipo":"comprarAoAmaldicoar","portas":2}
+```
+
+### `catador`
+
+Quando outro jogador descarta um item, pode rolar 1d6 para pegá-lo (1x por rodada).
+
+| Parâmetro | Tipo | Obrigatório | O que faz |
+|---|---|---|---|
+| `dado` | numero | sim | resultado mínimo |
+| `dadoPorNivel` | porNivel | não | muda "dado" a partir de certos níveis, ex.: { "11": 4 } |
+
+```json
+{"tipo":"catador","dado":2,"dadoPorNivel":"exemplo"}
+```
+
+### `olhosDaNoite`
+
+No início e no fim do seu turno, vê a carta do topo de Portas e pode mandá-la para o fundo.
+
+```json
+{"tipo":"olhosDaNoite"}
+```
+
+### `guardaPocao`
+
+Ao usar uma poção, role 1d6: com o valor ou mais ela não é descartada.
+
+| Parâmetro | Tipo | Obrigatório | O que faz |
+|---|---|---|---|
+| `dado` | numero | sim | resultado mínimo |
+
+```json
+{"tipo":"guardaPocao","dado":2}
+```
+
+### `pocoesDobradas`
+
+Poções que você usa têm efeito dobrado.
+
+```json
+{"tipo":"pocoesDobradas"}
+```
+
+### `tesouroExtraEscolhe`
+
+Ao vencer, compra 1 tesouro extra e descarta 1 dos tesouros comprados.
+
+```json
+{"tipo":"tesouroExtraEscolhe"}
+```
+
+### `tesouroExtraContra`
+
+Ao derrotar monstros com certas tags, compra tesouros extras.
+
+| Parâmetro | Tipo | Obrigatório | O que faz |
+|---|---|---|---|
+| `tags` | lista | sim | tags |
+| `quantidade` | numero | sim | quantidade |
+
+```json
+{"tipo":"tesouroExtraContra","tags":["fogo"],"quantidade":2}
+```
+
+### `magiaSelvagem`
+
+Ao usar uma ativa, role 1d6: com o valor ou mais ela não conta no limite de uso.
+
+| Parâmetro | Tipo | Obrigatório | O que faz |
+|---|---|---|---|
+| `dado` | numero | sim | resultado mínimo |
+
+```json
+{"tipo":"magiaSelvagem","dado":2}
+```
+
+### `maldicoesFortes`
+
+Suas maldições não podem ser anuladas nem refletidas por passivas e duram mais.
+
+| Parâmetro | Tipo | Obrigatório | O que faz |
+|---|---|---|---|
+| `duracaoExtra` | numero | não | rodadas a mais |
+
+```json
+{"tipo":"maldicoesFortes","duracaoExtra":2}
+```
+
+### `itensNaoRoubaveis`
+
+Seus itens equipados não podem ser roubados.
+
+```json
+{"tipo":"itensNaoRoubaveis"}
+```
+
+### `classesExtras`
+
+Pode ter mais classes ao mesmo tempo.
+
+| Parâmetro | Tipo | Obrigatório | O que faz |
+|---|---|---|---|
+| `quantidade` | numero | sim | quantidade |
+| `nivelMinimo` | numero | não | a partir de qual nível |
+
+```json
+{"tipo":"classesExtras","quantidade":2,"nivelMinimo":2}
+```
+
+### `slotExtraMetade`
+
+Escolha slots onde pode equipar um segundo item, que dá metade do bônus.
+
+| Parâmetro | Tipo | Obrigatório | O que faz |
+|---|---|---|---|
+| `slots` | lista | sim | slots permitidos |
+| `quantidade` | numero | sim | quantos slots |
+| `quantidadePorNivel` | porNivel | não | muda "quantidade" a partir de certos níveis, ex.: { "11": 4 } |
+
+```json
+{"tipo":"slotExtraMetade","slots":["capacete"],"quantidade":2}
+```
+
+## Ativas de raças e classes
+
+Cada ativa (lista `"ativas"` em racas.json/classes.json) tem `id`, `nome`, `texto`, `acao` (um dos tipos abaixo), `limite` (`combate`, `rodada`, `turno` ou `turnoProprio`), opcionalmente `custo` (`{ "descartar": 2 }` ou `{ "descartarMao": 4 }`) e os parâmetros da ação. Qualquer número pode variar com o nível usando `<parametro>PorNivel`, ex.: `"valor": 2, "valorPorNivel": { "11": 4 }`.
+
+### `bonusCombate`
+
+Soma bônus ao seu lado do combate.
+
+| Parâmetro | Tipo | Obrigatório | O que faz |
+|---|---|---|---|
+| `valor` | numero | sim | quanto soma (use número negativo para tirar) |
+| `valorPorNivel` | porNivel | não | muda "valor" a partir de certos níveis, ex.: { "11": 4 } |
+| `dobraContraTags` | lista | não | dobra contra monstros com essas tags |
+| `fogo` | sim/nao | não | conta como dano de fogo |
+
+```json
+{"acao":"bonusCombate","valor":2}
+```
+
+### `nivelDobradoAjudando`
+
+Se você estiver ajudando, seu nível conta em dobro.
+
+```json
+{"acao":"nivelDobradoAjudando"}
+```
+
+### `itemDaMaoParaLado`
+
+Descarte 1 item da mão e some o bônus dele a qualquer lado do combate.
+
+```json
+{"acao":"itemDaMaoParaLado"}
+```
+
+### `arremesso`
+
+Perca níveis e descarte 1 item Grande seu: some o bônus dele multiplicado.
+
+| Parâmetro | Tipo | Obrigatório | O que faz |
+|---|---|---|---|
+| `multiplicador` | numero | sim | multiplicador do bônus |
+| `perdeNiveis` | numero | não | níveis perdidos |
+
+```json
+{"acao":"arremesso","multiplicador":2,"perdeNiveis":2}
+```
+
+### `usarItemRestrito`
+
+Use um item restrito a outra raça/classe até o fim do combate.
+
+```json
+{"acao":"usarItemRestrito"}
+```
+
+### `ignorarEspecial`
+
+O texto Especial de um monstro é ignorado neste combate.
+
+| Parâmetro | Tipo | Obrigatório | O que faz |
+|---|---|---|---|
+| `naoEmLendarios` | sim/nao | não | não funciona em Lendários |
+
+```json
+{"acao":"ignorarEspecial","naoEmLendarios":true}
+```
+
+### `passarMaldicao`
+
+Passe uma maldição ativa em você para outro jogador.
+
+```json
+{"acao":"passarMaldicao"}
+```
+
+### `monstrosPerdemNivel`
+
+Todos os monstros do combate perdem níveis (com 0 eles morrem).
+
+| Parâmetro | Tipo | Obrigatório | O que faz |
+|---|---|---|---|
+| `valor` | numero | sim | quanto soma (use número negativo para tirar) |
+| `valorPorNivel` | porNivel | não | muda "valor" a partir de certos níveis, ex.: { "11": 4 } |
+| `fogo` | sim/nao | não | conta como dano de fogo |
+
+```json
+{"acao":"monstrosPerdemNivel","valor":2}
+```
+
+### `bugiganga`
+
+Pegue 1 item do descarte de Tesouros ou roube 1 tesouro aberto de quem acabou de ganhar.
+
+```json
+{"acao":"bugiganga"}
+```
+
+### `abrirOutraPorta`
+
+Depois de vencer ou fugir de um combate, abra mais uma porta neste turno.
+
+```json
+{"acao":"abrirOutraPorta"}
+```
+
+### `hibernar`
+
+No lugar de chutar a porta: compra tesouros e fica imune a maldições e roubos até o próximo turno.
+
+| Parâmetro | Tipo | Obrigatório | O que faz |
+|---|---|---|---|
+| `tesouros` | numero | não | tesouros comprados |
+
+```json
+{"acao":"hibernar","tesouros":2}
+```
+
+### `pressagio`
+
+Coloque 1 carta de Porta da mão no topo do baralho e pegue a do fundo.
+
+```json
+{"acao":"pressagio"}
+```
+
+### `ameacarAjuda`
+
+Peça ajuda: quem recusar perde níveis.
+
+| Parâmetro | Tipo | Obrigatório | O que faz |
+|---|---|---|---|
+| `perdeNiveis` | numero | não | níveis perdidos por quem recusa |
+
+```json
+{"acao":"ameacarAjuda","perdeNiveis":2}
+```
+
+### `forcarAjuda`
+
+Obrigue um jogador a ajudar você no combate (sem tesouro).
+
+```json
+{"acao":"forcarAjuda"}
+```
+
+### `trocarItem`
+
+Troque um item equipado seu por um do mesmo slot de outro jogador (exceto Lendários); ele pode descartar cartas para impedir.
+
+| Parâmetro | Tipo | Obrigatório | O que faz |
+|---|---|---|---|
+| `custoBloqueio` | numero | não | cartas que o alvo descarta para impedir |
+
+```json
+{"acao":"trocarItem","custoBloqueio":2}
+```
+
+### `roubarNivel`
+
+Depois de vencer um combate, roube 1 nível de um jogador de nível igual ou maior (nunca leva ao nível máximo).
+
+```json
+{"acao":"roubarNivel"}
+```
+
+### `desafio`
+
+Ninguém mais pode jogar cartas no combate nem ajudar; você sacrifica seu melhor item e luta com a penalidade, sem poder fugir (perder = Coisas Ruins e morte).
+
+| Parâmetro | Tipo | Obrigatório | O que faz |
+|---|---|---|---|
+| `penalidade` | numero | não | penalidade de combate |
+| `multiplicadorNiveis` | numero | não | multiplica os níveis ganhos |
+
+```json
+{"acao":"desafio","penalidade":2,"multiplicadorNiveis":2}
+```
+
+### `mandarMonstroEmbora`
+
+Um monstro sai do combate; você ganha parte dos tesouros dele, sem nível.
+
+| Parâmetro | Tipo | Obrigatório | O que faz |
+|---|---|---|---|
+| `fracaoTesouros` | numero | não | fração dos tesouros (1 = todos, 0.5 = metade) |
+| `naoEmLendarios` | sim/nao | não | não funciona em Lendários |
+
+```json
+{"acao":"mandarMonstroEmbora","fracaoTesouros":2,"naoEmLendarios":true}
+```
+
+### `curar`
+
+Remova 1 maldição ativa ou devolva 1 nível perdido nesta rodada (seu ou de outro jogador).
+
+```json
+{"acao":"curar"}
+```
+
+### `roubarItem`
+
+Role 1d6 para roubar 1 item equipado (não Grande) de outro jogador; se falhar, perde 1 nível.
+
+| Parâmetro | Tipo | Obrigatório | O que faz |
+|---|---|---|---|
+| `sucesso` | numero | sim | resultado mínimo |
+
+```json
+{"acao":"roubarItem","sucesso":2}
+```
+
+### `domarFera`
+
+Um monstro com a tag e nível igual ou menor que o seu vira sua montaria (bônus = tesouros dele).
+
+| Parâmetro | Tipo | Obrigatório | O que faz |
+|---|---|---|---|
+| `tag` | texto | não | tag necessária, ex.: animal |
+
+```json
+{"acao":"domarFera","tag":"exemplo"}
+```
+
+### `assumirCoisasRuins`
+
+Assuma as Coisas Ruins de outro jogador; depois compre tesouros.
+
+| Parâmetro | Tipo | Obrigatório | O que faz |
+|---|---|---|---|
+| `tesouros` | numero | não | tesouros comprados depois |
+
+```json
+{"acao":"assumirCoisasRuins","tesouros":2}
+```
+
+### `cancelarBonusMonstro`
+
+Cancele todos os bônus que outros jogadores deram ao monstro neste combate.
+
+```json
+{"acao":"cancelarBonusMonstro"}
+```
+
+### `polimorfia`
+
+O monstro vira o próximo monstro do baralho de Portas.
+
+| Parâmetro | Tipo | Obrigatório | O que faz |
+|---|---|---|---|
+| `naoEmLendarios` | sim/nao | não | não funciona em Lendários |
+
+```json
+{"acao":"polimorfia","naoEmLendarios":true}
+```
+
+### `maldicaoForca`
+
+Um jogador fica com penalidade de combate por alguns turnos (conta como maldição).
+
+| Parâmetro | Tipo | Obrigatório | O que faz |
+|---|---|---|---|
+| `valor` | numero | sim | quanto soma (use número negativo para tirar) |
+| `valorPorNivel` | porNivel | não | muda "valor" a partir de certos níveis, ex.: { "11": 4 } |
+| `turnos` | numero | não | até o fim de quantos turnos do alvo |
+
+```json
+{"acao":"maldicaoForca","valor":2}
+```
+
+### `encerrarCombate`
+
+Encerre o combate sem vencer nem perder.
+
+| Parâmetro | Tipo | Obrigatório | O que faz |
+|---|---|---|---|
+| `naoEmLendarios` | sim/nao | não | não funciona com Lendários |
+
+```json
+{"acao":"encerrarCombate","naoEmLendarios":true}
+```
+
+### `anularErrante`
+
+Anule um Monstro Errante que entrou em qualquer combate.
+
+```json
+{"acao":"anularErrante"}
+```
+
+### `duplicata`
+
+Coloque um monstro da mão lutando do seu lado (soma metade do nível); ninguém mais pode ajudar.
+
+```json
+{"acao":"duplicata"}
+```
+
+### `dobrarFuria`
+
+Dobre o bônus de fúria neste combate.
+
+```json
+{"acao":"dobrarFuria"}
+```
+
+### `dobrarItem`
+
+Dobre o bônus de 1 item equipado (seu ou de um aliado no combate) até o fim do combate.
+
+```json
+{"acao":"dobrarItem"}
+```
+
+### `buscarPocao`
+
+Pegue a primeira Poção do baralho de Tesouros e embaralhe-o.
+
+```json
+{"acao":"buscarPocao"}
+```
+
+### `reforjar`
+
+Descarte 1 item: um item equipado (exceto anéis) ganha bônus permanente (1x por item).
+
+| Parâmetro | Tipo | Obrigatório | O que faz |
+|---|---|---|---|
+| `bonus` | numero | não | bônus ganho |
+
+```json
+{"acao":"reforjar","bonus":2}
+```
+
 ## Efeitos de itens
 
 Usados em `itens.json`.
@@ -310,6 +1099,7 @@ O monstro não persegue (fuga automática) quem atende à condição.
 | `nivelMinimo` | numero | não | não persegue jogadores deste nível ou mais |
 | `nivelMaximo` | numero | não | não persegue jogadores deste nível ou menos |
 | `semArmadura` | sim/nao | não | não persegue quem não tem armadura |
+| `sempre` | sim/nao | não | vale mesmo se o Especial do monstro for ignorado |
 
 ```json
 {"tipo":"naoPersegue"}
@@ -433,10 +1223,14 @@ Quem luta não pode pedir ajuda (outros podem se oferecer).
 
 ### `paralisaAtivas`
 
-Ninguém do lado dos jogadores usa habilidades ativas (Clérigos ignoram).
+Ninguém do lado dos jogadores usa habilidades ativas.
+
+| Parâmetro | Tipo | Obrigatório | O que faz |
+|---|---|---|---|
+| `excetoClasses` | lista | não | classes que ignoram |
 
 ```json
-{"tipo":"paralisaAtivas"}
+{"tipo":"paralisaAtivas","excetoClasses":["elfo"]}
 ```
 
 ### `drenoDeVida`
@@ -639,12 +1433,18 @@ Perca 1 item Grande ou níveis (a vítima escolhe).
 {"tipo":"perderGrandeOuNiveis","niveis":2}
 ```
 
-### `podridaoDeMumia`
+### `penalidadeTemporaria`
 
-Fica com -2 em combate por 2 rodadas (conta como maldição).
+Fica com uma penalidade de combate por algumas rodadas (conta como maldição).
+
+| Parâmetro | Tipo | Obrigatório | O que faz |
+|---|---|---|---|
+| `nome` | texto | sim | nome mostrado |
+| `valor` | numero | sim | quanto soma (use número negativo para tirar) |
+| `rodadas` | numero | sim | rodadas |
 
 ```json
-{"tipo":"podridaoDeMumia"}
+{"tipo":"penalidadeTemporaria","nome":"exemplo","valor":2,"rodadas":2}
 ```
 
 ### `possessao`
@@ -655,20 +1455,29 @@ O jogador à esquerda escolhe 1 item seu e fica com ele.
 {"tipo":"possessao"}
 ```
 
-### `quimera`
+### `perderNiveisNoDado`
 
-Role 1d6 três vezes: perca 1 nível para cada resultado de 1 a 3.
+Role 1d6 várias vezes: perca 1 nível para cada resultado até o valor.
+
+| Parâmetro | Tipo | Obrigatório | O que faz |
+|---|---|---|---|
+| `rolagens` | numero | sim | quantas rolagens |
+| `dadoAte` | numero | sim | resultado que faz perder |
 
 ```json
-{"tipo":"quimera"}
+{"tipo":"perderNiveisNoDado","rolagens":2,"dadoAte":2}
 ```
 
-### `virarVampirico`
+### `virarRacaSeMorrer`
 
-Se morrer neste combate, sua raça vira Vampírico.
+Se morrer neste combate, sua raça vira outra.
+
+| Parâmetro | Tipo | Obrigatório | O que faz |
+|---|---|---|---|
+| `raca` | texto | sim | id da raça |
 
 ```json
-{"tipo":"virarVampirico"}
+{"tipo":"virarRacaSeMorrer","raca":"exemplo"}
 ```
 
 ### `perderItensNaoEquipados`

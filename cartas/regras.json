@@ -1,0 +1,37 @@
+{
+  "nivelInicial": 1,
+  "nivelMaximo": 20,
+  "cartasIniciais": {
+    "portas": 4,
+    "tesouros": 4
+  },
+  "cartasAoMorrer": {
+    "portas": 4,
+    "tesouros": 4
+  },
+  "limiteMao": 5,
+  "fugirCom": 5,
+  "ouroPorNivel": 1000,
+  "limiteItensGrandes": 1,
+  "limiteItensLendarios": 1,
+  "limiteFugirAneis": 2,
+  "slots": {
+    "capacete": 1,
+    "peitoral": 1,
+    "calcas": 1,
+    "botas": 1,
+    "maos": 2,
+    "anel": 10,
+    "colar": 1,
+    "montaria": 1
+  },
+  "encaixesDeRuna": {
+    "comum": 1,
+    "incomum": 1,
+    "raro": 2,
+    "epico": 2,
+    "lendario": 2
+  },
+  "jogadoresMinimo": 2,
+  "jogadoresMaximo": 9
+}

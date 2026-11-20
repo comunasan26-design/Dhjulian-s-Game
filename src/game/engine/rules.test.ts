@@ -206,9 +206,9 @@ describe("regras", () => {
     const b = give(state, "p0", "levelup.treino");
     topDoor(state, "monster.esqueleto"); // nível 3, morto-vivo
     applyAction(state, "p0", { type: "KICK_DOOR" }, ctx);
-    applyAction(state, "p0", { type: "ABILITY", key: "luzSagrada", discard: [a], params: {} }, ctx);
+    applyAction(state, "p0", { type: "ABILITY", key: "race.divino#luzSagrada", discard: [a], params: {} }, ctx);
     expect(computeCombat(state)!.playerTotal).toBe(2 + 4);
-    expect(() => applyAction(state, "p0", { type: "ABILITY", key: "luzSagrada", discard: [b], params: {} }, ctx)).toThrow();
+    expect(() => applyAction(state, "p0", { type: "ABILITY", key: "race.divino#luzSagrada", discard: [b], params: {} }, ctx)).toThrow();
   });
 
   it("janela de ataque de 60s reinicia quando alguém interfere", () => {

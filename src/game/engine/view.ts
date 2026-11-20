@@ -12,7 +12,8 @@ import {
   playerSide,
   runeSockets,
 } from "./stats";
-import { classesOf, player, raceOf } from "./util";
+import { fxOf } from "../catalog";
+import { classesOf, identityCards, maxClasses, player, raceOf } from "./util";
 
 export interface PlayerView {
   id: string;
@@ -34,6 +35,9 @@ export interface PlayerView {
   hibernating: boolean;
   ready: boolean;
   bot: boolean;
+  /** Tipos de efeito passivo que o jogador tem (vindos da raça/classe no JSON). */
+  passives: string[];
+  maxClasses: number;
   power: number;
   handLimit: number;
   ambushCount: number;
@@ -126,6 +130,8 @@ export function viewFor(state: GameState, me: string, now: number, online: Set<s
       hibernating: p.hibernating,
       ready: p.ready,
       bot: !!p.bot,
+      passives: [...new Set(identityCards(state, p).flatMap((id) => fxOf(state.cards[id].defId).map((f) => f.tipo)))],
+      maxClasses: maxClasses(state, p),
       power: playerPower(state, p),
       handLimit: handLimit(state, p),
       ambushCount: p.ambush.length,

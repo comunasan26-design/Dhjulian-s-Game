@@ -321,7 +321,7 @@ export async function flowAbility(api: GameApi, picker: Picker, info: AbilityInf
         case "kit": {
           const kit = [...(me.hand ?? []), ...me.carried].find((id) => !!findFx(api.def(id)?.id, "kitLadrao"));
           if (!kit) break;
-          const isThief = me.classIds.includes("ladino");
+          const isThief = !info.key.endsWith("#kit");
           if (!isThief) {
             params[f.name] = kit;
             reserved.push(kit);
@@ -496,8 +496,7 @@ export function cardActions(api: GameApi, picker: Picker, cardId: string): CardA
           run: async () => {
             let replaceId: string | undefined;
             if (me.classes.length >= 1) {
-              const humanBonus = me.raceId === "humano" && me.level >= 11 && me.classes.length < 2;
-              if (!humanBonus) {
+              if (me.classes.length >= me.maxClasses) {
                 const r = await picker.pick({
                   title: "Substituir qual classe?",
                   options: me.classes.map((c) => ({ value: c, label: api.name(c) })),
