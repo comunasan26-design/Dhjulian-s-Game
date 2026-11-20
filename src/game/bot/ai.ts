@@ -1,11 +1,12 @@
 // IA dos bots. Os bots decidem simulando ações no motor (que é puro) e escolhendo a que mais melhora
 // a situação deles: ganhar níveis e poder, vencer monstros, atrapalhar jogadores humanos e o líder,
 // aliar-se a outros bots (menos os que estão quase ganhando) e negociar itens exclusivos da sua classe.
-import { CARD_DEFS, type CardDef, type ItemCard, type MonsterCard } from "../catalog";
+import { CARD_DEFS, type CardDef, findFx, type ItemCard, type MonsterCard } from "../catalog";
 import { abilityInfos } from "../engine/abilities";
 import { type Action, applyAction } from "../engine/actions";
 import { type Ctx, type GameState, GameError, MAX_LEVEL, type PlayerState, type Prompt } from "../engine/state";
-import { computeCombat, equipCheck, fleeInfo, playerPower, playerSide, slotOf, specialIds } from "../engine/stats";
+import { combatHas } from "../engine/fx";
+import { computeCombat, equipCheck, fleeInfo, playerPower, playerSide, slotOf } from "../engine/stats";
 import { isCurrent } from "../engine/util";
 
 export const BOT_DELAY_MS = 900;
@@ -73,6 +74,10 @@ function itemDefOf(state: GameState, cardId: string): ItemCard | null {
   return df.kind === "item" ? df : null;
 }
 
+const fxIs = (state: GameState, cardId: string, tipo: string) => !!findFx(state.cards[cardId]?.defId, tipo);
+const unbreakable = (state: GameState, cardId: string) =>
+  (state.cards[cardId]?.runes ?? []).some((r) => findFx(state.cards[r]?.defId, "naoRoubavel"));
+
 /** Determinístico e "médio" para simular (d6 = 4). */
 const SIM_RNG = { int: (max: number) => Math.floor((max - 1) / 2) + (max === 6 ? 1 : 0) };
 
@@ -92,17 +97,43 @@ function maxOtherLevel(state: GameState, me: string): number {
   return Math.max(0, ...state.players.filter((p) => p.id !== me).map((p) => p.level));
 }
 
-/** Peso de um adversário: humanos e o líder pesam muito; bots aliados pouco (a não ser que estejam quase ganhando). */
+/**
+ * Peso de um adversário: humanos pesam um pouco mais que bots (preferência, não obsessão),
+ * e quem está liderando ou perto de ganhar pesa muito — mesmo que seja outro bot.
+ */
 function weight(state: GameState, me: string, other: PlayerState): number {
   const leaderLevel = maxOtherLevel(state, me);
-  const nearWin = other.level >= 16 || (other.level === leaderLevel && other.level >= 13);
-  let w = other.bot ? (nearWin ? 1 : 0.25) : 1;
-  if (other.level === leaderLevel && other.level >= P(state, me).level) w *= 1.5;
+  let w = other.bot ? 0.6 : 1;
+  if (other.level === leaderLevel && other.level >= P(state, me).level && other.level > 1) w *= 1.8;
+  if (other.level >= 16) w = Math.max(w, 1.6);
   return w;
 }
 
 function isAlly(state: GameState, me: string, other: PlayerState): boolean {
-  return !!other.bot && weight(state, me, other) < 0.5;
+  return !!other.bot && weight(state, me, other) < 0.8;
+}
+
+function monsterStake(state: GameState): { levels: number; treasures: number } {
+  const c = state.combat;
+  if (!c) return { levels: 0, treasures: 0 };
+  let levels = 0;
+  let treasures = 0;
+  for (const m of c.monsters) {
+    const md = d(state, m.cardId) as MonsterCard;
+    levels += md.levels;
+    treasures += md.treasures;
+  }
+  return { levels, treasures };
+}
+
+/** O jogador `who` consegue fazer o lutador perder com as cartas que tem? */
+function canFlip(state: GameState, who: string, ctx: Ctx): boolean {
+  if (!state.combat) return false;
+  const winning = (s: GameState) => !!s.combat && !!computeCombat(s)?.winning;
+  if (!winning(state)) return false;
+  const w = P(state, who);
+  if (!w) return false;
+  return !!plan(state, who, (s) => (s.combat ? hinderCandidates(s, P(s, who)) : []), (s) => !s.combat || !winning(s), ctx, 4);
 }
 
 function handValue(state: GameState, p: PlayerState): number {
@@ -261,9 +292,9 @@ function boostCandidates(state: GameState, me: PlayerState): Action[] {
     const df = d(state, id);
     if (df.kind === "monsterBonus" && df.value < 0) for (const m of monsters) out.push({ type: "PLAY_MONSTER_BONUS", cardId: id, monsterId: m });
     if (df.kind === "potion") {
-      if (["potion.forca-menor", "potion.fogo-grego", "potion.elixir-gigante", "potion.agua-benta"].includes(df.id))
+      if (fxIs(state, id, "bonusLado") || fxIs(state, id, "contraMortosVivos"))
         out.push({ type: "USE_CARD", cardId: id, side: "player", targetId: side.includes(me.id) ? me.id : c.fighterId });
-      if (df.id === "potion.acido") for (const m of monsters) out.push({ type: "USE_CARD", cardId: id, monsterId: m });
+      if (fxIs(state, id, "menosEmAlvo")) for (const m of monsters) out.push({ type: "USE_CARD", cardId: id, monsterId: m });
     }
   }
   if (me.id === c.fighterId) {
@@ -287,16 +318,12 @@ function hinderCandidates(state: GameState, me: PlayerState): Action[] {
     const df = d(state, id);
     if (df.kind === "monsterBonus" && df.value > 0) for (const m of monsters) out.push({ type: "PLAY_MONSTER_BONUS", cardId: id, monsterId: m });
     if (df.kind === "wandering" && strongestHandMonster) out.push({ type: "PLAY_WANDERING", cardId: id, monsterCardId: strongestHandMonster });
-    if (df.kind === "potion" && ["potion.forca-menor", "potion.fogo-grego", "potion.elixir-gigante"].includes(df.id))
-      out.push({ type: "USE_CARD", cardId: id, side: "monster" });
-    if (df.id === "potion.acido") out.push({ type: "USE_CARD", cardId: id, targetId: c.fighterId });
-    if (df.id === "misc.isca") for (const m of monsters) out.push({ type: "USE_CARD", cardId: id, monsterId: m });
-    if (df.kind === "curse" && ["curse.fraqueza", "curse.escuro", "curse.ilusao-traidora", "curse.isolamento"].includes(df.id))
-      out.push({ type: "PLAY_CURSE", cardId: id, targetId: c.fighterId });
+    if (df.kind === "potion" && fxIs(state, id, "bonusLado")) out.push({ type: "USE_CARD", cardId: id, side: "monster" });
+    if (fxIs(state, id, "menosEmAlvo")) out.push({ type: "USE_CARD", cardId: id, targetId: c.fighterId });
+    if (df.kind === "curse" && df.curseType === "combat") out.push({ type: "PLAY_CURSE", cardId: id, targetId: c.fighterId });
   }
   for (const id of [...me.hand, ...me.carried]) {
-    const df = d(state, id);
-    if (df.id === "misc.isca") for (const m of monsters) out.push({ type: "USE_CARD", cardId: id, monsterId: m });
+    if (fxIs(state, id, "isca")) for (const m of monsters) out.push({ type: "USE_CARD", cardId: id, monsterId: m });
   }
   out.push(...abilityCandidates(state, me, "hinder"));
   return out;
@@ -326,7 +353,7 @@ function manageCandidates(state: GameState, me: PlayerState, ownTurn: boolean): 
   for (const id of me.hand) {
     const df = d(state, id);
     if (df.kind === "levelup" && me.level < MAX_LEVEL - 1) out.push({ type: "PLAY_LEVELUP", cardId: id });
-    if (df.id === "potion.ascensao" && me.level < MAX_LEVEL - 1) out.push({ type: "USE_CARD", cardId: id });
+    if (fxIs(state, id, "subirNivel") && me.level < MAX_LEVEL - 1) out.push({ type: "USE_CARD", cardId: id });
     if (df.kind === "curse") {
       for (const o of state.players) if (o.id !== me.id && !isAlly(state, me.id, o)) out.push({ type: "PLAY_CURSE", cardId: id, targetId: o.id });
     }
@@ -393,15 +420,27 @@ function answerFor(state: GameState, me: PlayerState, pr: Prompt, ctx: Ctx): Act
     case "helpRequest": {
       const fighter = P(state, String(data.fighterId));
       const deal = data.deal as { count: number };
-      const c = state.combat;
       const calc = computeCombat(state);
       const wouldWin = !!calc && calc.playerTotal + playerPower(state, me) > calc.monsterTotal;
-      let accept: boolean;
-      if (fighter.bot) accept = isAlly(state, me.id, fighter) && wouldWin;
-      else accept = wouldWin && deal.count >= 2 && fighter.level < 15 && weight(state, me.id, fighter) <= 1;
-      if (data.threat && !accept && wouldWin && me.level > 1) accept = true;
-      void c;
+      const stake = monsterStake(state);
+      // Ganho para mim (tesouros + nível do Elfo) contra o quanto o lutador avança
+      const myGain = deal.count * 40 + (me.race && state.cards[me.race]?.defId === "race.elfo" ? 100 : 0);
+      const theirGain = weight(state, me.id, fighter) * stake.levels * 60;
+      let accept = wouldWin && (isAlly(state, me.id, fighter) || myGain >= theirGain);
+      if (fighter.level >= 18 && !isAlly(state, me.id, fighter)) accept = false;
+      if (data.threat && !accept && wouldWin && me.level > 1 && fighter.level < 18) accept = true;
       return answer({ accept });
+    }
+    case "threat": {
+      // Pago se quem ameaça conseguiria mesmo virar o combate
+      const threatener = String(data.threatenerId);
+      const count = Number(data.count);
+      const stake = monsterStake(state);
+      const calc = computeCombat(state);
+      const winningNow = !!calc?.winning;
+      const real = canFlip(state, threatener, ctx) || P(state, threatener).hand.length >= 4;
+      const worth = stake.levels * 100 + (stake.treasures - count) * 25 > 0 && count < stake.treasures + 1;
+      return answer({ accept: real && worth && (winningNow || count <= Math.ceil(stake.treasures / 2)) });
     }
     case "helpOffer": {
       const helper = P(state, String(data.helperId));
@@ -502,16 +541,16 @@ function decideBadStuff(state: GameState, me: PlayerState): Action | null {
     const md = d(state, r.monsterCardId) as MonsterCard;
     return md.badStuff.some((e) => e.t === "death" || (e.t === "levels" && e.n >= 2));
   });
-  if (severe && me.equipped.some((id) => state.cards[id].defId === "item.anel-desejos")) return { type: "WISH_RING" };
+  if (severe && me.equipped.some((id) => fxIs(state, id, "desejos"))) return { type: "WISH_RING" };
   const rolled = mine.find(({ r }) => r.roll > 0);
   if (rolled) {
-    if (me.equipped.some((id) => state.cards[id].defId === "item.cajado-arquimago") && !c.rerolled.includes(`${me.id}:cajado`))
+    if (me.equipped.some((id) => fxIs(state, id, "rerrolarFuga")) && !c.rerolled.includes(`${me.id}:cajado`))
       return { type: "REROLL", index: rolled.i, source: "cajado" };
-    const dado = [...me.hand, ...me.carried].find((id) => state.cards[id].defId === "misc.dado-viciado");
+    const dado = [...me.hand, ...me.carried].find((id) => fxIs(state, id, "rerrolarFuga"));
     if (dado && severe) return { type: "REROLL", index: rolled.i, source: "dado", cardId: dado };
   }
   if (severe) {
-    const escape = [...me.hand, ...me.carried].find((id) => ["misc.pergaminho", "potion.invisibilidade"].includes(state.cards[id].defId));
+    const escape = [...me.hand, ...me.carried].find((id) => fxIs(state, id, "teletransporte") || fxIs(state, id, "fugaAutomatica"));
     if (escape) return { type: "USE_CARD", cardId: escape, targetId: me.id };
   }
   return { type: "ACCEPT_BAD_STUFF" };
@@ -525,7 +564,7 @@ function decideFighter(state: GameState, me: PlayerState, ctx: Ctx): Action | nu
   if (calc.winning) {
     // Antes de atacar: Mapa do Tesouro e desejo do Glabrezu se continuar vencendo
     const extras: Action[] = [{ type: "ACCEPT_WISH" }];
-    for (const id of [...me.hand, ...me.carried]) if (state.cards[id].defId === "misc.mapa") extras.push({ type: "USE_CARD", cardId: id });
+    for (const id of [...me.hand, ...me.carried]) if (fxIs(state, id, "mapa")) extras.push({ type: "USE_CARD", cardId: id });
     for (const a of extras) {
       const s = simulate(state, me.id, a, ctx);
       if (s && winning(s) && computeCombat(s)!.playerTotal - computeCombat(s)!.monsterTotal >= 3) return a;
@@ -537,7 +576,7 @@ function decideFighter(state: GameState, me: PlayerState, ctx: Ctx): Action | nu
   if (p) return p;
   // Pede ajuda (prefere bots aliados)
   const m = mem(state);
-  if (!c.helperId && !specialIds(state, c).has("monster.bugbear")) {
+  if (!c.helperId && !combatHas(state, c, "semPedirAjuda")) {
     if (state.prompts.some((pr) => pr.kind === "helpRequest" && pr.data.fighterId === me.id)) return null;
     const treasures = c.monsters.reduce((a, x) => a + (d(state, x.cardId) as MonsterCard).treasures, 0);
     const candidates = state.players
@@ -569,8 +608,8 @@ function decideFighter(state: GameState, me: PlayerState, ctx: Ctx): Action | nu
       escapes.push({ type: "ABILITY", key: ab.key, discard: disc, params });
     }
     for (const id of [...me.hand, ...me.carried]) {
-      if (state.cards[id].defId === "misc.pergaminho") escapes.push({ type: "USE_CARD", cardId: id });
-      if (state.cards[id].defId === "potion.invisibilidade") escapes.push({ type: "USE_CARD", cardId: id, targetId: me.id });
+      if (fxIs(state, id, "teletransporte")) escapes.push({ type: "USE_CARD", cardId: id });
+      if (fxIs(state, id, "fugaAutomatica")) escapes.push({ type: "USE_CARD", cardId: id, targetId: me.id });
     }
     for (const a of escapes) if (simulate(state, me.id, a, ctx)) return a;
   }
@@ -599,7 +638,19 @@ function decideOtherCombat(state: GameState, me: PlayerState, ctx: Ctx): Action 
     if (c.stage === "resolving" && !onSide && !c.passed.includes(me.id)) return { type: "PASS" };
     return null;
   }
-  // Adversário: só interfere quando ele já decidiu atacar (janela de ataque)
+  // Adversário: ameaça (pede tesouros para não atrapalhar) se consegue virar o combate
+  const m = mem(state);
+  const threatKey = `threat:${c.id}:${me.id}`;
+  if (calc.winning && !m[threatKey] && !c.used.includes(`${me.id}:threat`) && !c.desafio) {
+    const fw = weight(state, me.id, fighter);
+    if (fw < 1.5 && canFlip(state, me.id, ctx)) {
+      m[threatKey] = 1;
+      const stake = monsterStake(state);
+      return { type: "THREATEN", count: Math.max(1, Math.ceil(stake.treasures / 2)) };
+    }
+    m[threatKey] = 1;
+  }
+  // Só atrapalha quando ele já decidiu atacar (janela de ataque)
   if (c.stage !== "resolving") return null;
   if (calc.winning) {
     const p = plan(state, me.id, (s) => (s.combat ? hinderCandidates(s, P(s, me.id)) : []), (s) => !s.combat || !winning(s), ctx, 4);
@@ -625,13 +676,13 @@ function tradeIdea(state: GameState, me: PlayerState): Action | null {
       if (!exclusive) continue;
       const key = `trade:${me.id}:${it}`;
       if (m[key] && state.turnSerial - m[key] < state.players.length * 3) continue;
-      if ((state.cards[it].runes ?? []).some((r) => state.cards[r]?.defId === "rune.vinculo")) continue;
+      if (unbreakable(state, it)) continue;
       // Precisa ser melhor que o que já uso no slot
       const current = me.equipped.filter((e) => slotOf(state, e) === df.slot).map((e) => cardValue(state, e));
       if (current.length && Math.max(...current) >= cardValue(state, it)) continue;
       // Oferta justa: item meu (fora de uso de preferência) com preço parecido
       const offer = [...me.carried, ...me.equipped.filter((e) => slotOf(state, e) !== df.slot)]
-        .filter((id) => itemDefOf(state, id) && !(state.cards[id].runes ?? []).some((r) => state.cards[r]?.defId === "rune.vinculo"))
+        .filter((id) => itemDefOf(state, id) && !unbreakable(state, id))
         .map((id) => ({ id, diff: Math.abs((itemDefOf(state, id)!.price ?? 0) - df.price), price: itemDefOf(state, id)!.price, carried: me.carried.includes(id) }))
         .filter((x) => x.price >= df.price * 0.7)
         .sort((a, b) => Number(b.carried) - Number(a.carried) || a.diff - b.diff)[0];

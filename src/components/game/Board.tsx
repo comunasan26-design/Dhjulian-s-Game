@@ -115,6 +115,7 @@ export function Board({
             <Link href="/regras" target="_blank" className="hidden text-xs text-muted underline hover:text-ink sm:inline">
               Regras
             </Link>
+            {view.phase !== "FINISHED" && <SurrenderButton act={act} />}
           </header>
 
           <div className={`${show(tab === "jogadores")} lg:block`}>
@@ -231,5 +232,26 @@ function TableArea({ view, me, act }: { view: GameView; me: GameView["players"][
         </div>
       )}
     </section>
+  );
+}
+
+function SurrenderButton({ act }: { act: (a: Action) => Promise<boolean> }) {
+  const [ask, setAsk] = useState(false);
+  if (!ask)
+    return (
+      <button onClick={() => setAsk(true)} className="text-xs text-muted hover:text-red-300" title="Desistir da partida">
+        🏳️ Desistir
+      </button>
+    );
+  return (
+    <span className="flex items-center gap-1 text-xs">
+      <span className="text-red-300">Desistir? Conta como morte e você sai da partida.</span>
+      <Button size="sm" variant="danger" onClick={() => act({ type: "SURRENDER" })}>
+        Sim
+      </Button>
+      <Button size="sm" variant="ghost" onClick={() => setAsk(false)}>
+        Não
+      </Button>
+    </span>
   );
 }

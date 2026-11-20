@@ -4,15 +4,17 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && next build",
-    "vercel-build": "prisma generate && prisma migrate deploy && next build",
+    "build": "tsx scripts/cartas.mts validar && prisma generate && next build",
+    "vercel-build": "tsx scripts/cartas.mts validar && prisma generate && prisma migrate deploy && next build",
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "cartas:validar": "tsx scripts/cartas.mts validar",
+    "cartas:docs": "tsx scripts/cartas.mts docs"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.10.1",

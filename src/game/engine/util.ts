@@ -1,4 +1,4 @@
-import { def, type CardDef, type ClassId, type ItemCard, type RaceId } from "../catalog";
+import { def, fxOf, type CardDef, type ClassId, type ItemCard, type RaceId } from "../catalog";
 import {
   type CardInst,
   type Ctx,
@@ -146,7 +146,7 @@ function resetInstance(state: GameState, c: CardInst) {
     for (const r of c.runes) discardCard(state, r);
     delete c.runes;
   }
-  if (c.defId === "item.anel-desejos") delete c.charges;
+  delete c.charges;
 }
 
 /** Envia a carta para a pilha de descarte correta (ou a remove, se virtual). */
@@ -216,8 +216,8 @@ export function drawTo(state: GameState, p: PlayerState, deck: "door" | "treasur
 // Dados
 // ----------------------------------------------------------------------------
 
-function hasActiveCurse(p: PlayerState, defId: string): boolean {
-  return p.curses.some((c) => c.defId === defId);
+function hasRuneFx(state: GameState, p: PlayerState, tipo: string): boolean {
+  return p.equipped.some((id) => (state.cards[id]?.runes ?? []).some((r) => fxOf(state.cards[r]?.defId).some((f) => f.tipo === tipo)));
 }
 
 export function equippedRuneCount(state: GameState, p: PlayerState, runeDefId: string): number {
@@ -232,16 +232,22 @@ export function equippedRuneCount(state: GameState, p: PlayerState, runeDefId: s
 export function rollD6(state: GameState, p: PlayerState | null, ctx: Ctx, label: string): { natural: number; total: number } {
   let natural = ctx.rng.int(6) + 1;
   let note = "";
-  if (p && natural === 1 && equippedRuneCount(state, p, "rune.sorte") > 0 && p.usage["runaSorte"] !== state.round) {
+  if (p && natural === 1 && hasRuneFx(state, p, "rerrolaUm") && p.usage["runaSorte"] !== state.round) {
     p.usage["runaSorte"] = state.round;
     const again = ctx.rng.int(6) + 1;
     note = ` (Runa da Sorte refez o 1 → ${again})`;
     natural = again;
   }
   let total = natural;
-  if (p && hasActiveCurse(p, "curse.corvo")) {
-    total -= 1;
-    note += " (-1 Corvo Agourento)";
+  if (p) {
+    for (const c of p.curses) {
+      for (const fx of fxOf(c.defId)) {
+        if (fx.tipo !== "menosNoDado") continue;
+        const v = typeof fx.valor === "number" ? fx.valor : 1;
+        total -= v;
+        note += ` (-${v} ${def(c.defId).name})`;
+      }
+    }
   }
   log(state, ctx, `🎲 ${p ? p.name : "Mesa"} rolou ${natural}${note} — ${label}`, "dice", p?.id);
   return { natural, total };

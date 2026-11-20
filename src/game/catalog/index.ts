@@ -1,20 +1,26 @@
-import { CLASSES } from "./classes";
-import { CURSES, MONSTER_BONUSES, WANDERING } from "./doors";
-import { MONSTERS } from "./monsters";
-import { RACES } from "./races";
-import { ITEMS, LEVEL_UPS, MISC, POTIONS, RUNES } from "./treasures";
-import type {
-  CardDef,
-  ClassCard,
-  ClassId,
-  CurseCard,
-  ItemCard,
-  MonsterCard,
-  RaceCard,
-  RaceId,
-} from "./types";
+import type { Fx } from "./effects";
+import { loadCatalog } from "./load";
+import type { CardDef, ClassCard, ClassId, CurseCard, ItemCard, MonsterCard, RaceCard, RaceId } from "./types";
 
 export * from "./types";
+export type { Fx } from "./effects";
+
+const loaded = loadCatalog();
+if (loaded.problems.length > 0) {
+  throw new Error(`Há problemas nos arquivos de cartas (pasta /cartas):\n- ${loaded.problems.join("\n- ")}`);
+}
+
+export const RACES = loaded.races;
+export const CLASSES = loaded.classes;
+export const ITEMS = loaded.items;
+export const POTIONS = loaded.potions;
+export const RUNES = loaded.runes;
+export const MISC = loaded.misc;
+export const LEVEL_UPS = loaded.levelUps;
+export const MONSTERS = loaded.monsters;
+export const CURSES = loaded.curses;
+export const MONSTER_BONUSES = loaded.bonuses;
+export const WANDERING = loaded.wandering;
 
 export const ALL_CARDS: CardDef[] = [
   ...RACES,
@@ -38,12 +44,13 @@ export function def(defId: string): CardDef {
   return d;
 }
 
+/** Primeira raça/classe (carta) com essas habilidades. */
 export function raceDef(id: RaceId): RaceCard {
-  return def(`race.${id}`) as RaceCard;
+  return (CARD_DEFS[`race.${id}`] as RaceCard) ?? RACES.find((r) => r.race === id)!;
 }
 
 export function classDef(id: ClassId): ClassCard {
-  return def(`class.${id}`) as ClassCard;
+  return (CARD_DEFS[`class.${id}`] as ClassCard) ?? CLASSES.find((c) => c.cls === id)!;
 }
 
 export function isItem(d: CardDef): d is ItemCard {
@@ -62,4 +69,16 @@ export function priceOf(d: CardDef): number {
   return 0;
 }
 
-export { CLASSES, CURSES, ITEMS, LEVEL_UPS, MISC, MONSTER_BONUSES, MONSTERS, POTIONS, RACES, RUNES, WANDERING };
+/** Efeitos de uma carta (pelo id da definição). */
+export function fxOf(defId: string | undefined): Fx[] {
+  if (!defId) return [];
+  return CARD_DEFS[defId]?.fx ?? [];
+}
+
+export function findFx(defId: string | undefined, tipo: string): Fx | undefined {
+  return fxOf(defId).find((f) => f.tipo === tipo);
+}
+
+export function allFx(defId: string | undefined, tipo: string): Fx[] {
+  return fxOf(defId).filter((f) => f.tipo === tipo);
+}

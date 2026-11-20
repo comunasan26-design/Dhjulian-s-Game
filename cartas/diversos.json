@@ -1,0 +1,108 @@
+[
+  {
+    "id": "isca",
+    "nome": "Isca de Monstro",
+    "raridade": "comum",
+    "preco": 200,
+    "copias": 2,
+    "texto": "Uso único. Jogue no combate de outro jogador: +5 para o monstro.",
+    "efeitos": [
+      {
+        "tipo": "isca",
+        "valor": 5
+      }
+    ]
+  },
+  {
+    "id": "dado-viciado",
+    "nome": "Dado Viciado",
+    "raridade": "comum",
+    "preco": 300,
+    "copias": 2,
+    "texto": "Uso único. Refaça uma rolagem de Fugir sua.",
+    "efeitos": [
+      {
+        "tipo": "rerrolarFuga"
+      }
+    ]
+  },
+  {
+    "id": "kit-ladrao",
+    "nome": "Kit de Ladrão",
+    "raridade": "incomum",
+    "preco": 300,
+    "texto": "Uso único. +2 numa rolagem de Roubo, ou role o Roubo mesmo sem ser Ladino (sucesso com 5+).",
+    "efeitos": [
+      {
+        "tipo": "kitLadrao",
+        "bonus": 2,
+        "sucessoSemLadino": 5
+      }
+    ]
+  },
+  {
+    "id": "espelho-prata",
+    "nome": "Espelho de Prata",
+    "raridade": "incomum",
+    "preco": 400,
+    "texto": "Uso único. Um Monstro Errante jogado no seu combate vai para outro jogador à sua escolha, que o enfrenta no próximo turno dele.",
+    "efeitos": [
+      {
+        "tipo": "espelho"
+      }
+    ]
+  },
+  {
+    "id": "bolsa",
+    "nome": "Bolsa Devoradora",
+    "raridade": "raro",
+    "preco": 500,
+    "permanente": true,
+    "texto": "Permanente (na mesa). Seu limite de mão sobe em 2 cartas.",
+    "efeitos": [
+      {
+        "tipo": "limiteMao",
+        "quantidade": 2
+      }
+    ]
+  },
+  {
+    "id": "mapa",
+    "nome": "Mapa do Tesouro",
+    "raridade": "raro",
+    "preco": 600,
+    "texto": "Uso único. Jogue no seu combate: ao vencer, compre 2 Tesouros a mais.",
+    "efeitos": [
+      {
+        "tipo": "mapa",
+        "tesouros": 2
+      }
+    ]
+  },
+  {
+    "id": "pergaminho",
+    "nome": "Pergaminho de Teletransporte",
+    "raridade": "epico",
+    "preco": 800,
+    "texto": "Uso único. Fuja de qualquer combate, até de Lendários.",
+    "efeitos": [
+      {
+        "tipo": "teletransporte"
+      }
+    ]
+  },
+  {
+    "id": "carta-rei",
+    "nome": "Carta de Recomendação do Rei",
+    "raridade": "lendario",
+    "preco": 1000,
+    "permanente": true,
+    "texto": "Permanente (na mesa). Itens que você vende valem 50% a mais de ouro.",
+    "efeitos": [
+      {
+        "tipo": "vendaMultiplicador",
+        "valor": 1.5
+      }
+    ]
+  }
+]

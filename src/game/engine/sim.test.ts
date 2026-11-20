@@ -58,6 +58,7 @@ function checkConservation(state: GameState) {
 function candidateActions(state: GameState, pid: string, rand: () => number): Action[] {
   const v = viewFor(state, pid, 0);
   const me = v.players.find((p) => p.id === pid)!;
+  if (!me) return [{ type: "TICK" }];
   const others = v.players.filter((p) => p.id !== pid);
   const pick = <T,>(arr: T[]): T | undefined => arr[Math.floor(rand() * arr.length)];
   const hand = me.hand ?? [];
@@ -116,9 +117,10 @@ function candidateActions(state: GameState, pid: string, rand: () => number): Ac
     acts.push({ type: "ASK_HELP", targetId: other, count: Math.floor(rand() * 3), mode: pick(["random", "fighter", "helper"] as const)! });
     acts.push({ type: "OFFER_HELP", count: 1, mode: "random" });
     acts.push({ type: "REROLL", index: 0, source: rand() < 0.5 ? "dado" : "cajado" });
-    acts.push({ type: "WISH_RING" }, { type: "ARCO" }, { type: "SOPRO" }, { type: "ACCEPT_WISH" });
+    acts.push({ type: "WISH_RING" }, { type: "ARCO" }, { type: "SOPRO" }, { type: "ACCEPT_WISH" }, { type: "THREATEN", count: 1 });
     for (const m of c.monsters) acts.push({ type: "DISPENSE", monsterId: m.cardId, discardId: pick(hand) });
   }
+  if (rand() < 0.002 && state.players.length > 3) acts.push({ type: "SURRENDER" });
   acts.push({ type: "CATADOR" }, { type: "OWL_PEEK" }, { type: "OWL_DECIDE", bottom: rand() < 0.5 });
   acts.push({ type: "MEDALHAO", targetId: other });
   acts.push({ type: "TRADE", toId: other, give: me.carried.slice(0, 1), take: [] });

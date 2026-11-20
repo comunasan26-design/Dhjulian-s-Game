@@ -1,3 +1,7 @@
+import type { Fx } from "./effects";
+
+export type { Fx };
+
 // Tipos das definições de cartas (catálogo estático).
 
 export type RaceId =
@@ -57,6 +61,8 @@ interface CardBase {
   deck: DeckName;
   /** Número de cópias no baralho (padrão 1). */
   copies?: number;
+  /** Efeitos (definidos nos arquivos JSON da pasta /cartas). */
+  fx?: Fx[];
 }
 
 export interface AbilityText {

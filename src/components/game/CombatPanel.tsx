@@ -1,21 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import { findFx, fxOf } from "@/game/catalog";
 import { Button } from "../ui/Button";
 import { CardView } from "./CardView";
 import { useGame } from "./GameContext";
 import { flowAskHelp, flowOfferHelp, pickFailedRoll } from "./flows";
 import { usePicker } from "./Picker";
 import { Countdown } from "./useClock";
-
-const DISPENSE: Record<string, { label: string; can: (race: string | null, classes: string[]) => boolean; discard: boolean }> = {
-  "monster.goblin": { label: "Dispensar (primo Goblin)", can: (r) => r === "goblin", discard: false },
-  "monster.urso-coruja": { label: "Dispensar (Druida)", can: (_r, c) => c.includes("druida"), discard: true },
-  "monster.gigante-colinas": { label: "Dispensar (primo Gigante)", can: (r) => r === "gigante", discard: true },
-  "monster.elemental-fogo": { label: "Dispensar (parente Elemental)", can: (r) => r === "elemental", discard: true },
-  "monster.vampiro": { label: "Dispensar (Vampírico)", can: (r) => r === "vampirico", discard: false },
-  "monster.solar": { label: "Dispensar e subir 1 nível", can: (r, c) => r === "divino" || c.includes("paladino"), discard: false },
-};
 
 export function CombatPanel() {
   const api = useGame();
@@ -29,7 +21,12 @@ export function CombatPanel() {
   const side = calc?.side ?? [];
   const onSide = side.includes(me.id);
   const victims = c.victims ?? [];
-  const hasItem = (id: string) => me.equipped.some((x) => view.cards[x]?.defId === id);
+  const hasFx = (tipo: string) => me.equipped.some((x) => !!findFx(view.cards[x]?.defId, tipo));
+  const bowOk = me.equipped.some((x) => {
+    const f = findFx(view.cards[x]?.defId, "atirarDeLonge");
+    const races = (f?.racas as string[] | undefined) ?? [];
+    return !!f && (races.length === 0 || (me.raceId !== null && races.includes(me.raceId)));
+  });
 
   return (
     <section className="rounded-xl border-2 border-red-900/70 bg-gradient-to-b from-red-950/40 to-panel p-3">
@@ -91,7 +88,21 @@ export function CombatPanel() {
         {c.monsters.map((m) => {
           const total = calc?.monsters.find((x) => x.cardId === m.cardId)?.total;
           const d = api.def(m.cardId);
-          const dispense = d ? DISPENSE[d.id] : undefined;
+          const dispFx = d && !m.ignoreSpecial
+            ? fxOf(d.id).find((f) => {
+                if (f.tipo !== "dispensavel") return false;
+                const races = (f.racas as string[] | undefined) ?? [];
+                const classes = (f.classes as string[] | undefined) ?? [];
+                if (!races.length && !classes.length) return true;
+                return (me.raceId !== null && races.includes(me.raceId)) || me.classIds.some((c) => classes.includes(c));
+              })
+            : undefined;
+          const dispense = dispFx
+            ? {
+                label: `Dispensar${typeof dispFx.tesouros === "number" ? ` (+${dispFx.tesouros} tesouro)` : ""}${typeof dispFx.niveis === "number" ? ` (+${dispFx.niveis} nível)` : ""}`,
+                discard: Number(dispFx.descartar ?? 0) > 0,
+              }
+            : undefined;
           return (
             <div key={m.cardId} className="flex flex-col items-center gap-1">
               <CardView id={m.cardId} badge={m.defeated ? "morto" : total !== undefined ? `força ${total}` : undefined} dim={m.defeated} />
@@ -101,7 +112,7 @@ export function CombatPanel() {
                 {m.petrified && <span className="rounded bg-stone-700 px-1">petrificou</span>}
                 {m.ettinFight && <span className="rounded bg-stone-700 px-1">cabeças brigando</span>}
               </div>
-              {isFighter && dispense && dispense.can(me.raceId, me.classIds) && !m.ignoreSpecial && c.stage !== "badstuff" && (
+              {isFighter && dispense && c.stage !== "badstuff" && (
                 <Button
                   size="sm"
                   onClick={async () => {
@@ -205,7 +216,7 @@ export function CombatPanel() {
                 🙏 Pedir ajuda
               </Button>
             )}
-            {c.monsters.some((m) => api.def(m.cardId)?.id === "monster.glabrezu" && !m.ignoreSpecial) && !c.glabrezuAccepted && (
+            {c.monsters.some((m) => !m.ignoreSpecial && !!findFx(view.cards[m.cardId]?.defId, "desejo")) && !c.glabrezuAccepted && (
               <Button onClick={() => api.act({ type: "ACCEPT_WISH" })}>😈 Aceitar o desejo (+1 nível, monstro +10)</Button>
             )}
           </>
@@ -220,41 +231,57 @@ export function CombatPanel() {
             🤚 Oferecer ajuda
           </Button>
         )}
+        {!onSide && c.stage !== "badstuff" && !c.desafio && !c.used.includes(`${me.id}:threat`) && (
+          <Button
+            onClick={async () => {
+              const treasures = c.monsters.reduce((a, m) => a + ((api.def(m.cardId) as { treasures?: number })?.treasures ?? 0), 0);
+              const v = await picker.pick({
+                title: `Ameaçar atrapalhar ${fighter.name}`,
+                description: "Peça tesouros para não atrapalhar. Se ele aceitar, você recebe os tesouros quando ele vencer e não pode atrapalhá-lo nesta rodada.",
+                options: Array.from({ length: Math.max(1, Math.min(10, treasures)) }, (_, i) => ({ value: String(i + 1), label: `${i + 1} tesouro(s)` })),
+              });
+              if (v) await api.act({ type: "THREATEN", count: Number(v) });
+            }}
+            disabled={api.busy}
+          >
+            😈 Ameaçar atrapalhar
+          </Button>
+        )}
         {!onSide && c.stage === "resolving" && !c.passed.includes(me.id) && (
           <Button variant="primary" onClick={() => api.act({ type: "PASS" })}>
             ✅ Deixar passar
           </Button>
         )}
-        {!onSide && me.raceId === "elfo" && hasItem("item.arco-elfico") && !c.bowUsedBy.includes(me.id) && c.stage !== "badstuff" && (
-          <Button onClick={() => api.act({ type: "ARCO" })}>🏹 Atirar com o Arco Élfico</Button>
+        {!onSide && bowOk && !c.bowUsedBy.includes(me.id) && c.stage !== "badstuff" && (
+          <Button onClick={() => api.act({ type: "ARCO" })}>🏹 Atirar de longe</Button>
         )}
-        {onSide && hasItem("item.dragao-bebe") && !c.breathUsedBy.includes(me.id) && c.stage !== "badstuff" && (
-          <Button onClick={() => api.act({ type: "SOPRO" })}>🐲 Sopro do Dragão Bebê (+3 fogo)</Button>
+        {onSide && hasFx("sopro") && !c.breathUsedBy.includes(me.id) && c.stage !== "badstuff" && (
+          <Button onClick={() => api.act({ type: "SOPRO" })}>🐲 Sopro (fogo)</Button>
         )}
         {victims.includes(me.id) && c.flee && !c.flee.confirmed.includes(me.id) && (
           <>
             <Button variant="danger" onClick={() => api.act({ type: "ACCEPT_BAD_STUFF" })}>
               ☠️ Aceitar as Coisas Ruins
             </Button>
-            {hasItem("item.anel-desejos") && <Button onClick={() => api.act({ type: "WISH_RING" })}>💍 Gastar um desejo</Button>}
-            {hasItem("item.cajado-arquimago") && !c.rerolled.includes(`${me.id}:cajado`) && (
+            {hasFx("desejos") && <Button onClick={() => api.act({ type: "WISH_RING" })}>💍 Gastar um desejo</Button>}
+            {hasFx("rerrolarFuga") && !c.rerolled.includes(`${me.id}:cajado`) && (
               <Button
                 onClick={async () => {
                   const idx = await pickFailedRoll(api, picker);
                   if (idx !== null) await api.act({ type: "REROLL", index: idx, source: "cajado" });
                 }}
               >
-                🎲 Rerrolar (Cajado)
+                🎲 Rerrolar (item equipado)
               </Button>
             )}
-            {[...(me.hand ?? []), ...me.carried].some((id) => view.cards[id]?.defId === "misc.dado-viciado") && (
+            {[...(me.hand ?? []), ...me.carried].some((id) => !!findFx(view.cards[id]?.defId, "rerrolarFuga")) && (
               <Button
                 onClick={async () => {
                   const idx = await pickFailedRoll(api, picker);
                   if (idx !== null) await api.act({ type: "REROLL", index: idx, source: "dado" });
                 }}
               >
-                🎲 Dado Viciado
+                🎲 Rerrolar (carta)
               </Button>
             )}
           </>
@@ -262,6 +289,12 @@ export function CombatPanel() {
       </div>
       {c.screamerFor === me.id && (
         <p className="mt-2 text-sm text-gold-2">📣 O Cogumelo gritou para você: clique em um monstro da sua mão para colocá-lo no combate.</p>
+      )}
+      {c.bribes.length > 0 && (
+        <p className="mt-2 text-sm text-gold-2">
+          🤝 Acordos:{" "}
+          {c.bribes.map((b) => `${api.playerName(b.playerId)} recebe ${b.count} tesouro(s) se ${fighter.name} vencer e não atrapalha`).join("; ")}
+        </p>
       )}
       {c.desafio && <p className="mt-2 text-sm text-gold-2">⚔️ Desafio! Ninguém mais pode jogar cartas neste combate.</p>}
     </section>

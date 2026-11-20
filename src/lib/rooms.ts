@@ -191,3 +191,19 @@ export function botInfo(stateJson: unknown): { hasBots: boolean; nextAt: number;
   if (!s) return { hasBots: false, nextAt: 0, finished: false };
   return { hasBots: s.players.some((p) => p.bot), nextAt: s.botNextAt ?? 0, finished: s.phase === "FINISHED" };
 }
+
+/** Depois de desistir: o usuário sai da sala; se não sobrou nenhum humano, a sala é apagada. */
+export async function leaveAfterSurrender(code: string, userId: string): Promise<{ closed: boolean }> {
+  const room = await loadRoom(code);
+  const state = room.state as unknown as GameState | null;
+  if (state?.closed) {
+    await db().room.delete({ where: { id: room.id } });
+    return { closed: true };
+  }
+  await db().roomPlayer.deleteMany({ where: { roomId: room.id, userId } });
+  if (room.hostId === userId && state) {
+    const newHost = room.players.find((p) => p.userId !== userId);
+    if (newHost) await db().room.update({ where: { id: room.id }, data: { hostId: newHost.userId } });
+  }
+  return { closed: false };
+}

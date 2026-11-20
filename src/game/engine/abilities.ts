@@ -14,6 +14,7 @@ import {
   removeHelper,
   removeMonster,
 } from "./core";
+import { cardFx, combatHas, heldFx, monsterFx, num, runeFx } from "./fx";
 import { type Ctx, type GameState, type HelpDeal, type PlayerState, fail } from "./state";
 import {
   activeMonsters,
@@ -26,7 +27,6 @@ import {
   monsterDef,
   playerSide,
   slotOf,
-  specialIds,
   tier11,
 } from "./stats";
 import {
@@ -193,7 +193,7 @@ function combatMonster(state: GameState, params: Params, opts: { notLegendary?: 
   if (!cm) fail("Monstro inválido.");
   const d = monsterDef(state, cm);
   if (opts.notLegendary && d.legendary) fail("Não funciona em Lendários.");
-  if (opts.notLegendary && d.id === "monster.tarrasque") fail("O Tarrasque não pode ser afetado.");
+  if (opts.notLegendary && monsterFx(state, cm, "imbativel").length) fail(`${d.name} não pode ser afetado.`);
   return { cm, d };
 }
 
@@ -221,7 +221,7 @@ function canBeHelper(state: GameState, target: PlayerState): string | null {
   if (combat.isolated.includes(combat.fighterId)) return "Ninguém pode ajudar neste combate (Isolamento/Duplicata).";
   if (combat.desafio) return "Desafio: ninguém pode lutar junto.";
   if (target.id === combat.fighterId) return "Escolha outro jogador.";
-  if (specialIds(state, combat).has("monster.planetar") && target.curseCastRound === state.round)
+  if (combatHas(state, combat, "detectaMentiras") && target.curseCastRound === state.round)
     return "Planetar: quem lançou maldição nesta rodada não pode ajudar.";
   return null;
 }
@@ -602,7 +602,7 @@ const SPECS: Spec[] = [
       const e = isFighter(state, p);
       if (e) return e;
       if (state.combat!.helperId) return "Você já tem ajudante.";
-      if (specialIds(state, state.combat).has("monster.bugbear")) return "Bugbear: você não pode pedir ajuda.";
+      if (combatHas(state, state.combat, "semPedirAjuda")) return "Este monstro não deixa você pedir ajuda.";
       return null;
     },
     prepare: (state, ctx, p, params) => {
@@ -667,7 +667,7 @@ const SPECS: Spec[] = [
       if (!p.equipped.includes(mine) || !target.equipped.includes(theirs)) fail("Escolha itens equipados.");
       if (slotOf(state, mine) !== slotOf(state, theirs)) fail("Os itens precisam ser do mesmo slot.");
       if (isLegendaryItem(state, mine) || isLegendaryItem(state, theirs)) fail("Não funciona com itens Lendários.");
-      if ((state.cards[theirs].runes ?? []).some((r) => state.cards[r]?.defId === "rune.vinculo")) fail("Runa do Vínculo: esse item não pode ser trocado.");
+      if (runeFx(state, theirs, "naoRoubavel").length > 0) fail("Uma runa impede que esse item seja trocado.");
       if (target.hibernating) fail(`${target.name} está no casco.`);
       return {
         run: () => {
@@ -1139,11 +1139,12 @@ function stealPrepare(state: GameState, ctx: Ctx, p: PlayerState, params: Params
   if (d?.big) fail("Não dá para roubar itens Grandes.");
   if (hasClass(state, target, "ladino")) fail(`${target.name} é Ladino: os itens dele não podem ser roubados.`);
   if (target.hibernating) fail(`${target.name} está no casco (imune a roubos).`);
-  if ((state.cards[card].runes ?? []).some((r) => state.cards[r]?.defId === "rune.vinculo")) fail("Runa do Vínculo: não pode ser roubado.");
+  if (runeFx(state, card, "naoRoubavel").length > 0) fail("Uma runa impede que esse item seja roubado.");
   const kitId = optStr(params, "kit");
   const isThief = hasClass(state, p, "ladino");
   if (kitId && !(p.hand.includes(kitId) || p.carried.includes(kitId))) fail("Kit de Ladrão inválido.");
-  if (kitId && state.cards[kitId]?.defId !== "misc.kit-ladrao") fail("Kit de Ladrão inválido.");
+  const kitFx = kitId ? cardFx(state, kitId, "kitLadrao") : undefined;
+  if (kitId && !kitFx) fail("Kit de Ladrão inválido.");
   if (!isThief && !kitId) fail("Sem ser Ladino, você precisa de um Kit de Ladrão.");
   return {
     paramCards: kitId ? [kitId] : [],
@@ -1154,8 +1155,8 @@ function stealPrepare(state: GameState, ctx: Ctx, p: PlayerState, params: Params
         return;
       }
       const r = rollD6(state, p, ctx, `Roubo em ${target.name}`);
-      const bonus = kitId && isThief ? 2 : 0;
-      const need = isThief ? 4 : 5;
+      const bonus = kitFx && isThief ? num(kitFx, "bonus", 2) : 0;
+      const need = isThief ? 4 : num(kitFx, "sucessoSemLadino", 5);
       if (r.total + bonus >= need) {
         removeFromPlayer(target, card);
         delete state.cards[card].artificeSecond;
@@ -1186,7 +1187,7 @@ export function abilitiesOf(state: GameState, p: PlayerState): AbilityKey[] {
     if (s.race && hasRace(state, p, s.race)) out.push(s.key);
     else if (s.cls && hasClass(state, p, s.cls)) out.push(s.key);
   }
-  if (!out.includes("roubo") && [...p.hand, ...p.carried].some((id) => state.cards[id]?.defId === "misc.kit-ladrao"))
+  if (!out.includes("roubo") && heldFx(state, p, "kitLadrao"))
     out.push("roubo");
   return out;
 }
@@ -1237,13 +1238,12 @@ export function abilityBlocked(state: GameState, p: PlayerState, key: AbilityKey
   }
   const combat = state.combat;
   if (combat) {
-    const specials = specialIds(state, combat);
-    if (s.combat && specials.has("monster.golem")) return "Golem de Ferro: nenhuma habilidade ativa funciona neste combate.";
-    if (specials.has("monster.carnical") && playerSide(state, combat).includes(p.id) && !hasClass(state, p, "clerigo"))
+    if (s.combat && combatHas(state, combat, "imuneMagia")) return "Nenhuma habilidade ativa funciona neste combate.";
+    if (combatHas(state, combat, "paralisaAtivas") && playerSide(state, combat).includes(p.id) && !hasClass(state, p, "clerigo"))
       return "Carniçal: ninguém do lado dos jogadores usa ativas.";
     if (combat.silenced.includes(p.id)) return "Silêncio Arcano: você não pode usar ativas.";
     if (s.combat && combat.desafio && combat.fighterId !== p.id) return "Desafio: ninguém mais pode jogar neste combate.";
-    if (s.combat && specials.has("monster.planetar") && p.curseCastRound === state.round && !playerSide(state, combat).includes(p.id))
+    if (s.combat && combatHas(state, combat, "detectaMentiras") && p.curseCastRound === state.round && !playerSide(state, combat).includes(p.id))
       return "Planetar: quem lançou maldição nesta rodada não interfere.";
   }
   if (s.discard && p.hand.length < s.discard) return `Precisa de ${s.discard} carta(s) na mão.`;
