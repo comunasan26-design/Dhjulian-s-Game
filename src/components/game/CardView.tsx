@@ -3,7 +3,7 @@
 import { CardBackside, CardFront } from "../art/CardArt";
 import { RuneHalo } from "../art/RuneHalo";
 import { METAL_OF, rarityOf } from "../art/metals";
-import { useDraggable } from "../art/drag";
+import { useDraggable, useIsHidden } from "../art/drag";
 import { instLines, openZoom, useHold } from "../art/zoom";
 import { cardDef } from "@/game/display";
 import { useGameOptional } from "./GameContext";
@@ -64,6 +64,7 @@ export function CardView({
       handlers[k] = prev ? (e: never) => (prev(e), fn(e)) : fn;
     }
   }
+  const hidden = useIsHidden(id);
   const runes = inst?.runes?.length ?? 0;
   const metal = METAL_OF[rarityOf(d)];
 
@@ -79,7 +80,7 @@ export function CardView({
       aria-label={d ? d.name : "Carta oculta"}
       className={`game-card relative block aspect-[5/7] shrink-0 rounded-[7%/5%] text-left ${WIDTH[size]} ${click ? "interactive cursor-pointer" : "cursor-default"} ${
         d ? `metal-${metal}` : ""
-      } ${hold.holding ? "holding" : ""} ${draggable && d ? "draggable-card" : ""} ${selected ? "ring-[3px] ring-gold-2 ring-offset-2 ring-offset-bg" : ""} ${dim ? "opacity-50 grayscale" : ""}`}
+      } ${hold.holding ? "holding" : ""} ${draggable && d ? "draggable-card" : ""} ${selected ? "ring-[3px] ring-gold-2 ring-offset-2 ring-offset-bg" : ""} ${dim ? "opacity-50 grayscale" : ""} ${hidden ? "card-hidden" : ""}`}
     >
       {runes > 0 && <RuneHalo count={runes} layer="back" />}
       {d ? <CardFront d={d} inst={inst} size={size} /> : <CardBackside deck={deck} />}

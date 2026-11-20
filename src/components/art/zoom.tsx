@@ -123,8 +123,11 @@ export function FlipCard({
   const [flipped, setFlipped] = useState(startFlipped);
   const [tilt, setTilt] = useState({ x: 0, y: 0 });
   const metal = METAL_OF[rarityOf(d)];
+  const runes = inst?.runes?.length ?? 0;
   return (
-    <div className={`card-3d ${lift ? "card-lift" : ""} ${className}`}>
+    <div className={`card-3d relative ${lift ? "card-lift" : ""} ${className}`}>
+      {/* as runas ficam fora da camada 3D (dentro dela alguns navegadores apagam a animação) */}
+      {runes > 0 && <RuneHalo count={runes} layer="back" />}
       <button
         type="button"
         aria-label={flipped ? "Ver a frente da carta" : "Virar a carta para ver o que ela faz"}
@@ -139,20 +142,19 @@ export function FlipCard({
           setTilt({ x: ((e.clientY - r.top) / r.height - 0.5) * -10, y: ((e.clientX - r.left) / r.width - 0.5) * 12 });
         }}
         onPointerLeave={() => setTilt({ x: 0, y: 0 })}
-        className="block w-full"
+        className="relative z-[5] block w-full"
         style={{ transform: `rotateX(${tilt.x}deg) rotateY(${tilt.y}deg)`, transition: "transform 120ms ease-out", transformStyle: "preserve-3d" }}
       >
         <div className={`card-flipper aspect-[5/7] w-full ${flipped ? "flipped" : ""}`}>
           <div className={`card-side rounded-[6.4%/4.6%] shadow-[0_14px_34px_rgba(0,0,0,0.65)] ${metal === "negro" ? "ring-1 ring-red-900/60" : ""}`}>
-            {(inst?.runes?.length ?? 0) > 0 && <RuneHalo count={inst!.runes!.length} layer="back" />}
             <CardFront d={d} inst={inst} size="lg" />
-            {(inst?.runes?.length ?? 0) > 0 && <RuneHalo count={inst!.runes!.length} layer="front" />}
           </div>
           <div className="card-side back rounded-[6.4%/4.6%] shadow-[0_14px_34px_rgba(0,0,0,0.65)]">
             <CardBackText d={d} lines={[...fullText(d), ...extra]} />
           </div>
         </div>
       </button>
+      {runes > 0 && <RuneHalo count={runes} layer="front" />}
     </div>
   );
 }

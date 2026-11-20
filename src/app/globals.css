@@ -271,3 +271,21 @@ body.card-dragging .drop-zone.drop-over {
   outline: 2px solid #f1c86b;
   box-shadow: 0 0 22px rgba(241, 200, 107, 0.45);
 }
+
+.game-card.card-hidden {
+  opacity: 0;
+  transform: scale(0.85);
+}
+@keyframes pit-flame {
+  0%,
+  100% {
+    transform: scaleY(1) translateY(0);
+  }
+  50% {
+    transform: scaleY(1.12) translateY(-1px);
+  }
+}
+.pit-flame {
+  transform-origin: 32px 38px;
+  animation: pit-flame 0.6s ease-in-out infinite;
+}

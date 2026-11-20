@@ -5,7 +5,7 @@
 import type { CSSProperties, ReactNode } from "react";
 import { type CardDef, RARITY_LABEL } from "@/game/catalog";
 import { KIND_LABEL, shortInfo } from "@/game/display";
-import { Emblem } from "./emblems";
+import { Emblem, SCENE } from "./emblems";
 import { GEM_LABEL, Gem, type GemKind, gemOf, gemOutline, offsetPoly, poly } from "./gems";
 import { METAL, METAL_LABEL, METAL_OF, type Metal, rarityOf } from "./metals";
 
@@ -48,6 +48,19 @@ export function CardArtDefs() {
             </g>
           );
         })}
+        {(Object.keys(SCENE) as CardDef["kind"][]).map((k) => (
+          <linearGradient key={k} id={`sky-${k}`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={SCENE[k][0]} />
+            <stop offset="75%" stopColor={SCENE[k][1]} />
+          </linearGradient>
+        ))}
+        <radialGradient id="art-glow" cx="50%" cy="45%" r="50%">
+          <stop offset="0%" stopColor="#fffbe8" stopOpacity="0.85" />
+          <stop offset="100%" stopColor="#fffbe8" stopOpacity="0" />
+        </radialGradient>
+        <clipPath id="art-arch" clipPathUnits="userSpaceOnUse">
+          <path d={ARCH} />
+        </clipPath>
         <pattern id="metal-grain" width="26" height="26" patternUnits="userSpaceOnUse">
           <ellipse cx="5" cy="6" rx="3.2" ry="2.4" fill="#000" opacity="0.22" />
           <ellipse cx="18" cy="4" rx="2" ry="1.4" fill="#fff" opacity="0.18" />
@@ -59,6 +72,34 @@ export function CardArtDefs() {
         </pattern>
       </defs>
     </svg>
+  );
+}
+
+const ARCH = "M4 100 V38 C4 14 32 4 70 4 C108 4 136 14 136 38 V100 Z";
+
+/** Janela em arco com cenário (céu, brilho, colinas) e a ilustração da carta. */
+function ArtWindow({ d }: { d: CardDef }) {
+  const [, , ground] = SCENE[d.kind];
+  return (
+    <div className="absolute inset-x-[12%] top-[34%] h-[37%]">
+      <svg viewBox="0 0 140 100" className="h-full w-full" preserveAspectRatio="none" aria-hidden>
+        <path d={ARCH} fill={`url(#sky-${d.kind})`} />
+        <g clipPath="url(#art-arch)">
+          <circle cx="70" cy="48" r="46" fill="url(#art-glow)" />
+          {Array.from({ length: 12 }, (_, i) => (
+            <path key={i} d="M70 48 L64 -40 L76 -40 Z" transform={`rotate(${i * 30} 70 48)`} fill="#fffbe8" opacity="0.13" />
+          ))}
+          <path d="M0 84 C20 72 36 76 52 82 C70 70 92 72 108 80 C120 74 132 74 140 78 V100 H0 Z" fill={ground} opacity="0.55" />
+          <path d="M0 92 C30 86 60 90 90 88 C110 86 126 88 140 90 V100 H0 Z" fill={ground} />
+          <ellipse cx="70" cy="93" rx="30" ry="4" fill="#24160b" opacity="0.3" />
+          <g transform="translate(23 3) scale(0.94)">
+            <Emblem d={d} />
+          </g>
+        </g>
+        <path d={ARCH} fill="none" stroke="#24160b" strokeWidth="2.2" vectorEffect="non-scaling-stroke" />
+        <path d="M8 100 V39 C8 18 34 8 70 8 C106 8 132 18 132 39 V100" fill="none" stroke="#c9a14a" strokeWidth="1" opacity="0.7" vectorEffect="non-scaling-stroke" />
+      </svg>
+    </div>
   );
 }
 
@@ -208,14 +249,7 @@ export function CardFront({ d, inst, size = "md" }: { d: CardDef; inst?: CardIns
     <div className="absolute inset-0 [container-type:inline-size]">
       <div className="parchment absolute inset-x-[5.2%] inset-y-[3.7%] overflow-hidden rounded-[4%/3%]">
         {TINT[d.kind] && <div className="absolute inset-0" style={{ background: TINT[d.kind] }} />}
-        {!compact && (
-          <div className="absolute left-1/2 top-[38%] aspect-square w-[46%] -translate-x-1/2 text-[#2b1a0d]/45">
-            <svg viewBox="0 0 100 100" className="h-full w-full" aria-hidden>
-              <circle cx="50" cy="50" r="47" fill="none" stroke="currentColor" strokeWidth="1.5" strokeDasharray="2 4" opacity="0.6" />
-              <Emblem d={d} />
-            </svg>
-          </div>
-        )}
+        {!compact && <ArtWindow d={d} />}
       </div>
       <MetalFrame metal={metal} gem={gem} />
       <div

@@ -588,25 +588,64 @@ async function sellOne(api: GameApi, picker: Picker, cardId: string) {
 }
 
 /**
- * Carta solta por arraste. Mesa → ação principal; jogador → maldição nele; monstro → bônus nele;
- * descarte → descarta. Devolve "inspect" quando não dá para decidir sozinho (abre as ações da carta).
+ * Carta solta por arraste. Depende de onde a carta estava e de onde foi solta:
+ * - descarte: descarta (itens equipados são desequipados antes; raça/classe também podem ser descartadas);
+ * - equipado → inventário/mão: desequipa; inventário → equipamento/mesa: equipa;
+ * - mão → jogador: maldição nele; → monstro: bônus nele; → inventário: coloca na mesa; → mesa: jogada principal.
+ * Devolve "inspect" quando não dá para decidir sozinho (abre as ações da carta).
  */
-export async function dropCard(api: GameApi, picker: Picker, cardId: string, target: DropTarget): Promise<"done" | "inspect"> {
+export async function dropCard(api: GameApi, picker: Picker, cardId: string, target: DropTarget): Promise<"done" | "inspect" | "none"> {
+  const { me } = api;
   const d = api.def(cardId);
-  if (!d || !api.me.hand?.includes(cardId)) return "inspect";
+  const from = me.hand?.includes(cardId)
+    ? "hand"
+    : me.equipped.includes(cardId)
+      ? "equipped"
+      : me.carried.includes(cardId)
+        ? "carried"
+        : me.race === cardId
+          ? "race"
+          : me.classes.includes(cardId)
+            ? "class"
+            : null;
+  if (!d || !from) return "none";
+  const tamed = !!api.view.cards[cardId]?.tamed;
+
   if (target.kind === "discard") {
-    await api.act({ type: "DISCARD", cardId });
+    if (from === "race") await api.act({ type: "DISCARD_RACE" });
+    else if (from === "class") await api.act({ type: "DISCARD_CLASS", cardId });
+    else if (from === "equipped") {
+      if (await api.act({ type: "UNEQUIP", cardId })) await api.act({ type: "DISCARD", cardId });
+    } else await api.act({ type: "DISCARD", cardId });
+    return "done";
+  }
+  if (from === "equipped") {
+    if (target.kind === "inventory" || target.kind === "hand") await api.act({ type: "UNEQUIP", cardId });
+    return "done";
+  }
+  if (from === "carried") {
+    if (target.kind === "equip" || target.kind === "table") await api.act({ type: "EQUIP", cardId });
+    return "done";
+  }
+  if (from === "race" || from === "class") return "none";
+
+  // vindo da mão
+  if (target.kind === "hand") return "none";
+  if (target.kind === "inventory") {
+    if ("price" in d || tamed) await api.act({ type: "PLACE", cardId });
+    return "done";
+  }
+  if (target.kind === "equip" && (d.kind === "item" || tamed)) {
+    await api.act({ type: "EQUIP", cardId });
     return "done";
   }
   if (target.kind === "player" && d.kind === "curse") {
     await api.act({ type: "PLAY_CURSE", cardId, targetId: target.id });
     return "done";
   }
-  if (target.kind === "monster") {
-    if (d.kind === "monsterBonus") {
-      await api.act({ type: "PLAY_MONSTER_BONUS", cardId, monsterId: target.id });
-      return "done";
-    }
+  if (target.kind === "monster" && d.kind === "monsterBonus") {
+    await api.act({ type: "PLAY_MONSTER_BONUS", cardId, monsterId: target.id });
+    return "done";
   }
   const actions = cardActions(api, picker, cardId).filter((a) => a.label !== "Descartar");
   const primary = actions.find((a) => a.primary);
