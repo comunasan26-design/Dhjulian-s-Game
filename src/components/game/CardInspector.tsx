@@ -3,7 +3,7 @@
 import { KIND_LABEL, fullText, shortInfo } from "@/game/display";
 import { Button } from "../ui/Button";
 import { Modal } from "../ui/Modal";
-import { CardView } from "./CardView";
+import { FlipCard, instLines } from "../art/zoom";
 import { useGame } from "./GameContext";
 import { cardActions } from "./flows";
 import { usePicker } from "./Picker";
@@ -19,7 +19,16 @@ export function CardInspector({ cardId, onClose }: { cardId: string | null; onCl
   return (
     <Modal open title={d.name} onClose={onClose}>
       <div className="flex gap-4">
-        <CardView id={cardId} onClick={() => undefined} />
+        <div className="shrink-0">
+          <FlipCard
+            key={cardId}
+            d={d}
+            inst={inst}
+            extra={instLines(inst, api.name)}
+            className="w-[8.5rem] sm:w-[11rem]"
+          />
+          <p className="mt-1 text-center text-[10px] text-muted">toque para virar</p>
+        </div>
         <div className="min-w-0 flex-1 text-sm">
           <p className="text-xs uppercase tracking-wide text-muted">
             {KIND_LABEL[d.kind]} · {shortInfo(d)}

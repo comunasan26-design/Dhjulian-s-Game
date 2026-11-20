@@ -12,6 +12,8 @@ raças, classes, itens, runas, poções e maldições, e seja o primeiro a chega
 - **Modo local** (`/local`): partida contra bots rodando só no navegador, sem conta e sem banco (salva no aparelho)
 - Layout para celular com abas (Mesa, Você, Jogadores, Histórico)
 - **Cartas editáveis em JSON** (pasta [`cartas/`](cartas/LEIA-ME.md)): qualquer pessoa altera ou cria cartas mudando textos e números
+- **Visual de cartas de verdade**: moldura de metal pela raridade (cobre, bronze, prata, ouro, ferro negro), gema no topo pelo tipo, runas circulando itens encantados; segure uma carta para erguê-la e toque para virar e ler o verso
+- **Trilha sonora dinâmica** (gerada com Web Audio, sem arquivos): muda entre exploração, combate, chefe lendário, vitória e derrota; efeitos sonoros e **animações Lottie** (`public/animacoes/`) em eventos como subir de nível, combate, monstro derrotado, morte, maldição, runa e fim de jogo
 - Ameaçar atrapalhar (pedir tesouros para não atrapalhar) e desistir da partida
 
 ## Rodando localmente
@@ -39,6 +41,7 @@ Scripts úteis:
 | `npm run db:migrate` | Nova migração em desenvolvimento |
 | `npm run cartas:validar` | Confere os arquivos de cartas e mostra erros em português |
 | `npm run cartas:docs` | Gera `cartas/EFEITOS.md` (lista de efeitos disponíveis) |
+| `npm run animacoes` | Regera as animações Lottie em `public/animacoes/` (pode trocar qualquer uma por outra Lottie de mesmo nome) |
 
 ## Deploy na Vercel
 
