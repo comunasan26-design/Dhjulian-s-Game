@@ -3,7 +3,7 @@ import { applyAction } from "../engine/actions";
 import { createGame } from "../engine/core";
 import type { Ctx, GameState } from "../engine/state";
 import { newCard } from "../engine/util";
-import { botName, shouldPayThreat, stepBots } from "./ai";
+import { botName, shouldAcceptHelpOffer, shouldAcceptHelpRequest, shouldPayThreat, stepBots, strengthOf } from "./ai";
 
 function mulberry(seed: number) {
   let a = seed >>> 0;
@@ -100,5 +100,57 @@ describe("bots e ameaças", () => {
     const { state, ctx, bot, human } = combatWithThreat();
     human.hand.push(newCard(state, "bonus.anciao"));
     expect(shouldPayThreat(state, bot, "p1", 2, ctx)).toBe(false);
+  });
+});
+
+describe("bots e pedidos de ajuda", () => {
+  function fight(fighterLevel: number, levels: Record<string, number>, fighterId = "p0") {
+    const ctx: Ctx = { now: 1_000, rng: { int: () => 0 } };
+    const state = createGame(
+      [
+        { id: "p0", name: "Bot", bot: true },
+        { id: "p1", name: "Humano" },
+        { id: "p2", name: "Outro" },
+      ],
+      "p0",
+      ctx,
+    );
+    state.order = [fighterId, ...["p0", "p1", "p2"].filter((x) => x !== fighterId)];
+    for (const p of state.players) {
+      p.hand = [];
+      p.race = null;
+      p.classes = [];
+      p.equipped = [];
+      p.level = levels[p.id] ?? 3;
+    }
+    applyAction(state, "p0", { type: "START_NOW" }, ctx);
+    state.currentIdx = 0;
+    state.players.find((p) => p.id === fighterId)!.level = fighterLevel;
+    state.decks.door.unshift(newCard(state, "monster.gosma")); // nível 5, 2 tesouros, 1 nível
+    applyAction(state, fighterId, { type: "KICK_DOOR" }, ctx);
+    const P = (id: string) => state.players.find((p) => p.id === id)!;
+    return { state, P };
+  }
+
+  it("quem já está muito forte conta como mais forte", () => {
+    const { state, P } = fight(3, { p1: 15, p2: 3 });
+    expect(strengthOf(state, P("p1"))).toBeGreaterThan(strengthOf(state, P("p2")) + 0.4);
+  });
+
+  it("aceita a oferta de ajuda de um jogador comum, mas não a de quem já lidera com folga pedindo mais", () => {
+    const comum = fight(3, { p1: 4, p2: 4 });
+    expect(comum.state.combat?.fighterId).toBe("p0");
+    expect(shouldAcceptHelpOffer(comum.state, comum.P("p0"), comum.P("p1"), 1)).toBe(true);
+    const lider = fight(3, { p1: 15, p2: 3 });
+    expect(shouldAcceptHelpOffer(lider.state, lider.P("p0"), lider.P("p1"), 2)).toBe(false);
+  });
+
+  it("ajuda quem pede com uma boa oferta, mas pensa duas vezes antes de fortalecer o líder", () => {
+    const comum = fight(3, { p0: 5, p2: 5 }, "p1");
+    expect(comum.state.combat?.fighterId).toBe("p1");
+    expect(shouldAcceptHelpRequest(comum.state, comum.P("p0"), comum.P("p1"), 2)).toBe(true);
+    const lider = fight(15, { p0: 4, p2: 3 }, "p1");
+    lider.state.combat!.monsters[0].mods.push({ id: "x", value: 12, by: "p2", label: "teste" });
+    expect(shouldAcceptHelpRequest(lider.state, lider.P("p0"), lider.P("p1"), 2)).toBe(false);
   });
 });

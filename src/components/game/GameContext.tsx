@@ -15,6 +15,8 @@ export interface GameApi {
   name: (cardId: string) => string;
   playerName: (id: string | null | undefined) => string;
   inspect: (cardId: string) => void;
+  /** Abre uma maldição ativa de um jogador. */
+  inspectCurse: (playerId: string, curseId: string) => void;
   serverOffset: number;
 }
 
