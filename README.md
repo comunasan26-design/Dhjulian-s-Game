@@ -51,7 +51,7 @@ Use um egg de Node.js (versão 20.9 ou mais nova) com pelo menos **2 GB de RAM**
    (variáveis do painel **Git Repo Address** e **Install Branch**; sem elas, este repositório e o `main`) e chama
    [`deploy/start.cjs`](deploy/start.cjs), que instala as dependências, compila quando o código muda, cria/atualiza o
    banco e sobe o servidor na porta do painel (`SERVER_PORT`).
-2. O banco SQLite é criado sozinho em `prisma/jogo.db` (com os arquivos `jogo.db-wal`/`-shm` ao lado). Para fazer
+2. O banco SQLite é criado sozinho em `prisma/jogo.db` e tudo é gravado direto nele. Para fazer
    backup, copie a pasta `prisma/` com o servidor parado. As atualizações pelo GitHub não mexem nesses arquivos.
 3. Sem domínio com HTTPS, crie um `.env` na raiz com `COOKIE_SECURE="false"` para o login funcionar por
    `http://IP:porta`.
