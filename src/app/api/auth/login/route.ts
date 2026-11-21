@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { createSession, verifyPassword } from "@/lib/auth";
-import { db } from "@/lib/db";
+import { createSession, findUserByName, verifyPassword } from "@/lib/auth";
 import { HttpError, handle, readJson } from "@/lib/http";
 
 export const POST = handle(async (req: Request) => {
@@ -9,9 +8,7 @@ export const POST = handle(async (req: Request) => {
   const password = typeof body.password === "string" ? body.password : "";
   if (!username || !password) throw new HttpError(400, "Informe usuário e senha.");
 
-  const user = await db().user.findFirst({
-    where: { username: { equals: username, mode: "insensitive" } },
-  });
+  const user = await findUserByName(username);
   if (!user || !(await verifyPassword(password, user.passwordHash))) {
     throw new HttpError(401, "Usuário ou senha incorretos.");
   }

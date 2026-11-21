@@ -1,6 +1,6 @@
 // Inicia o jogo em painéis de hospedagem (Pterodactyl e parecidos) que só deixam escolher o "arquivo principal".
 // Compila o jogo quando o código muda, aplica as migrações do banco e sobe o Next.js na porta do painel.
-// Uso: coloque "deploy/start.cjs" como arquivo principal (Main file). Configure o banco em um arquivo .env.
+// Uso: coloque "deploy/start.cjs" como arquivo principal (Main file). O banco SQLite fica em prisma/jogo.db.
 /* eslint-disable @typescript-eslint/no-require-imports -- arquivo CommonJS executado direto pelo Node */
 const { spawn, spawnSync } = require("node:child_process");
 const fs = require("node:fs");
@@ -29,10 +29,6 @@ function codeVersion() {
   return String(fs.statSync("package.json").mtimeMs);
 }
 
-
-const hasDb = !!(process.env.DATABASE_URL || (fs.existsSync(".env") && /^\s*DATABASE_URL\s*=\s*\S/m.test(fs.readFileSync(".env", "utf8"))));
-if (!hasDb) console.warn("\n⚠️  DATABASE_URL não definido (crie um arquivo .env). Só o modo local vai funcionar.");
-
 const stampFile = path.join(".next", "deploy-version");
 const version = codeVersion();
 const built = fs.existsSync(path.join(".next", "BUILD_ID")) && fs.existsSync(stampFile) && fs.readFileSync(stampFile, "utf8") === version;
@@ -43,9 +39,9 @@ if (!built) {
   fs.writeFileSync(stampFile, version);
 } else console.log("\nCódigo sem mudanças: usando a compilação anterior.");
 
-// sem banco o servidor sobe mesmo assim (o modo local funciona e o erro fica no console)
-if (hasDb && !run(npx, ["prisma", "migrate", "deploy"], false))
-  console.warn("\n⚠️  Não deu para atualizar o banco. Confira o DATABASE_URL no .env; as salas online não vão funcionar.");
+// cria/atualiza o banco SQLite (prisma/jogo.db); se falhar, o servidor sobe mesmo assim (o modo local funciona)
+if (!run(npx, ["prisma", "migrate", "deploy"], false))
+  console.warn("\n⚠️  Não deu para criar/atualizar o banco em prisma/. As salas online não vão funcionar.");
 
 console.log(`\nIniciando na porta ${port}...`);
 const next = spawn(process.execPath, [require.resolve("next/dist/bin/next"), "start", "-p", port, "-H", "0.0.0.0"], {

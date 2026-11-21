@@ -4,10 +4,10 @@ Jogo de cartas online de masmorra (3 a 9 jogadores) baseado no livro de regras d
 raças, classes, itens, runas, poções e maldições, e seja o primeiro a chegar ao **nível 20**.
 
 - **Next.js 16** (App Router) + **TypeScript** + **Tailwind CSS 4** + **ESLint**
-- **PostgreSQL** com **Prisma 7** (`@prisma/adapter-pg`)
+- **SQLite** com **Prisma 7** (`@prisma/adapter-better-sqlite3`): o banco é um arquivo em `prisma/jogo.db`, criado sozinho
 - Contas só com **usuário e senha** (bcrypt + sessão em cookie httpOnly guardada no banco)
 - **Salas** com código de convite, sala de espera e **reconexão** (o estado da partida fica no banco)
-- **Tempo real** com Server-Sent Events: funciona na Vercel sem serviço externo
+- **Tempo real** com Server-Sent Events, sem serviço externo
 - **Bots** com IA nas salas online (o anfitrião adiciona na sala de espera)
 - **Modo local** (`/local`): partida contra bots rodando só no navegador, sem conta e sem banco (salva no aparelho)
 - Layout para celular com abas (Mesa, Você, Jogadores, Histórico)
@@ -18,12 +18,11 @@ raças, classes, itens, runas, poções e maldições, e seja o primeiro a chega
 
 ## Rodando localmente
 
-Requisitos: Node 20.9+ e um PostgreSQL.
+Requisitos: Node 20.9+. Não precisa instalar banco de dados: o SQLite fica no arquivo `prisma/jogo.db`.
 
 ```bash
-cp .env.example .env   # ajuste DATABASE_URL
 npm install            # também gera o Prisma Client
-npx prisma migrate dev # cria as tabelas
+npx prisma migrate dev # cria prisma/jogo.db com as tabelas
 npm run dev
 ```
 
@@ -43,30 +42,24 @@ Scripts úteis:
 | `npm run cartas:docs` | Gera `cartas/EFEITOS.md` (lista de efeitos disponíveis) |
 | `npm run animacoes` | Regera as animações Lottie em `public/animacoes/` (pode trocar qualquer uma por outra Lottie de mesmo nome) |
 
-## Deploy na Vercel
-
-1. Crie um banco PostgreSQL (Neon, Supabase, Prisma Postgres, Vercel Postgres…).
-2. Importe o repositório na Vercel.
-3. Em **Settings → Environment Variables**, defina:
-   - `DATABASE_URL` — URL do Postgres usada pelo app (se o provedor tiver *pooler*, use a URL com pooler).
-   - `DIRECT_URL` (opcional) — URL direta, sem pooler, usada só pelo Prisma para aplicar migrações.
-4. Faça o deploy. O `vercel.json` usa o script `vercel-build`, que roda `prisma generate`, `prisma migrate deploy`
-   (aplica as migrações no banco) e `next build`.
-
-O stream de tempo real (`/api/rooms/[code]/events`) fica aberto até ~55 s e o navegador reconecta sozinho, então funciona
-nos limites de duração do plano Hobby. Cada conexão consulta a versão da sala no Postgres a cada ~0,7 s; quem faz a ação
-recebe o novo estado na hora e os outros jogadores em menos de 1 s.
-
-## Deploy no Pterodactyl (ou outro painel com Node.js)
+## Deploy no Pterodactyl (ou outro servidor com Node.js)
 
 Use um egg de Node.js (versão 20.9 ou mais nova) com pelo menos **2 GB de RAM** (a compilação passa de 1,5 GB).
 
-1. **Git Repo Address**: o endereço deste repositório; **Install Branch**: `main`; **Auto Update**: ligado.
-2. **Main file**: `deploy/start.cjs` — ele instala o que faltar, compila quando o código muda, aplica as migrações
-   do banco e sobe o servidor na porta do painel (`SERVER_PORT`).
-3. Pelo gerenciador de arquivos, crie um `.env` na raiz com o `DATABASE_URL` de um PostgreSQL (o painel costuma oferecer
-   só MySQL; use um Postgres externo, como Neon ou Supabase, ou um egg de PostgreSQL).
-4. Sem domínio com HTTPS, acrescente `COOKIE_SECURE="false"` no `.env` para o login funcionar por `http://IP:porta`.
+1. Copie [`deploy/iniciar.cjs`](deploy/iniciar.cjs) para a raiz do servidor (gerenciador de arquivos → novo arquivo
+   `iniciar.cjs`) e use **Main file**: `iniciar.cjs`. A cada inicialização ele baixa a versão mais nova do GitHub
+   (variáveis do painel **Git Repo Address** e **Install Branch**; sem elas, este repositório e o `main`) e chama
+   [`deploy/start.cjs`](deploy/start.cjs), que instala as dependências, compila quando o código muda, cria/atualiza o
+   banco e sobe o servidor na porta do painel (`SERVER_PORT`).
+2. O banco SQLite é criado sozinho em `prisma/jogo.db` (com os arquivos `jogo.db-wal`/`-shm` ao lado). Para fazer
+   backup, copie a pasta `prisma/` com o servidor parado. As atualizações pelo GitHub não mexem nesses arquivos.
+3. Sem domínio com HTTPS, crie um `.env` na raiz com `COOKIE_SECURE="false"` para o login funcionar por
+   `http://IP:porta`.
+
+Para outro caminho do banco, use `DATABASE_URL="file:caminho/arquivo.db"` no `.env` (relativo à pasta do projeto).
+
+**Vercel:** o SQLite precisa de disco permanente, que as funções da Vercel não têm. Para hospedar lá, seria preciso
+voltar para um banco externo (PostgreSQL).
 
 ## Como funciona
 
