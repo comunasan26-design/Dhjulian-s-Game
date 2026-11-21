@@ -1192,7 +1192,7 @@ function decideOtherCombat(state: GameState, me: PlayerState, ctx: Ctx): Action 
       const stake = monsterStake(state);
       const worth =
         40 + (hasPassive(state, me, "nivelAoAjudar") ? 100 : 0) + 80 - weight(state, me.id, fighter) * stake.levels * 60 - STRENGTH_PENALTY * strengthOf(state, fighter) > 0;
-      if (!onSide && !c.helperId && fighter.bot && !m[key] && worth && calc.playerTotal + playerPower(state, me) > calc.monsterTotal) {
+      if (!onSide && !c.helperId && fighter.bot && !m[key] && !c.passed.includes(me.id) && worth && calc.playerTotal + playerPower(state, me) > calc.monsterTotal) {
         m[key] = 1;
         return { type: "OFFER_HELP", count: 1, mode: "random" };
       }
@@ -1204,7 +1204,7 @@ function decideOtherCombat(state: GameState, me: PlayerState, ctx: Ctx): Action 
   const m = mem(state);
   const threatKey = `threat:${c.id}.${c.rev ?? 0}:${me.id}`;
   const value = hinderValue(state, me.id);
-  if (calc.winning && !m[threatKey] && !c.used.includes(`${me.id}:threat`) && !c.desafio && value < 100_000) {
+  if (calc.winning && !m[threatKey] && !c.used.includes(`${me.id}:threat`) && !c.passed.includes(me.id) && !c.desafio && value < 100_000) {
     const free = freeTreasures(state, c);
     m[threatKey] = 1;
     // quem está perto de ganhar não é chantageado: é derrubado

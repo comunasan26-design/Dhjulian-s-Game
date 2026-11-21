@@ -131,11 +131,13 @@ function expectedTreasures(api: GameApi): number {
 // Fluxos de combate
 // ----------------------------------------------------------------------------
 
-export async function flowAskHelp(api: GameApi, picker: Picker) {
-  const target = await picker.pick({
-    title: "Pedir ajuda a quem?",
-    options: playerOptions(api.view, (id) => id !== api.me.id),
-  });
+export async function flowAskHelp(api: GameApi, picker: Picker, targetId?: string) {
+  const target =
+    targetId ??
+    (await picker.pick({
+      title: "Pedir ajuda a quem?",
+      options: playerOptions(api.view, (id) => id !== api.me.id),
+    }));
   if (!target) return;
   const deal = await pickDeal(picker, expectedTreasures(api));
   if (!deal) return;
@@ -689,6 +691,10 @@ export async function dropCard(api: GameApi, picker: Picker, cardId: string, tar
     await api.act({ type: "PLAY_MONSTER_BONUS", cardId, monsterId: target.id });
     return "done";
   }
+  if (api.view.combat && (target.kind === "player" || target.kind === "monster")) {
+    const r = await dropOnCombatSide(api, picker, cardId, target);
+    if (r) return r;
+  }
   const actions = cardActions(api, picker, cardId).filter((a) => a.label !== "Descartar");
   const primary = actions.find((a) => a.primary);
   if (primary) {
@@ -696,4 +702,51 @@ export async function dropCard(api: GameApi, picker: Picker, cardId: string, tar
     return "done";
   }
   return "inspect";
+}
+
+/**
+ * Carta solta num dos lados do combate (tela de batalha): poções e cartas de uso para o lado certo,
+ * Monstro Errante para o lado do monstro.
+ */
+async function dropOnCombatSide(
+  api: GameApi,
+  picker: Picker,
+  cardId: string,
+  target: { kind: "player" | "monster"; id: string },
+): Promise<"done" | null> {
+  const { view, me } = api;
+  const c = view.combat!;
+  const d = api.def(cardId)!;
+  const side = sidePlayers(view);
+  const has = (t: string) => !!findFx(d.id, t);
+  const usable = d.kind === "potion" || (d.kind === "misc" && !d.permanent);
+  if (usable && has("bonusLado")) {
+    await api.act({ type: "USE_CARD", cardId, side: target.kind === "monster" ? "monster" : "player" });
+    return "done";
+  }
+  if (usable && has("menosEmAlvo")) {
+    if (target.kind === "monster") await api.act({ type: "USE_CARD", cardId, monsterId: target.id });
+    else if (side.includes(target.id)) await api.act({ type: "USE_CARD", cardId, targetId: target.id });
+    else return null;
+    return "done";
+  }
+  if (usable && (has("bonusFugir") || has("fugaAutomatica")) && target.kind === "player" && side.includes(target.id)) {
+    await api.act({ type: "USE_CARD", cardId, targetId: target.id });
+    return "done";
+  }
+  if (target.kind === "monster" && c.stage !== "badstuff") {
+    const hand = me.hand ?? [];
+    if (d.kind === "wandering" || d.kind === "monster") {
+      const wanderingId = d.kind === "wandering" ? cardId : hand.find((id) => api.def(id)?.kind === "wandering");
+      if (!wanderingId) return null;
+      const monsterCardId =
+        d.kind === "monster"
+          ? cardId
+          : await picker.pick({ title: "Qual monstro entra no combate?", options: cardOptions(hand.filter((id) => api.def(id)?.kind === "monster")) });
+      if (!monsterCardId) return "done";
+      await api.act({ type: "PLAY_WANDERING", cardId: wanderingId, monsterCardId });
+      return "done";
+    }
+  }
+  return null;
 }

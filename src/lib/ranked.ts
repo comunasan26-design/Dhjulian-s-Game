@@ -8,7 +8,6 @@ import { USER_ONLINE_MS } from "./auth";
 import { db } from "./db";
 import { HttpError } from "./http";
 import {
-  MAX_COUNTED_BOTS,
   RANKED_SIZE,
   type RatedPlayer,
   botRating,
@@ -166,7 +165,7 @@ async function createMatch(userIds: string[]): Promise<string> {
         },
       });
       await db().rankedMatch.create({
-        data: { roomCode: code, counted: nBots <= MAX_COUNTED_BOTS, botSkill: skill, players: players as unknown as Prisma.InputJsonValue },
+        data: { roomCode: code, counted: true, botSkill: skill, players: players as unknown as Prisma.InputJsonValue },
       });
       return code;
     } catch (e) {

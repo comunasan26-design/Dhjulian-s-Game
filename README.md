@@ -72,7 +72,7 @@ voltar para um banco externo (PostgreSQL).
   comparados com o esperado pela diferença de rating, como no xadrez. K = 48 (0–9 partidas), 32 (10–29), 20 (30+) e
   16 (30+ e rating ≥ 2000). Começa em 1200 (oculto nas 5 partidas de colocação), mínimo 100.
 - **Bots**: rating fixo `600 + 50 × (dificuldade − 1)`; a dificuldade de quem completa a mesa acompanha a média dos
-  humanos. Duelos contra bots valem metade e, com 4 ou mais bots, a partida não conta. Os duelos humano x bot ficam
+  humanos. Toda partida conta, com qualquer número de bots (ganhar de um bot vale conforme o rating do nível dele; duelos contra bots valem metade). Os duelos humano x bot ficam
   guardados em `RankedMatch.results` para recalibrar a tabela.
 
 ## Como funciona
@@ -93,6 +93,13 @@ src/
 - Janelas de reação (tempo para interferir antes da vitória, Coisas Ruins, pedidos de ajuda, escolhas) têm prazo; quando
   vencem, o servidor aplica a escolha padrão, então um jogador ausente não trava a mesa. Se o jogador da vez ficar offline por
   mais de 45 s, qualquer um pode pular o turno dele.
+- **Tela de batalha**: quando um combate começa, a tela escurece, pisca em branco e vira a caixa do combate. Quem luta
+  vê os monstros em cima (toque para ver as cartas que estão nele e as especificações), o próprio lado embaixo (itens,
+  cartas de combate, ativas) e os outros jogadores nas laterais, com balões: azul = quer ajudar, roxo = ameaça (toque para
+  aceitar ou recusar), verde = deixou passar. Quem está de fora vê o jogador à esquerda e o monstro à direita e pode
+  arrastar cartas para um dos lados, ameaçar, pedir para ajudar ou deixar passar. Ao virar ajudante, a tela pisca e muda
+  para a visão de quem luta. “Ver mesa” minimiza a tela de batalha.
+- **Deixar passar**: vale durante todo o combate; quem deixou passar não ameaça nem pede para ajudar até o combate mudar.
 - **Janela de ataque**: quando alguém clica em “Atacar”, os outros têm 60 s para interferir ou “Deixar passar”; qualquer
   ação que mude o combate reinicia o contador.
 - **Bots** (`src/game/bot/ai.ts`): simulam as jogadas no próprio motor e procuram o **combo** mais barato de cartas e

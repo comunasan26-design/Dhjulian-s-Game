@@ -11,7 +11,7 @@ import { type CurseRef, CurseInspector } from "./CurseInspector";
 import { CardBackside } from "../art/CardArt";
 import { DragDiscardZone, setDropHandler } from "../art/drag";
 import { CardView } from "./CardView";
-import { CombatPanel } from "./CombatPanel";
+import { CombatReturnBar, CombatScreen, combatRole } from "./CombatScreen";
 import { GameProvider, useGame } from "./GameContext";
 import { dropCard } from "./flows";
 import { LogPanel } from "./LogPanel";
@@ -59,6 +59,8 @@ export function Board({
   const lastCombat = useRef<number | null>(null);
   const [offset, setOffset] = useState(0);
   const lastTick = useRef(0);
+  /** Tela de batalha minimizada (para ver a mesa) neste combate/visão. */
+  const [minimized, setMinimized] = useState<string | null>(null);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -100,6 +102,8 @@ export function Board({
   const me = view.players.find((p) => p.id === view.me)!;
   const others = view.order.map((id) => view.players.find((p) => p.id === id)!).filter((p) => p.id !== view.me);
   const winner = view.players.find((p) => p.id === view.winnerId);
+  const combatKey = view.combat ? `${view.combat.id}:${combatRole(view)}` : null;
+  const combatOpen = !!combatKey && view.phase !== "FINISHED" && minimized !== combatKey;
 
   return (
     <GameProvider
@@ -139,7 +143,8 @@ export function Board({
                 <TurnControls />
               </div>
               <div className={show(tab === "mesa")}>
-                {view.combat ? <CombatPanel /> : <TableArea view={view} me={me} act={act} />}
+                {view.combat && !combatOpen && <CombatReturnBar onOpen={() => setMinimized(null)} />}
+                {!view.combat && <TableArea view={view} me={me} act={act} />}
               </div>
               {tab === "mesa" && <MobileHand />}
               <div className={show(tab === "eu")}>
@@ -171,7 +176,8 @@ export function Board({
             </button>
           ))}
         </nav>
-        <PromptLayer />
+        {combatOpen && <CombatScreen onMinimize={() => setMinimized(combatKey)} />}
+        <PromptLayer hideCombatBubbles={combatOpen} />
         <DropBridge onInspect={setInspect} />
         <DragDiscardZone />
         <GameFx view={view} />
