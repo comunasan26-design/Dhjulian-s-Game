@@ -29,7 +29,6 @@ function codeVersion() {
   return String(fs.statSync("package.json").mtimeMs);
 }
 
-if (!fs.existsSync("node_modules/next")) run(npm, ["install"]);
 
 const hasDb = !!(process.env.DATABASE_URL || (fs.existsSync(".env") && /^\s*DATABASE_URL\s*=\s*\S/m.test(fs.readFileSync(".env", "utf8"))));
 if (!hasDb) console.warn("\n⚠️  DATABASE_URL não definido (crie um arquivo .env). Só o modo local vai funcionar.");
@@ -38,6 +37,8 @@ const stampFile = path.join(".next", "deploy-version");
 const version = codeVersion();
 const built = fs.existsSync(path.join(".next", "BUILD_ID")) && fs.existsSync(stampFile) && fs.readFileSync(stampFile, "utf8") === version;
 if (!built) {
+  // código novo pode trazer dependências novas
+  run(npm, ["install", "--include=dev", "--no-audit", "--no-fund"]);
   run(npm, ["run", "build"]);
   fs.writeFileSync(stampFile, version);
 } else console.log("\nCódigo sem mudanças: usando a compilação anterior.");
