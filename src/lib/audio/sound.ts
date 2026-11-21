@@ -57,7 +57,7 @@ class Engine {
   music!: GainNode;
   fx!: GainNode;
   verb!: GainNode;
-  noiseBuf!: AudioBuffer;
+  noiseBuf: AudioBuffer | null = null;
   enabled = true;
   volume = 0.6;
   mood: Mood = "off";
@@ -107,28 +107,39 @@ class Engine {
       this.music.gain.value = 0.75;
       this.fx = ctx.createGain();
       this.fx.gain.value = 1;
-      // reverb simples (resposta ao impulso gerada)
-      const conv = ctx.createConvolver();
-      const len = Math.floor(ctx.sampleRate * 2.4);
-      const ir = ctx.createBuffer(2, len, ctx.sampleRate);
-      for (let ch = 0; ch < 2; ch++) {
-        const data = ir.getChannelData(ch);
-        for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / len) ** 3;
-      }
-      conv.buffer = ir;
       this.verb = ctx.createGain();
       this.verb.gain.value = 0.32;
-      this.verb.connect(conv).connect(this.master);
       this.music.connect(this.master);
       this.music.connect(this.verb);
       this.fx.connect(this.master);
       this.fx.connect(this.verb);
-      this.noiseBuf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
-      const nd = this.noiseBuf.getChannelData(0);
-      for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
+      // reverb e ruído são gerados depois do toque (gerar no toque travava a tela no celular);
+      // no celular o eco é mais curto, que pesa bem menos para o processador
+      window.setTimeout(() => this.buildBuffers(ctx), 30);
     }
     if (this.ctx.state === "suspended") void this.ctx.resume();
     this.startScheduler();
+  }
+
+  /** Resposta ao impulso do reverb (ruído decaindo) e o buffer de ruído da percussão. */
+  private buildBuffers(ctx: AudioContext) {
+    const mobile = window.matchMedia?.("(pointer: coarse)").matches;
+    const len = Math.floor(ctx.sampleRate * (mobile ? 0.9 : 1.6));
+    const ir = ctx.createBuffer(2, len, ctx.sampleRate);
+    for (let ch = 0; ch < 2; ch++) {
+      const data = ir.getChannelData(ch);
+      for (let i = 0; i < len; i++) {
+        const k = 1 - i / len;
+        data[i] = (Math.random() * 2 - 1) * k * k * k;
+      }
+    }
+    const conv = ctx.createConvolver();
+    conv.buffer = ir;
+    this.verb.connect(conv).connect(this.master);
+    const noise = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
+    const nd = noise.getChannelData(0);
+    for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
+    this.noiseBuf = noise;
   }
 
   setEnabled(on: boolean) {
@@ -166,7 +177,7 @@ class Engine {
   private startScheduler() {
     if (this.timer !== null || !this.ctx) return;
     this.nextTime = Math.max(this.nextTime, this.ctx.currentTime + 0.05);
-    this.timer = window.setInterval(() => this.tick(), 40);
+    this.timer = window.setInterval(() => this.tick(), 90);
   }
   private stopScheduler() {
     if (this.timer !== null) window.clearInterval(this.timer);
@@ -180,7 +191,7 @@ class Engine {
     if (!song) return;
     const sixteenth = 60 / song.bpm / 4;
     if (this.nextTime < ctx.currentTime - 0.3) this.nextTime = ctx.currentTime + 0.05; // aba voltou do segundo plano
-    while (this.nextTime < ctx.currentTime + 0.18) {
+    while (this.nextTime < ctx.currentTime + 0.3) {
       if (this.nextTime >= this.holdUntil) {
         const s = this.stepN % 16;
         const bar = Math.floor(this.stepN / 16);
@@ -287,6 +298,7 @@ class Engine {
 
   noise(t: number, dur: number, vol: number, type: BiquadFilterType, freq: number, bus: AudioNode = this.music, freqEnd?: number) {
     const c = this.ctx!;
+    if (!this.noiseBuf) return;
     const src = c.createBufferSource();
     src.buffer = this.noiseBuf;
     const f = c.createBiquadFilter();

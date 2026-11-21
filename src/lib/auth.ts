@@ -93,5 +93,20 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
     await db().session.delete({ where: { id: session.id } }).catch(() => undefined);
     return null;
   }
+  touchUser(session.user.id);
   return session.user;
+}
+
+/** Usuários com sinal de vida nos últimos 60 s contam como online. */
+export const USER_ONLINE_MS = 60_000;
+const lastTouch = new Map<string, number>();
+
+/** Marca o usuário como ativo (no máximo uma gravação a cada 20 s por usuário). */
+function touchUser(userId: string) {
+  const now = Date.now();
+  if (now - (lastTouch.get(userId) ?? 0) < 20_000) return;
+  lastTouch.set(userId, now);
+  void db()
+    .user.update({ where: { id: userId }, data: { lastSeenAt: new Date(now) } })
+    .catch(() => undefined);
 }

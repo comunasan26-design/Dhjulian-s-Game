@@ -83,6 +83,41 @@ const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.le
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 
 // ----------------------------------------------------------------------------
+// Dificuldade (1 a 30)
+// ----------------------------------------------------------------------------
+
+/**
+ * Como a dificuldade muda o jeito de jogar: nas baixas o bot enxerga combos menores, avalia as jogadas
+ * com "ruído", às vezes faz o óbvio sem pensar (chuta a porta, foge, passa) e atrapalha menos os outros.
+ * Na 30 ele joga o melhor que sabe.
+ */
+interface SkillProfile {
+  t: number;
+  depth: number;
+  noise: number;
+  mistake: number;
+  hinder: number;
+  rand: () => number;
+}
+
+export function skillProfile(skill: number, rand: () => number = Math.random): SkillProfile {
+  const t = (Math.max(1, Math.min(30, skill)) - 1) / 29;
+  return {
+    t,
+    depth: 1 + Math.round(3 * t),
+    noise: 80 * Math.pow(1 - t, 1.3),
+    mistake: 0.4 * Math.pow(1 - t, 1.6),
+    hinder: 0.2 + 0.8 * t,
+    rand,
+  };
+}
+
+const FULL_SKILL: SkillProfile = { t: 1, depth: 4, noise: 0, mistake: 0, hinder: 1, rand: () => 0.5 };
+/** Perfil do bot que está decidindo agora (as decisões são síncronas). */
+let SK: SkillProfile = FULL_SKILL;
+
+
+// ----------------------------------------------------------------------------
 // Valores
 // ----------------------------------------------------------------------------
 
@@ -747,6 +782,7 @@ function bestOf(state: GameState, me: string, actions: Action[], ctx: Ctx, thres
       settledBase ??= evaluate(settle(state, me, ctx), me);
       gain = evaluate(settle(s, me, ctx), me) - settledBase;
     } else gain = evaluate(s, me) - base;
+    if (SK.noise) gain += (SK.rand() - 0.5) * 2 * SK.noise;
     if (gain > threshold && (!best || gain > best.gain)) best = { action: a, s, gain };
   }
   return best;
@@ -786,9 +822,9 @@ function findCombo(
   ctx: Ctx,
   opts: { maxDepth?: number; budget?: number; simCap?: number } = {},
 ): Combo | null {
-  const maxDepth = opts.maxDepth ?? 4;
+  const maxDepth = Math.min(opts.maxDepth ?? 4, SK.depth);
   const budget = opts.budget ?? Infinity;
-  const simCap = opts.simCap ?? 450;
+  const simCap = Math.round((opts.simCap ?? 450) * (0.4 + 0.6 * SK.t));
   if (goal(state)) return null;
   const base = assets(state, me);
   const basePenalty = helperPenalty(state, me);
@@ -882,7 +918,16 @@ function hinderGoal(need = 1) {
 
 function mem(state: GameState): Record<string, number> {
   state.botMemory ??= {};
-  return state.botMemory;
+  const m = state.botMemory;
+  // lembranças de combates que já acabaram não servem mais (e o estado fica menor)
+  if (Object.keys(m).length > 150) {
+    const cur = state.combat ? `${state.combat.id}.` : null;
+    for (const k of Object.keys(m)) {
+      const [kind, rest] = [k.slice(0, k.indexOf(":")), k.slice(k.indexOf(":") + 1)];
+      if (["ask", "offer", "threat", "hinder"].includes(kind) && (!cur || !rest.startsWith(cur))) delete m[k];
+    }
+  }
+  return m;
 }
 
 function answerFor(state: GameState, me: PlayerState, pr: Prompt, ctx: Ctx): Action {
@@ -1036,10 +1081,10 @@ function helpPlan(state: GameState, me: PlayerState, ctx: Ctx): Action | null {
   for (const ab of abilityInfos(state, me)) {
     if (!ab.available || ab.acao !== "ameacarAjuda") continue;
     const target = state.players
-      .filter((o) => o.id !== me.id && flips(o) && !m[`ask:${c.id}:${me.id}:${o.id}`])
+      .filter((o) => o.id !== me.id && flips(o) && !m[`ask:${c.id}.${c.rev ?? 0}:${me.id}:${o.id}`])
       .sort((a, b) => playerPower(state, b) - playerPower(state, a))[0];
     if (target) {
-      m[`ask:${c.id}:${me.id}:${target.id}`] = 1;
+      m[`ask:${c.id}.${c.rev ?? 0}:${me.id}:${target.id}`] = 1;
       return { type: "ABILITY", key: ab.key, discard: [], params: { player: target.id, dealCount: 1, dealMode: "fighter" } };
     }
   }
@@ -1050,14 +1095,14 @@ function helpPlan(state: GameState, me: PlayerState, ctx: Ctx): Action | null {
     return w * (countFor(o) * 30 + (hasPassive(state, o, "nivelAoAjudar") ? 100 : 0)) + STRENGTH_PENALTY * strengthOf(state, o);
   };
   const candidates = state.players
-    .filter((o) => o.id !== me.id && !m[`ask:${c.id}:${me.id}:${o.id}`])
+    .filter((o) => o.id !== me.id && !m[`ask:${c.id}.${c.rev ?? 0}:${me.id}:${o.id}`])
     .filter((o) => flips(o))
     .filter((o) => cost(o) < benefit)
     .filter((o) => o.level + 1 < MAX() || isAlly(state, me.id, o))
     .sort((a, b) => Number(isAlly(state, me.id, b)) - Number(isAlly(state, me.id, a)) || cost(a) - cost(b));
   const pick = candidates.find((o) => isAlly(state, me.id, o)) ?? candidates.find((o) => !o.bot && weight(state, me.id, o) <= 1.2) ?? candidates[0];
   if (!pick) return null;
-  m[`ask:${c.id}:${me.id}:${pick.id}`] = 1;
+  m[`ask:${c.id}.${c.rev ?? 0}:${me.id}:${pick.id}`] = 1;
   void ctx;
   return { type: "ASK_HELP", targetId: pick.id, count: countFor(pick), mode: isAlly(state, me.id, pick) ? "random" : "fighter" };
 }
@@ -1143,7 +1188,7 @@ function decideOtherCombat(state: GameState, me: PlayerState, ctx: Ctx): Action 
       if (combo) return combo.actions[0];
       // Oferece ajuda a bots aliados
       const m = mem(state);
-      const key = `offer:${c.id}:${me.id}`;
+      const key = `offer:${c.id}.${c.rev ?? 0}:${me.id}`;
       const stake = monsterStake(state);
       const worth =
         40 + (hasPassive(state, me, "nivelAoAjudar") ? 100 : 0) + 80 - weight(state, me.id, fighter) * stake.levels * 60 - STRENGTH_PENALTY * strengthOf(state, fighter) > 0;
@@ -1157,7 +1202,7 @@ function decideOtherCombat(state: GameState, me: PlayerState, ctx: Ctx): Action 
   }
   // Adversário: ameaça (pede tesouros para não atrapalhar) se consegue virar o combate
   const m = mem(state);
-  const threatKey = `threat:${c.id}:${me.id}`;
+  const threatKey = `threat:${c.id}.${c.rev ?? 0}:${me.id}`;
   const value = hinderValue(state, me.id);
   if (calc.winning && !m[threatKey] && !c.used.includes(`${me.id}:threat`) && !c.desafio && value < 100_000) {
     const free = freeTreasures(state, c);
@@ -1170,7 +1215,10 @@ function decideOtherCombat(state: GameState, me: PlayerState, ctx: Ctx): Action 
   }
   // Só atrapalha quando ele já decidiu atacar (janela de ataque)
   if (c.stage !== "resolving") return null;
-  if (calc.winning && value > 20) {
+  // bots fáceis nem sempre se dão ao trabalho de atrapalhar (decidem uma vez por mudança no combate)
+  const hk = `hinder:${c.id}.${c.rev ?? 0}:${me.id}`;
+  m[hk] ??= value >= 100_000 || SK.rand() <= SK.hinder ? 1 : 2;
+  if (calc.winning && value > 20 && m[hk] === 1) {
     // Atrapalha com folga quando o lutador ainda tem mão para reagir; senão, o mínimo que basta
     const deep = 1 + Math.min(4, Math.floor(fighter.hand.length / 2));
     const budget = value >= 100_000 ? Infinity : value * 0.85;
@@ -1254,12 +1302,24 @@ function sellIdea(state: GameState, me: PlayerState): Action | null {
 
 /** Procurar encrenca: luta com um monstro da mão quando um combo garante a vitória com folga. */
 function troubleIdea(state: GameState, me: PlayerState, ctx: Ctx): Action | null {
+  if (SK.t < 0.3) return null;
   const monsters = me.hand.filter((id) => d(state, id).kind === "monster");
   if (!monsters.length) return null;
   const hostile = hostileHinder(state, me.id);
-  let best: { id: string; value: number } | null = null;
+  // depois da porta: procurar encrenca (grátis); depois de um combate: Monstro Errante a seu favor (gasta a carta)
+  const wandering = me.hand.find((id) => d(state, id).kind === "wandering");
+  const actionFor = (id: string): Action | null =>
+    state.turnPhase === "AFTER_DOOR"
+      ? { type: "LOOK_FOR_TROUBLE", cardId: id }
+      : wandering
+        ? { type: "PLAY_WANDERING", cardId: wandering, monsterCardId: id, targetId: me.id }
+        : null;
+  const extraCost = state.turnPhase === "AFTER_DOOR" ? 0 : wandering ? cardValue(state, wandering, me) : 0;
+  let best: { action: Action; value: number } | null = null;
   for (const id of monsters) {
-    const s1 = simulate(state, me.id, { type: "LOOK_FOR_TROUBLE", cardId: id }, ctx);
+    const action = actionFor(id);
+    if (!action) continue;
+    const s1 = simulate(state, me.id, action, ctx);
     if (!s1?.combat) continue;
     const me1 = P(s1, me.id);
     const stake = stakeFor(s1, me.id);
@@ -1279,10 +1339,26 @@ function troubleIdea(state: GameState, me: PlayerState, ctx: Ctx): Action | null
     const margin = end.combat ? marginOf(end) : 99;
     const reserve = reserveBoost(end, P(end, me.id));
     const pHindered = hostile <= 0 ? 0.03 : Math.max(0.05, Math.min(0.9, (hostile - margin - reserve) / (hostile + 2)));
-    const value = (stake >= 100_000 ? 3000 : stake) - cost - pHindered * (fleeLoss + stake * 0.3);
-    if (value > 45 && (!best || value > best.value)) best = { id, value };
+    const value = (stake >= 100_000 ? 3000 : stake) - cost - extraCost - pHindered * (fleeLoss + stake * 0.3);
+    if (value > 45 && (!best || value > best.value)) best = { action, value };
   }
-  return best ? { type: "LOOK_FOR_TROUBLE", cardId: best.id } : null;
+  return best?.action ?? null;
+}
+
+/** Monstro Errante de tocaia: um monstro forte da mão na porta de quem está ameaçando vencer. */
+function ambushIdea(state: GameState, me: PlayerState): Action | null {
+  const wandering = me.hand.find((id) => d(state, id).kind === "wandering");
+  if (!wandering || state.combat || state.phase !== "PLAYING" || SK.t < 0.4) return null;
+  const monster = me.hand
+    .filter((id) => d(state, id).kind === "monster")
+    .sort((a, b) => (d(state, b) as MonsterCard).level - (d(state, a) as MonsterCard).level)[0];
+  if (!monster) return null;
+  const level = (d(state, monster) as MonsterCard).level;
+  const target = state.players
+    .filter((o) => o.id !== me.id && !isAlly(state, me.id, o) && !o.hibernating)
+    .filter((o) => level >= playerPower(state, o) + 3 && threat(state, me.id, o) >= 1.2)
+    .sort((a, b) => threat(state, me.id, b) - threat(state, me.id, a))[0];
+  return target ? { type: "PLAY_WANDERING", cardId: wandering, monsterCardId: monster, targetId: target.id } : null;
 }
 
 /** Fim do turno com mão acima do limite: usa o que iria para a Caridade em vez de dar para alguém. */
@@ -1356,6 +1432,8 @@ function decideOwnTurn(state: GameState, me: PlayerState, ctx: Ctx): Action | nu
       if (!disc || playerPower(state, me) < me.level + 4 || disc.some((id) => cardValue(state, id, me) > 40)) continue;
       return { type: "ABILITY", key: ab.key, discard: disc, params: {} };
     }
+    const fight = troubleIdea(state, me, ctx);
+    if (fight) return fight;
     const over = overflowIdea(state, me, ctx);
     if (over) return over;
     const trade = tradeIdea(state, me);
@@ -1369,6 +1447,32 @@ function decideOwnTurn(state: GameState, me: PlayerState, ctx: Ctx): Action | nu
 export function decide(state: GameState, botId: string, ctx: Ctx): Action | null {
   const me = P(state, botId);
   if (!me?.bot || state.phase === "FINISHED") return null;
+  SK = me.skill && me.skill < 30 ? skillProfile(me.skill, () => ctx.rng.int(10_000) / 10_000) : FULL_SKILL;
+  try {
+    return decideWith(state, me, ctx);
+  } finally {
+    SK = FULL_SKILL;
+  }
+}
+
+/** Jogada "sem pensar" (bots de dificuldade baixa às vezes fazem só o óbvio). */
+function lazyAction(state: GameState, me: PlayerState): Action | null | undefined {
+  const c = state.combat;
+  if (c) {
+    if (c.stage === "badstuff") return undefined;
+    if (c.fighterId === me.id) return c.stage === "fight" ? (computeCombat(state)?.winning ? { type: "RESOLVE" } : { type: "FLEE" }) : null;
+    if (c.stage === "resolving" && !playerSide(state, c).includes(me.id) && !c.passed.includes(me.id)) return { type: "PASS" };
+    return undefined;
+  }
+  if (!isCurrent(state, me.id) || state.reward || state.prompts.some((p) => p.blocking) || state.turn.ending) return undefined;
+  if (state.turnPhase === "KICK") return { type: "KICK_DOOR" };
+  if (state.turnPhase === "AFTER_DOOR") return { type: "LOOT_ROOM" };
+  if (state.turnPhase === "END") return { type: "END_TURN" };
+  return undefined;
+}
+
+function decideWith(state: GameState, me: PlayerState, ctx: Ctx): Action | null {
+  const botId = me.id;
   const pr = state.prompts.find((p) => p.playerId === botId);
   if (pr) return answerFor(state, me, pr, ctx);
   if (me.owlPeek) {
@@ -1378,6 +1482,10 @@ export function decide(state: GameState, botId: string, ctx: Ctx): Action | null
   }
   const notice = state.notices.find((n) => n.playerId === botId);
   if (notice) return { type: "DISMISS_NOTICE", id: notice.id };
+  if (state.phase === "PLAYING" && SK.mistake && SK.rand() < SK.mistake) {
+    const lazy = lazyAction(state, me);
+    if (lazy !== undefined) return lazy;
+  }
   if (state.phase === "SETUP") {
     const improve = bestOf(state, botId, manageCandidates(state, me, true), ctx, 4);
     if (improve) return noteGear(state, botId, improve.action);
@@ -1397,6 +1505,8 @@ export function decide(state: GameState, botId: string, ctx: Ctx): Action | null
   const stamp = state.turnSerial * 10 + (state.turnPhase === "END" ? 1 : 0);
   if (m[key] === stamp) return null;
   m[key] = stamp;
+  const ambush = ambushIdea(state, me);
+  if (ambush) return ambush;
   const harm = bestOf(state, botId, manageCandidates(state, me, false), ctx, 40);
   if (harm) return harm.action;
   return tradeIdea(state, me);

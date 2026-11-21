@@ -11,7 +11,7 @@ export const GET = handle(async () => {
   const now = Date.now();
   const [open, mine] = await Promise.all([
     db().room.findMany({
-      where: { status: "LOBBY" },
+      where: { status: "LOBBY", ranked: false },
       orderBy: { updatedAt: "desc" },
       take: 50,
       include: { players: { select: { userId: true, lastSeenAt: true } }, host: { select: { username: true } } },
@@ -43,6 +43,7 @@ export const POST = handle(async (req: Request) => {
   const body = await readJson(req);
   const name = String(body.name ?? "").trim().slice(0, 40) || `Mesa de ${user.username}`;
   const maxPlayers = Math.min(MAX_PLAYERS, Math.max(MIN_PLAYERS, Number(body.maxPlayers) || 6));
+  const botSkill = Math.min(30, Math.max(1, Math.round(Number(body.botSkill) || 20)));
   for (let i = 0; i < 5; i++) {
     const code = makeCode();
     try {
@@ -51,6 +52,7 @@ export const POST = handle(async (req: Request) => {
           code,
           name,
           maxPlayers,
+          botSkill,
           hostId: user.id,
           players: { create: { userId: user.id, seat: 0 } },
         },

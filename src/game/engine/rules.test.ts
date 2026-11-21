@@ -311,4 +311,41 @@ describe("regras", () => {
     state.combat!.used = state.combat!.used.filter((u) => u !== "p3:threat");
     expect(() => applyAction(state, "p3", { type: "THREATEN", count: 1 }, ctx)).toThrow(/não vai ganhar mais tesouros/);
   });
+
+  it("depois de qualquer mudança no combate, quem já ameaçou pode ameaçar de novo", () => {
+    const { state, ctx } = setup(3);
+    P(state, "p0").level = 3;
+    topDoor(state, "monster.gosma"); // nível 5, 2 tesouros
+    applyAction(state, "p0", { type: "KICK_DOOR" }, ctx);
+    applyAction(state, "p1", { type: "THREATEN", count: 1 }, ctx);
+    expect(() => applyAction(state, "p1", { type: "THREATEN", count: 1 }, ctx)).toThrow(/já fez uma ameaça/);
+    const bonus = give(state, "p2", "bonus.ferido");
+    applyAction(state, "p2", { type: "PLAY_MONSTER_BONUS", cardId: bonus, monsterId: state.combat!.monsters[0].cardId }, ctx);
+    expect(() => applyAction(state, "p1", { type: "THREATEN", count: 1 }, ctx)).not.toThrow();
+  });
+
+  it("Monstro Errante fora de combate: lutar agora no seu turno ou deixar de tocaia para outro jogador", () => {
+    const { state, ctx } = setup(3);
+    P(state, "p0").level = 9;
+    topDoor(state, "levelup.treino"); // porta sem monstro
+    applyAction(state, "p0", { type: "KICK_DOOR" }, ctx);
+    const w1 = give(state, "p0", "wandering.errante");
+    const kobold = give(state, "p0", "monster.kobold");
+    applyAction(state, "p0", { type: "PLAY_WANDERING", cardId: w1, monsterCardId: kobold, targetId: "p0" }, ctx);
+    expect(state.combat?.fighterId).toBe("p0");
+    expect(state.combat?.monsters[0].cardId).toBe(kobold);
+
+    // p2 (fora do turno) solta um monstro na porta de p1
+    state.combat = null;
+    state.turnPhase = "END";
+    const w2 = give(state, "p2", "wandering.errante");
+    const ogro = give(state, "p2", "monster.ogro");
+    applyAction(state, "p2", { type: "PLAY_WANDERING", cardId: w2, monsterCardId: ogro, targetId: "p1" }, ctx);
+    expect(P(state, "p1").ambush).toEqual([ogro]);
+    expect(P(state, "p2").hand).not.toContain(ogro);
+    // não dá para lutar "a seu favor" fora do próprio turno
+    const w3 = give(state, "p2", "wandering.errante");
+    const m3 = give(state, "p2", "monster.kobold");
+    expect(() => applyAction(state, "p2", { type: "PLAY_WANDERING", cardId: w3, monsterCardId: m3, targetId: "p2" }, ctx)).toThrow();
+  });
 });

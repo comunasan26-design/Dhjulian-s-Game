@@ -30,7 +30,7 @@ function show(active: boolean): string {
 
 const CONN_LABEL: Record<ConnState, string> = {
   connecting: "conectando…",
-  online: "ao vivo",
+  online: "conectado",
   reconnecting: "reconectando…",
   offline: "sem internet",
 };
@@ -224,9 +224,9 @@ function TableArea({ view, me, act }: { view: GameView; me: GameView["players"][
         )}
       </div>
       {view.reward && (
-        <div>
+        <div className="w-full min-w-0 basis-full">
           <p className="mb-1 text-xs text-muted">Tesouros sendo divididos</p>
-          <div className="flex gap-1">
+          <div className="flex flex-wrap gap-1">
             {(view.reward.cards ?? []).map((id) => (
               <CardView key={id} id={id} size="sm" />
             ))}

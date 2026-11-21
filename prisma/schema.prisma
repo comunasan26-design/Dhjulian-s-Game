@@ -15,9 +15,18 @@ model User {
   username     String       @unique
   passwordHash String
   createdAt    DateTime     @default(now())
+  /** Último sinal de vida (para contar quem está online). */
+  lastSeenAt   DateTime     @default(now())
+  /** Rating do modo ranqueado (estilo Elo; começa em 1200 e é exibido arredondado). */
+  rating       Float        @default(1200)
+  rankedGames  Int          @default(0)
   sessions     Session[]
   rooms        RoomPlayer[]
   hostedRooms  Room[]       @relation("RoomHost")
+  queue        RankedQueue?
+  rankedResults RankedResult[]
+
+  @@index([rating])
 }
 
 model Session {
@@ -47,6 +56,10 @@ model Room {
   maxPlayers Int          @default(6)
   // Quantidade de bots (controlados pelo servidor) na sala
   bots       Int          @default(0)
+  // Dificuldade dos bots (1 a 30)
+  botSkill   Int          @default(20)
+  // Partida do modo ranqueado (criada pela fila; não aparece na lista de salas)
+  ranked     Boolean      @default(false)
   version    Int          @default(0)
   // Estado completo do jogo (JSON). Só é enviado aos clientes depois de filtrado por jogador.
   state      Json?
@@ -68,4 +81,48 @@ model RoomPlayer {
 
   @@id([roomId, userId])
   @@index([userId])
+}
+
+/// Fila do modo ranqueado: quem está procurando partida.
+model RankedQueue {
+  userId     String   @id
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rating     Float
+  joinedAt   DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+  /** Código da sala quando a partida foi formada. */
+  roomCode   String?
+}
+
+/// Uma partida ranqueada: jogadores e ratings de antes, e o resultado (também o log humano x bot).
+model RankedMatch {
+  id         String         @id @default(cuid())
+  roomCode   String         @unique
+  /** Conta para o rating? (não conta com 4 ou mais bots) */
+  counted    Boolean
+  botSkill   Int
+  /** [{ id, name, bot, rating, games, skill? }] no início da partida */
+  players    Json
+  /** Colocações, variações e duelos humano x bot (para recalibrar os bots) */
+  results    Json?
+  createdAt  DateTime       @default(now())
+  finishedAt DateTime?
+  entries    RankedResult[]
+}
+
+/// Resultado de um humano numa partida ranqueada (histórico de rating).
+model RankedResult {
+  id           String      @id @default(cuid())
+  matchId      String
+  match        RankedMatch @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  userId       String
+  user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  position     Int
+  ratingBefore Float
+  ratingAfter  Float
+  delta        Float
+  abandoned    Boolean     @default(false)
+  createdAt    DateTime    @default(now())
+
+  @@index([userId, createdAt])
 }

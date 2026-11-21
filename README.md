@@ -8,13 +8,14 @@ raças, classes, itens, runas, poções e maldições, e seja o primeiro a chega
 - Contas só com **usuário e senha** (bcrypt + sessão em cookie httpOnly guardada no banco)
 - **Salas** com código de convite, sala de espera e **reconexão** (o estado da partida fica no banco)
 - **Tempo real** com Server-Sent Events, sem serviço externo
-- **Bots** com IA nas salas online (o anfitrião adiciona na sala de espera)
+- **Bots** com IA nas salas online e no modo local, com **dificuldade de 1 a 30** escolhida ao criar a sala
 - **Modo local** (`/local`): partida contra bots rodando só no navegador, sem conta e sem banco (salva no aparelho)
 - Layout para celular com abas (Mesa, Você, Jogadores, Histórico)
 - **Cartas editáveis em JSON** (pasta [`cartas/`](cartas/LEIA-ME.md)): qualquer pessoa altera ou cria cartas mudando textos e números
 - **Visual de cartas de verdade**: moldura de metal pela raridade (cobre, bronze, prata, ouro, ferro negro), gema no topo pelo tipo, runas circulando itens encantados; segure uma carta para erguê-la e toque para virar e ler o verso
 - **Trilha sonora dinâmica** (gerada com Web Audio, sem arquivos): muda entre exploração, combate, chefe lendário, vitória e derrota; efeitos sonoros e **animações Lottie** (`public/animacoes/`) em eventos como subir de nível, combate, monstro derrotado, morte, maldição, runa e fim de jogo
 - Ameaçar atrapalhar (pedir tesouros para não atrapalhar) e desistir da partida
+- **Modo ranqueado** (6 jogadores) com fila por rating, **rating estilo Elo** e **ranking** na página principal
 
 ## Rodando localmente
 
@@ -61,6 +62,19 @@ Para outro caminho do banco, use `DATABASE_URL="file:caminho/arquivo.db"` no `.e
 **Vercel:** o SQLite precisa de disco permanente, que as funções da Vercel não têm. Para hospedar lá, seria preciso
 voltar para um banco externo (PostgreSQL).
 
+## Modo ranqueado
+
+- **Fila**: procura jogadores com rating parecido (±100 até 30 s, ±250 até 60 s); depois de 60 s a mesa de 6 é
+  completada com bots. A tela de busca mostra o tempo, quantos estão online e quantos estão procurando.
+- **Colocação**: 1º quem venceu; os demais por nível, desempate pelo bônus dos itens equipados (se ainda igual, empate).
+  Quem desiste fica em último e perde 10 a mais.
+- **Rating** (`src/lib/rating.ts`): cada partida vira duelos 1x1 contra os outros 5 (vitória 1, empate 0,5, derrota 0),
+  comparados com o esperado pela diferença de rating, como no xadrez. K = 48 (0–9 partidas), 32 (10–29), 20 (30+) e
+  16 (30+ e rating ≥ 2000). Começa em 1200 (oculto nas 5 partidas de colocação), mínimo 100.
+- **Bots**: rating fixo `600 + 50 × (dificuldade − 1)`; a dificuldade de quem completa a mesa acompanha a média dos
+  humanos. Duelos contra bots valem metade e, com 4 ou mais bots, a partida não conta. Os duelos humano x bot ficam
+  guardados em `RankedMatch.results` para recalibrar a tabela.
+
 ## Como funciona
 
 ```
@@ -92,7 +106,10 @@ src/
 - **Cartas**: o motor não conhece cartas pelo nome; ele lê os `"efeitos"` de cada carta (ex.: `bonusContra`, `anula`,
   `naoPersegue`). Assim, cartas novas podem reaproveitar qualquer efeito existente. Veja `cartas/LEIA-ME.md`.
 - **Ameaça**: quem não está no combate pode pedir tesouros para não atrapalhar. Se o lutador aceitar, paga com a
-  recompensa (se vencer) e quem ameaçou não pode atrapalhá-lo pelo resto da rodada.
+  recompensa (se vencer) e quem ameaçou não pode atrapalhá-lo pelo resto da rodada. Sempre que algo muda no combate
+  (bônus, monstros, ajudante), todos podem ameaçar e pedir ajuda de novo.
+- **Monstro Errante**: no combate, a seu favor (mais níveis e tesouros) ou contra quem luta; fora de combate, para lutar
+  agora no seu turno ou de tocaia na porta de outro jogador (ele o enfrenta ao chutar a próxima porta).
 - **Desistência**: conta como morte (os outros saqueiam os itens) e o jogador sai da mesa. Se só restarem bots, a sala
   é apagada; se restar um único jogador, ele vence.
 - **Reconexão**: basta voltar à sala (o lobby lista “Suas salas”). Recarregar a página ou perder a internet não perde nada.

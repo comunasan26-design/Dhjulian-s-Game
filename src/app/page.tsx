@@ -1,14 +1,17 @@
 import { redirect } from "next/navigation";
 import { AuthForm } from "@/components/AuthForm";
+import { Leaderboard } from "@/components/ranked/Leaderboard";
 import { getCurrentUser } from "@/lib/auth";
+import { leaderboard } from "@/lib/ranked";
 
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
   const user = await getCurrentUser();
   if (user) redirect("/lobby");
+  const rows = await leaderboard(20).catch(() => []);
   return (
-    <main className="flex flex-1 items-center justify-center px-4 py-10">
+    <main className="flex flex-1 flex-col items-center justify-center gap-10 px-4 py-10">
       <div className="grid w-full max-w-4xl items-center gap-10 md:grid-cols-2">
         <section>
           <p className="text-sm uppercase tracking-[0.3em] text-gold">Jogo de cartas online</p>
@@ -27,10 +30,12 @@ export default async function Home() {
             <li>⚔️ 60 monstros, 17 raças e 16 classes com habilidades únicas</li>
             <li>🧪 Itens, runas, poções e 33 maldições</li>
             <li>🔁 Caiu a conexão? Entre de novo e continue de onde parou</li>
+            <li>🏆 Modo ranqueado com rating estilo xadrez e ranking</li>
           </ul>
         </section>
         <AuthForm />
       </div>
+      <Leaderboard rows={rows} className="w-full max-w-4xl" />
     </main>
   );
 }

@@ -79,7 +79,7 @@ import {
 // ============================================================================
 
 export function createGame(
-  players: { id: string; name: string; bot?: boolean }[],
+  players: { id: string; name: string; bot?: boolean; skill?: number }[],
   hostId: string,
   ctx: Ctx,
 ): GameState {
@@ -145,7 +145,7 @@ export function createGame(
       ambush: [],
       ready: false,
       owlPeek: null,
-      ...(pl.bot ? { bot: true } : {}),
+      ...(pl.bot ? { bot: true, skill: Math.max(1, Math.min(30, Math.round(pl.skill ?? 30))) } : {}),
     });
   });
 
@@ -459,6 +459,9 @@ export function addMonster(
 export function onCombatChanged(state: GameState, ctx: Ctx) {
   const combat = state.combat;
   if (!combat) return;
+  // o combate mudou: quem já ameaçou pode ameaçar de novo (pedidos de ajuda nunca são limitados)
+  combat.rev = (combat.rev ?? 0) + 1;
+  combat.used = combat.used.filter((u) => !u.endsWith(":threat"));
   // Monstros com nível <= 0 morrem (Tempestade Elemental)
   for (const cm of combat.monsters) {
     if (cm.defeated) continue;

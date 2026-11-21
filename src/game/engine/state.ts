@@ -73,6 +73,8 @@ export interface PlayerState {
   ready: boolean;
   /** Jogador controlado pela IA. */
   bot?: boolean;
+  /** Dificuldade do bot (1 a 30; 30 = joga o melhor que sabe). */
+  skill?: number;
   /** Carta vista pelos Olhos da Noite (Owlin), aguardando decisão. */
   owlPeek: string | null;
 }
@@ -165,6 +167,8 @@ export interface CombatState {
   breathUsedBy: string[];
   /** Habilidades usadas neste combate: "playerId:chave". */
   used: string[];
+  /** Quantas vezes o combate mudou (bônus, monstros, ajudante…): a cada mudança, todos podem ameaçar/pedir ajuda de novo. */
+  rev?: number;
   levelsLost: Record<string, number>;
   /** Fontes de rerrolagem já usadas (Cajado do Arquimago). */
   rerolled: string[];

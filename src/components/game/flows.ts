@@ -18,6 +18,58 @@ export interface CardAction {
 // Opções
 // ----------------------------------------------------------------------------
 
+/**
+ * Opções do Monstro Errante: no combate (a seu favor se você está lutando, contra quem luta se não está);
+ * fora de combate, lutar agora no seu turno ou deixar o monstro de tocaia na porta de outro jogador.
+ */
+function wanderingOptions(api: GameApi, picker: Picker, wanderingId: string, monsterId?: string): CardAction[] {
+  const view = api.view;
+  const me = api.me;
+  const monsters = (me.hand ?? []).filter((id) => api.def(id)?.kind === "monster");
+  if (!monsters.length) return [];
+  const chooseMonster = async (title: string) =>
+    monsterId ?? (await picker.pick({ title, options: cardOptions(monsters) }));
+  const out: CardAction[] = [];
+  const c = view.combat;
+  if (c) {
+    if (c.stage === "badstuff") return [];
+    const mine = c.fighterId === me.id || c.helperId === me.id;
+    out.push({
+      label: mine ? "Monstro Errante: reforçar meu combate (mais níveis e tesouros)" : `Monstro Errante: contra ${api.playerName(c.fighterId)}`,
+      primary: true,
+      run: async () => {
+        const m = await chooseMonster("Qual monstro entra no combate?");
+        if (m) return api.act({ type: "PLAY_WANDERING", cardId: wanderingId, monsterCardId: m });
+      },
+    });
+    return out;
+  }
+  if (view.currentPlayerId === me.id && (view.turnPhase === "AFTER_DOOR" || view.turnPhase === "END"))
+    out.push({
+      label: "Monstro Errante: lutar com ele agora (a seu favor)",
+      primary: true,
+      run: async () => {
+        const m = await chooseMonster("Com qual monstro você quer lutar?");
+        if (m) return api.act({ type: "PLAY_WANDERING", cardId: wanderingId, monsterCardId: m, targetId: me.id });
+      },
+    });
+  out.push({
+    label: "Monstro Errante: soltar contra outro jogador…",
+    primary: out.length === 0,
+    run: async () => {
+      const t = await picker.pick({
+        title: "Quem vai enfrentar o monstro?",
+        description: "O monstro fica escondido atrás da porta dele: ele luta ao chutar a próxima porta.",
+        options: playerOptions(view, (id) => id !== me.id),
+      });
+      if (!t) return;
+      const m = await chooseMonster("Qual monstro vai ficar de tocaia?");
+      if (m) return api.act({ type: "PLAY_WANDERING", cardId: wanderingId, monsterCardId: m, targetId: t });
+    },
+  });
+  return out;
+}
+
 export function playerOptions(view: GameView, filter: (id: string) => boolean = () => true): PickOption[] {
   return view.players
     .filter((p) => filter(p.id))
@@ -517,10 +569,9 @@ export function cardActions(api: GameApi, picker: Picker, cardId: string): CardA
           out.push({ label: "Procurar encrenca (lutar com ele)", run: act({ type: "LOOK_FOR_TROUBLE", cardId }), primary: true });
         if (view.combat?.screamerFor === me.id)
           out.push({ label: "Grito do Cogumelo: pôr no combate", run: act({ type: "SCREAMER_ADD", monsterCardId: cardId }), primary: true });
-        if (inCombat) {
+        {
           const wandering = (me.hand ?? []).find((id) => api.def(id)?.kind === "wandering");
-          if (wandering)
-            out.push({ label: "Jogar como Monstro Errante", run: act({ type: "PLAY_WANDERING", cardId: wandering, monsterCardId: cardId }) });
+          if (wandering) out.push(...wanderingOptions(api, picker, wandering, cardId));
         }
         break;
       case "curse":
@@ -545,18 +596,7 @@ export function cardActions(api: GameApi, picker: Picker, cardId: string): CardA
           });
         break;
       case "wandering":
-        if (inCombat)
-          out.push({
-            label: "Trazer um monstro da mão",
-            primary: true,
-            run: async () => {
-              const m = await picker.pick({
-                title: "Qual monstro entra no combate?",
-                options: cardOptions((me.hand ?? []).filter((id) => api.def(id)?.kind === "monster")),
-              });
-              if (m) return api.act({ type: "PLAY_WANDERING", cardId, monsterCardId: m });
-            },
-          });
+        out.push(...wanderingOptions(api, picker, cardId));
         break;
       case "levelup":
         out.push({ label: "Subir 1 nível", run: act({ type: "PLAY_LEVELUP", cardId }), primary: true });

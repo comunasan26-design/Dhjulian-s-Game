@@ -7,6 +7,10 @@ export interface RoomInfo {
   hostId: string;
   maxPlayers: number;
   bots: number;
+  /** Dificuldade dos bots (1 a 30). */
+  botSkill: number;
+  /** Partida do modo ranqueado. */
+  ranked: boolean;
   version: number;
   players: { id: string; username: string; seat: number; online: boolean }[];
 }

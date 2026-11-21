@@ -5,7 +5,7 @@
  * diagonal. Cada anel é desenhado em duas camadas sincronizadas — uma atrás da carta (metade de trás da
  * órbita, mais apagada) e outra na frente (metade da frente) — para dar a ilusão de atravessar a carta em 3D.
  */
-import { useId } from "react";
+import { memo, useId } from "react";
 
 const GLYPHS = [
   "M-3 7V-7M-3-3L3-7M-3 1L3-3", // ᚠ
@@ -52,7 +52,7 @@ function orbit(reverse: boolean) {
 }
 
 /** `layer="back"` vai antes da arte da carta (fica atrás); `layer="front"` vai depois (fica na frente). */
-export function RuneHalo({ count = 1, layer }: { count?: number; layer: "back" | "front" }) {
+export const RuneHalo = memo(function RuneHalo({ count = 1, layer }: { count?: number; layer: "back" | "front" }) {
   const uid = useId().replace(/[^a-zA-Z0-9_-]/g, "");
   const rings = RINGS.slice(0, Math.max(1, Math.min(3, count)));
   const front = layer === "front";
@@ -96,4 +96,4 @@ export function RuneHalo({ count = 1, layer }: { count?: number; layer: "back" |
       })}
     </svg>
   );
-}
+});
