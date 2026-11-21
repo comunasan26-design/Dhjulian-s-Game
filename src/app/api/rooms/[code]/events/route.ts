@@ -12,7 +12,7 @@ const PRESENCE_MS = 8_000;
 
 /**
  * Stream de eventos (Server-Sent Events) de uma sala.
- * Funciona em ambiente serverless (Vercel): consulta a versão da sala no Postgres
+ * Funciona em ambiente serverless (Vercel): consulta a versão da sala no banco
  * e envia o estado filtrado para o jogador sempre que algo muda.
  */
 export async function GET(req: Request, ctx: { params: Promise<{ code: string }> }) {

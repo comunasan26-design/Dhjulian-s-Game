@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { defineConfig } from "prisma/config";
+import { databaseUrl } from "./src/lib/dbUrl";
 
 export default defineConfig({
   schema: "prisma/schema.prisma",
@@ -7,7 +8,7 @@ export default defineConfig({
     path: "prisma/migrations",
   },
   datasource: {
-    // Em produção (Vercel) use a URL "direta" (sem pooler) para migrações, se o provedor tiver uma.
-    url: process.env["DIRECT_URL"] ?? process.env["DATABASE_URL"],
+    // Banco SQLite na própria pasta prisma/ (prisma/jogo.db), ou o arquivo de DATABASE_URL="file:..."
+    url: databaseUrl(),
   },
 });

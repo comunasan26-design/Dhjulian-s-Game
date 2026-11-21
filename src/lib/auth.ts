@@ -21,6 +21,12 @@ export function validateUsername(username: unknown): string | null {
   return null;
 }
 
+/** Procura um usuário pelo nome sem diferenciar maiúsculas (os nomes só têm letras ASCII). */
+export async function findUserByName(username: string) {
+  const rows = await db().$queryRaw<{ id: string }[]>`SELECT id FROM "User" WHERE username = ${username} COLLATE NOCASE LIMIT 1`;
+  return rows[0] ? db().user.findUnique({ where: { id: rows[0].id } }) : null;
+}
+
 export function validatePassword(password: unknown): string | null {
   if (typeof password !== "string") return "Senha inválida.";
   if (password.length < 6) return "A senha deve ter pelo menos 6 caracteres.";
@@ -45,7 +51,8 @@ export async function createSession(userId: string): Promise<void> {
   store.set(SESSION_COOKIE, token, {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    // COOKIE_SECURE=false permite login por http://IP:porta (sem HTTPS), útil para testar em painéis de hospedagem
+    secure: process.env.COOKIE_SECURE ? process.env.COOKIE_SECURE !== "false" : process.env.NODE_ENV === "production",
     path: "/",
     expires: expiresAt,
   });

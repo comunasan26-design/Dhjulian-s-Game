@@ -43,3 +43,9 @@ next-env.d.ts
 
 # prisma client gerado
 /src/generated/
+
+# banco SQLite (fica na pasta prisma/ do servidor)
+/prisma/*.db
+/prisma/*.db-journal
+/prisma/*.db-wal
+/prisma/*.db-shm
