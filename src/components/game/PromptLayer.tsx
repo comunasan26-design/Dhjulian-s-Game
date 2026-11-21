@@ -4,6 +4,7 @@ import type { GameView } from "@/game/engine";
 import { Button } from "../ui/Button";
 import { CardView } from "./CardView";
 import { useGame } from "./GameContext";
+import { COMBAT_BUBBLE_KINDS } from "./CombatScreen";
 import { cardOptions } from "./flows";
 import { usePicker } from "./Picker";
 import { Countdown } from "./useClock";
@@ -312,10 +313,11 @@ function MyPrompt({ pr }: { pr: PromptV }) {
   );
 }
 
-export function PromptLayer() {
+export function PromptLayer({ hideCombatBubbles = false }: { hideCombatBubbles?: boolean }) {
   const api = useGame();
-  const mine = api.view.prompts.filter((p) => p.playerId === api.me.id);
-  const others = api.view.prompts.filter((p) => p.playerId !== api.me.id);
+  // com a tela de batalha aberta, ofertas/pedidos de ajuda e ameaças aparecem como balões nela
+  const mine = api.view.prompts.filter((p) => p.playerId === api.me.id && !(hideCombatBubbles && COMBAT_BUBBLE_KINDS.has(p.kind)));
+  const others = api.view.prompts.filter((p) => p.playerId !== api.me.id && !(hideCombatBubbles && COMBAT_BUBBLE_KINDS.has(p.kind)));
   const notices = api.view.notices;
   if (mine.length === 0 && others.length === 0 && notices.length === 0) return null;
   return (

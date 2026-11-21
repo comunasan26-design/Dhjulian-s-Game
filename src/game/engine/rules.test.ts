@@ -324,6 +324,27 @@ describe("regras", () => {
     expect(() => applyAction(state, "p1", { type: "THREATEN", count: 1 }, ctx)).not.toThrow();
   });
 
+  it("deixar passar durante a luta: não pode ameaçar/oferecer ajuda até o combate mudar, e já conta no ataque", () => {
+    const { state, ctx } = setup(3);
+    P(state, "p0").level = 9;
+    topDoor(state, "monster.gosma"); // nível 5
+    applyAction(state, "p0", { type: "KICK_DOOR" }, ctx);
+    applyAction(state, "p1", { type: "PASS" }, ctx);
+    expect(state.combat!.passed).toEqual(["p1"]);
+    expect(() => applyAction(state, "p1", { type: "THREATEN", count: 1 }, ctx)).toThrow(/deixou passar/);
+    expect(() => applyAction(state, "p1", { type: "OFFER_HELP", count: 0, mode: "random" }, ctx)).toThrow(/deixou passar/);
+    const bonus = give(state, "p2", "bonus.ferido");
+    applyAction(state, "p2", { type: "PLAY_MONSTER_BONUS", cardId: bonus, monsterId: state.combat!.monsters[0].cardId }, ctx);
+    expect(state.combat!.passed).toEqual([]);
+    expect(() => applyAction(state, "p1", { type: "THREATEN", count: 1 }, ctx)).not.toThrow();
+    // passou de novo e nada mudou: ao atacar, só falta p2 deixar passar
+    applyAction(state, "p1", { type: "PASS" }, ctx);
+    applyAction(state, "p0", { type: "RESOLVE" }, ctx);
+    expect(state.combat!.passed).toEqual(["p1"]);
+    applyAction(state, "p2", { type: "PASS" }, ctx);
+    expect(state.combat).toBeNull();
+  });
+
   it("Monstro Errante fora de combate: lutar agora no seu turno ou deixar de tocaia para outro jogador", () => {
     const { state, ctx } = setup(3);
     P(state, "p0").level = 9;

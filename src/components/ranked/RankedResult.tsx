@@ -49,7 +49,7 @@ export function RankedResult({ code }: { code: string }) {
           ) : null}
         </p>
       ) : (
-        <p className="mt-1 text-sm text-muted">Esta partida não contou para o rating (4 ou mais bots na mesa).</p>
+        <p className="mt-1 text-sm text-muted">Esta partida não contou para o rating.</p>
       )}
       <button type="button" className="mt-3 text-xs text-muted underline" onClick={() => setClosed(true)}>
         Fechar

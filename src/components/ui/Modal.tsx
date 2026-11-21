@@ -8,12 +8,15 @@ export function Modal({
   onClose,
   children,
   wide = false,
+  tone,
 }: {
   open: boolean;
   title: ReactNode;
   onClose?: () => void;
   children: ReactNode;
   wide?: boolean;
+  /** Cor da borda: azul (ajuda) ou roxa (ameaça). */
+  tone?: "blue" | "purple";
 }) {
   useEffect(() => {
     if (!open || !onClose) return;
@@ -27,7 +30,9 @@ export function Modal({
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-2 sm:items-center sm:p-4" onClick={onClose}>
       <div
-        className={`max-h-[92vh] w-full overflow-hidden rounded-xl border border-edge bg-panel shadow-2xl ${wide ? "max-w-4xl" : "max-w-lg"}`}
+        className={`max-h-[92vh] w-full overflow-hidden rounded-xl bg-panel shadow-2xl ${
+          tone === "blue" ? "border-2 border-sky-500" : tone === "purple" ? "border-2 border-purple-500" : "border border-edge"
+        } ${wide ? "max-w-4xl" : "max-w-lg"}`}
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"

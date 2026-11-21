@@ -245,6 +245,7 @@ export function applyAction(state: GameState, actorId: string, action: Action, c
   if (state.phase === "FINISHED" && action.type !== "CHAT" && action.type !== "DISMISS_NOTICE" && action.type !== "TICK")
     fail("A partida terminou.");
   const before = combatKey(state);
+  const beforeRev = state.combat ? `${state.combat.id}.${state.combat.rev ?? 0}` : null;
   dispatch(state, p, action, ctx);
   // Qualquer ação que mude o combate durante a janela de ataque reinicia o prazo
   const c = state.combat;
@@ -252,6 +253,8 @@ export function applyAction(state: GameState, actorId: string, action: Action, c
     c.resolveDeadline = ctx.now + TIMERS.resolve;
     c.passed = [];
   }
+  // quem deixou passar volta a poder ameaçar/ajudar quando o combate muda
+  if (c && c.stage === "fight" && beforeRev !== null && `${c.id}.${c.rev ?? 0}` !== beforeRev) c.passed = [];
   if (action.type !== "TICK" && action.type !== "CHAT") {
     state.lastActionAt = ctx.now;
     if (!p.bot) state.botNextAt = Math.max(state.botNextAt ?? 0, ctx.now + 1200);
@@ -629,6 +632,7 @@ function dispatch(state: GameState, p: PlayerState, a: Action, ctx: Ctx) {
       if (combat.stage === "badstuff") fail("O combate já foi decidido.");
       const err = canBeHelper(state, p);
       if (err) fail(err);
+      if (combat.passed.includes(p.id)) fail("Você deixou passar: espere o combate mudar para oferecer ajuda.");
       if (state.prompts.some((x) => x.kind === "helpOffer" && x.data.helperId === p.id)) fail("Você já ofereceu ajuda.");
       const deal = parseDeal(a.count, a.mode);
       createPrompt(state, ctx, "helpOffer", combat.fighterId, { helperId: p.id, deal, combatId: combat.id });
@@ -643,14 +647,14 @@ function dispatch(state: GameState, p: PlayerState, a: Action, ctx: Ctx) {
       if (!calc.winning) fail("Você ainda não está vencendo.");
       combat.stage = "resolving";
       combat.resolveDeadline = ctx.now + TIMERS.resolve;
-      combat.passed = [];
+      // quem já deixou passar (e nada mudou desde então) continua tendo passado
       log(state, ctx, `⚔️ ${p.name} vai atacar! Últimos segundos para jogar cartas.`, "combat");
       if (allPassed(state, ctx)) resolveVictory(state, ctx);
       return;
     }
     case "PASS": {
       const combat = combatFor(state);
-      if (combat.stage !== "resolving") fail("Nada para passar agora.");
+      if (combat.stage === "badstuff") fail("Nada para passar agora.");
       if (playerSide(state, combat).includes(p.id)) fail("Você está no combate.");
       if (!combat.passed.includes(p.id)) combat.passed.push(p.id);
       if (allPassed(state, ctx)) resolveVictory(state, ctx);
@@ -822,6 +826,7 @@ function dispatch(state: GameState, p: PlayerState, a: Action, ctx: Ctx) {
       if (playerSide(state, combat).includes(p.id)) fail("Você está no combate.");
       if (truceBlocks(state, p, combat.fighterId)) fail("Você já tem um acordo com esse jogador nesta rodada.");
       if (combat.used.includes(`${p.id}:threat`)) fail("Você já fez uma ameaça neste combate.");
+      if (combat.passed.includes(p.id)) fail("Você deixou passar: espere o combate mudar para ameaçar.");
       const free = freeTreasures(state, combat);
       if (free <= 0) fail(`${player(state, combat.fighterId).name} não vai ganhar mais tesouros neste combate: não há o que pedir.`);
       const count = Math.floor(Number(a.count) || 0);

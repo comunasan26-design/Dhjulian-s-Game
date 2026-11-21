@@ -8,11 +8,12 @@ export const RATING_MIN = 100;
 export const RANKED_SIZE = 6;
 /** Partidas de colocação: até completar, mostra "Em colocação (X/5)" em vez do rating. */
 export const PLACEMENT_GAMES = 5;
-/** Com mais bots que isso, a partida não conta para o rating. */
-export const MAX_COUNTED_BOTS = 3;
 export const ABANDON_PENALTY = 10;
 
-/** Rating fixo de um bot de dificuldade 1 a 30: 600 (nível 1) a 2050 (nível 30). */
+/**
+ * Rating fixo (predefinido) de um bot de dificuldade 1 a 30: 600 (nível 1) a 2050 (nível 30).
+ * Toda partida ranqueada conta, com qualquer número de bots: ganhar de um bot vale conforme o rating do nível dele.
+ */
 export function botRating(skill: number): number {
   return 600 + 50 * (Math.max(1, Math.min(30, Math.round(skill))) - 1);
 }
