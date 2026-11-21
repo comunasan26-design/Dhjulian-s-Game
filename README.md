@@ -57,6 +57,17 @@ O stream de tempo real (`/api/rooms/[code]/events`) fica aberto até ~55 s e o n
 nos limites de duração do plano Hobby. Cada conexão consulta a versão da sala no Postgres a cada ~0,7 s; quem faz a ação
 recebe o novo estado na hora e os outros jogadores em menos de 1 s.
 
+## Deploy no Pterodactyl (ou outro painel com Node.js)
+
+Use um egg de Node.js (versão 20.9 ou mais nova) com pelo menos **2 GB de RAM** (a compilação passa de 1,5 GB).
+
+1. **Git Repo Address**: o endereço deste repositório; **Install Branch**: `main`; **Auto Update**: ligado.
+2. **Main file**: `deploy/start.cjs` — ele instala o que faltar, compila quando o código muda, aplica as migrações
+   do banco e sobe o servidor na porta do painel (`SERVER_PORT`).
+3. Pelo gerenciador de arquivos, crie um `.env` na raiz com o `DATABASE_URL` de um PostgreSQL (o painel costuma oferecer
+   só MySQL; use um Postgres externo, como Neon ou Supabase, ou um egg de PostgreSQL).
+4. Sem domínio com HTTPS, acrescente `COOKIE_SECURE="false"` no `.env` para o login funcionar por `http://IP:porta`.
+
 ## Como funciona
 
 ```

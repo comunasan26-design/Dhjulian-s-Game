@@ -45,7 +45,8 @@ export async function createSession(userId: string): Promise<void> {
   store.set(SESSION_COOKIE, token, {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    // COOKIE_SECURE=false permite login por http://IP:porta (sem HTTPS), útil para testar em painéis de hospedagem
+    secure: process.env.COOKIE_SECURE ? process.env.COOKIE_SECURE !== "false" : process.env.NODE_ENV === "production",
     path: "/",
     expires: expiresAt,
   });
