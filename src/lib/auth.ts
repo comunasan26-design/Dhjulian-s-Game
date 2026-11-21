@@ -1,7 +1,7 @@
 import "server-only";
 import { createHash, randomBytes } from "node:crypto";
 import bcrypt from "bcryptjs";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { db } from "./db";
 
 export const SESSION_COOKIE = "dg_session";
@@ -42,6 +42,19 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
   return bcrypt.compare(password, hash);
 }
 
+/**
+ * Cookie "Secure" só quando o site é acessado por HTTPS: assim o login também funciona em http://IP:porta
+ * (painéis de hospedagem). COOKIE_SECURE="true"/"false" força um dos dois.
+ */
+async function secureCookie(): Promise<boolean> {
+  const forced = process.env.COOKIE_SECURE?.trim().toLowerCase();
+  if (forced === "true" || forced === "false") return forced === "true";
+  const h = await headers();
+  const proto = h.get("x-forwarded-proto")?.split(",")[0]?.trim().toLowerCase();
+  if (proto) return proto === "https";
+  return (h.get("origin") ?? h.get("referer") ?? "").startsWith("https://");
+}
+
 /** Cria uma sessão no banco e grava o cookie httpOnly. */
 export async function createSession(userId: string): Promise<void> {
   const token = randomBytes(32).toString("base64url");
@@ -51,8 +64,7 @@ export async function createSession(userId: string): Promise<void> {
   store.set(SESSION_COOKIE, token, {
     httpOnly: true,
     sameSite: "lax",
-    // COOKIE_SECURE=false permite login por http://IP:porta (sem HTTPS), útil para testar em painéis de hospedagem
-    secure: process.env.COOKIE_SECURE ? process.env.COOKIE_SECURE !== "false" : process.env.NODE_ENV === "production",
+    secure: await secureCookie(),
     path: "/",
     expires: expiresAt,
   });
