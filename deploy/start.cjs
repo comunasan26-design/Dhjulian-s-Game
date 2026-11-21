@@ -43,6 +43,20 @@ if (!built) {
 if (!run(npx, ["prisma", "migrate", "deploy"], false))
   console.warn("\n⚠️  Não deu para criar/atualizar o banco em prisma/. As salas online não vão funcionar.");
 
+// mostra qual arquivo de banco está em uso e quantas contas ele tem (ajuda a achar banco errado/vazio)
+try {
+  const Database = require("better-sqlite3");
+  const env = (process.env.DATABASE_URL || "").trim();
+  const file = env.startsWith("file:") ? path.resolve(root, env.slice(5)) : path.join(root, "prisma", "jogo.db");
+  const sqlite = new Database(file, { readonly: true });
+  const contas = sqlite.prepare('SELECT COUNT(*) AS n FROM "User"').get().n;
+  const salas = sqlite.prepare('SELECT COUNT(*) AS n FROM "Room"').get().n;
+  sqlite.close();
+  console.log(`\n🗄️  Banco: ${file} — ${contas} conta(s), ${salas} sala(s).`);
+} catch (e) {
+  console.warn(`\n⚠️  Não consegui ler o banco: ${e.message}`);
+}
+
 console.log(`\nIniciando na porta ${port}...`);
 const next = spawn(process.execPath, [require.resolve("next/dist/bin/next"), "start", "-p", port, "-H", "0.0.0.0"], {
   stdio: "inherit",

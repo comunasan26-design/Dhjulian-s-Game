@@ -9,9 +9,9 @@ export const POST = handle(async (req: Request) => {
   if (!username || !password) throw new HttpError(400, "Informe usuário e senha.");
 
   const user = await findUserByName(username);
-  if (!user || !(await verifyPassword(password, user.passwordHash))) {
-    throw new HttpError(401, "Usuário ou senha incorretos.");
-  }
+  // (o cadastro já diz quais nomes existem, então dizer qual dos dois errou não expõe nada a mais)
+  if (!user) throw new HttpError(401, `Não existe conta "${username}" neste servidor. Use "Criar conta".`);
+  if (!(await verifyPassword(password, user.passwordHash))) throw new HttpError(401, "Senha incorreta.");
   await createSession(user.id);
   return NextResponse.json({ user: { id: user.id, username: user.username } });
 });
