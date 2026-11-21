@@ -20,7 +20,7 @@ export function PlayerPanel({ p }: { p: PlayerView }) {
   return (
     <div
       data-drop={`player:${p.id}`}
-      className={`drop-zone w-full shrink-0 rounded-xl lg:w-[17rem] border bg-panel p-2 ${current ? "border-gold pulse-ring" : "border-edge"} ${
+      className={`drop-zone w-full shrink-0 rounded-xl lg:w-[17rem] border bg-panel p-2 [contain-intrinsic-size:auto_14rem] [content-visibility:auto] ${current ? "border-gold pulse-ring" : "border-edge"} ${
         inCombat ? "ring-1 ring-red-700" : ""
       }`}
     >

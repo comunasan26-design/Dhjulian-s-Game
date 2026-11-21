@@ -4,6 +4,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "./ui/Button";
+import { SkillSelect } from "./SkillSelect";
+import { Leaderboard, type LeaderRow } from "./ranked/Leaderboard";
+import { RankedPanel } from "./ranked/RankedPanel";
 
 interface RoomRow {
   code: string;
@@ -22,6 +25,8 @@ export function LobbyClient({ username }: { username: string }) {
   const [mine, setMine] = useState<RoomRow[]>([]);
   const [name, setName] = useState("");
   const [maxPlayers, setMaxPlayers] = useState(6);
+  const [botSkill, setBotSkill] = useState(20);
+  const [leaders, setLeaders] = useState<LeaderRow[]>([]);
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -44,6 +49,16 @@ export function LobbyClient({ username }: { username: string }) {
     return () => clearInterval(t);
   }, [load]);
 
+  useEffect(() => {
+    const get = () =>
+      fetch("/api/ranked/leaderboard", { cache: "no-store" })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => d && setLeaders(d.rows ?? []));
+    void get();
+    const t = setInterval(get, 30_000);
+    return () => clearInterval(t);
+  }, []);
+
   async function createRoom(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
@@ -51,7 +66,7 @@ export function LobbyClient({ username }: { username: string }) {
     const res = await fetch("/api/rooms", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, maxPlayers }),
+      body: JSON.stringify({ name, maxPlayers, botSkill }),
     });
     const data = await res.json();
     setLoading(false);
@@ -124,6 +139,7 @@ export function LobbyClient({ username }: { username: string }) {
 
       <div className="grid gap-6 md:grid-cols-[1fr_1.4fr]">
         <section className="space-y-4">
+          <RankedPanel />
           <form onSubmit={createRoom} className="rounded-xl border border-edge bg-panel p-4">
             <h2 className="mb-3 font-display text-lg text-gold-2">Criar sala</h2>
             <input
@@ -147,6 +163,7 @@ export function LobbyClient({ username }: { username: string }) {
                 ))}
               </select>
             </label>
+            <SkillSelect className="mt-3" value={botSkill} onChange={setBotSkill} />
             <Button type="submit" variant="primary" className="mt-4 w-full" disabled={loading}>
               Criar e entrar
             </Button>
@@ -173,6 +190,7 @@ export function LobbyClient({ username }: { username: string }) {
           </form>
         </section>
 
+        <div className="space-y-6">
         <section className="rounded-xl border border-edge bg-panel p-4">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="font-display text-lg text-gold-2">Salas abertas</h2>
@@ -200,6 +218,8 @@ export function LobbyClient({ username }: { username: string }) {
             </ul>
           )}
         </section>
+        <Leaderboard rows={leaders} me={username} />
+        </div>
       </div>
     </main>
   );

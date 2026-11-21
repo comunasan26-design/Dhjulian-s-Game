@@ -88,7 +88,7 @@ export type Action =
   | { type: "PLAY_CURSE"; cardId: string; targetId: string }
   | { type: "PLAY_LEVELUP"; cardId: string }
   | { type: "PLAY_MONSTER_BONUS"; cardId: string; monsterId: string }
-  | { type: "PLAY_WANDERING"; cardId: string; monsterCardId: string }
+  | { type: "PLAY_WANDERING"; cardId: string; monsterCardId: string; targetId?: string }
   | { type: "USE_CARD"; cardId: string; side?: "player" | "monster"; targetId?: string; monsterId?: string; index?: number }
   | { type: "TRADE"; toId: string; give: string[]; take: string[] }
   | { type: "KISS"; targetId: string; cardId: string }
@@ -548,6 +548,10 @@ function dispatch(state: GameState, p: PlayerState, a: Action, ctx: Ctx) {
       return;
     }
     case "PLAY_WANDERING": {
+      if (!state.combat) {
+        playWanderingOutside(state, ctx, p, a);
+        return;
+      }
       const combat = canInterfere(state, p);
       inHand(p, a.cardId);
       inHand(p, a.monsterCardId);
@@ -841,6 +845,37 @@ function dispatch(state: GameState, p: PlayerState, a: Action, ctx: Ctx) {
     default:
       fail("Ação desconhecida.");
   }
+}
+
+/**
+ * Monstro Errante fora de combate:
+ * - em você mesmo (no seu turno, depois de abrir a porta): luta agora com o monstro da mão (a seu favor);
+ * - em outro jogador: o monstro fica de tocaia e ele o enfrenta ao chutar a próxima porta.
+ */
+function playWanderingOutside(state: GameState, ctx: Ctx, p: PlayerState, a: Extract<Action, { type: "PLAY_WANDERING" }>) {
+  if (state.phase !== "PLAYING") fail("A partida não está em andamento.");
+  inHand(p, a.cardId);
+  inHand(p, a.monsterCardId);
+  if (defOf(state, a.cardId).kind !== "wandering") fail("Use uma carta de Monstro Errante.");
+  if (defOf(state, a.monsterCardId).kind !== "monster") fail("Escolha um monstro da mão.");
+  const target = player(state, a.targetId || p.id);
+  if (target.id === p.id) {
+    ownTurn(state, p);
+    if (state.turnPhase !== "AFTER_DOOR" && state.turnPhase !== "END") fail("Chute a porta primeiro.");
+    if (hasBlockingPrompts(state)) fail("Resolva as escolhas pendentes primeiro.");
+    if (state.reward) fail("Aguarde a divisão dos tesouros.");
+    discardFromPlayer(state, p, a.cardId);
+    removeFromPlayer(p, a.monsterCardId);
+    log(state, ctx, `🐺 ${p.name} chamou um Monstro Errante para lutar: ${nameOf(state, a.monsterCardId)}!`, "combat", p.id);
+    startCombat(state, ctx, p.id, a.monsterCardId);
+    return;
+  }
+  assertMayHinder(state, p, target.id);
+  if (target.hibernating) fail(`${target.name} está no casco.`);
+  discardFromPlayer(state, p, a.cardId);
+  removeFromPlayer(p, a.monsterCardId);
+  target.ambush.push(a.monsterCardId);
+  log(state, ctx, `🐺 ${p.name} soltou um Monstro Errante atrás da porta de ${target.name}: ele vai enfrentá-lo no próximo turno!`, "combat", p.id);
 }
 
 function clearOwl(state: GameState, p: PlayerState) {

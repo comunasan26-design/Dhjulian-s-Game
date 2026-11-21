@@ -6,6 +6,7 @@ import { Board } from "../game/Board";
 import { Button } from "../ui/Button";
 import { useRoom } from "./useRoom";
 import { WaitingRoom } from "./WaitingRoom";
+import { RankedResult } from "../ranked/RankedResult";
 
 export function RoomClient({ code, meId }: { code: string; meId: string }) {
   const { payload, needsJoin, fatal, toast, setToast, conn, busy, act, roomCall } = useRoom(code);
@@ -49,6 +50,7 @@ export function RoomClient({ code, meId }: { code: string; meId: string }) {
   return (
     <>
       {content}
+      {payload?.room.ranked && payload.game?.phase === "FINISHED" && <RankedResult code={payload.room.code} />}
       {toast && (
         <div className="fixed left-1/2 top-3 z-[60] max-w-[90vw] -translate-x-1/2 rounded-lg border border-blood bg-panel px-4 py-2 text-sm text-red-200 shadow-xl">
           {toast}

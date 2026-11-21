@@ -2,7 +2,7 @@
  * Arte das cartas: moldura de metal (cor pela raridade), gema no topo (pelo tipo), pergaminho e emblema.
  * Tudo em SVG estático; os gradientes ficam num único <svg> de definições (CardArtDefs) montado no layout.
  */
-import type { CSSProperties, ReactNode } from "react";
+import { type CSSProperties, memo, type ReactNode } from "react";
 import { type CardDef, RARITY_LABEL } from "@/game/catalog";
 import { KIND_LABEL, shortInfo } from "@/game/display";
 import { Emblem, KIND_FILE, sceneOf } from "./emblems";
@@ -234,7 +234,7 @@ function Seal({ children, tone }: { children: ReactNode; tone: "wax" | "gold" | 
 }
 
 /** Frente da carta (sem interatividade). O contêiner define a largura; a altura vem da proporção 5:7. */
-export function CardFront({ d, inst, size = "md" }: { d: CardDef; inst?: CardInstInfo; size?: CardSize }) {
+function CardFrontImpl({ d, inst, size = "md" }: { d: CardDef; inst?: CardInstInfo; size?: CardSize }) {
   const metal = METAL_OF[rarityOf(d)];
   const gem = gemOf(d.kind);
   const compact = size === "sm";
@@ -307,8 +307,16 @@ export function CardBackText({ d, lines, extra }: { d: CardDef; lines: string[];
   );
 }
 
+const instKey = (i?: CardInstInfo) => (i ? `${i.reforged ?? ""}|${i.runes?.join(",") ?? ""}|${i.charges ?? ""}|${i.tamed ? 1 : 0}|${i.artificeSecond ? 1 : 0}` : "");
+
+/**
+ * Frente da carta. Memorizada: o desenho (centenas de elementos SVG) só é refeito quando a própria carta muda,
+ * não a cada jogada ou troca de aba — no celular isso é o que mais pesa.
+ */
+export const CardFront = memo(CardFrontImpl, (a, b) => a.d === b.d && a.size === b.size && instKey(a.inst) === instKey(b.inst));
+
 /** Costas de carta oculta (ou do baralho). */
-export function CardBackside({ deck }: { deck?: "door" | "treasure" }) {
+export const CardBackside = memo(function CardBackside({ deck }: { deck?: "door" | "treasure" }) {
   const metal: Metal = deck === "treasure" ? "ouro" : "bronze";
   const leather = deck === "treasure" ? "#3a2410" : deck === "door" ? "#3a1512" : "#2a1d14";
   return (
@@ -334,4 +342,4 @@ export function CardBackside({ deck }: { deck?: "door" | "treasure" }) {
       <MetalFrame metal={metal} />
     </div>
   );
-}
+});

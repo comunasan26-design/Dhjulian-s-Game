@@ -6,6 +6,7 @@ import { RULES } from "@/game/catalog";
 import { type Action, applyAction, createGame, type Ctx, type GameState, type GameView, nextDeadline, tick, viewFor } from "@/game/engine";
 import { db } from "./db";
 import { HttpError } from "./http";
+import { finalizeRanked } from "./ranked";
 
 export const MIN_PLAYERS = RULES.jogadoresMinimo;
 export const MAX_PLAYERS = RULES.jogadoresMaximo;
@@ -47,6 +48,9 @@ export interface RoomInfo {
   hostId: string;
   maxPlayers: number;
   bots: number;
+  /** Dificuldade dos bots (1 a 30). */
+  botSkill: number;
+  ranked: boolean;
   version: number;
   players: { id: string; username: string; seat: number; online: boolean }[];
 }
@@ -65,6 +69,8 @@ export function roomInfo(room: RoomWithPlayers): RoomInfo {
     hostId: room.hostId,
     maxPlayers: room.maxPlayers,
     bots: room.bots,
+    botSkill: room.botSkill,
+    ranked: room.ranked,
     version: room.version,
     players: room.players.map((p) => ({ id: p.userId, username: p.user.username, seat: p.seat, online: online.has(p.userId) })),
   };
@@ -105,7 +111,7 @@ export async function startGame(code: string, userId: string): Promise<RoomWithP
   const state = createGame(
     [
       ...room.players.map((p) => ({ id: p.userId, name: p.user.username })),
-      ...Array.from({ length: room.bots }, (_, i) => ({ id: `bot-${i + 1}`, name: botName(i), bot: true })),
+      ...Array.from({ length: room.bots }, (_, i) => ({ id: `bot-${i + 1}`, name: botName(i), bot: true, skill: room.botSkill })),
     ],
     room.hostId,
     serverCtx(),
@@ -141,6 +147,7 @@ export async function performAction(code: string, userId: string, action: Action
     });
     if (res.count === 1) {
       await touchPresence(room.id, userId);
+      if (state.phase === "FINISHED") await finalizeRanked(room.id, state);
       return loadRoom(code);
     }
     await new Promise((r) => setTimeout(r, 20 + Math.random() * 60));
@@ -161,6 +168,7 @@ export async function tickRoom(roomId: string, version: number, stateJson: unkno
       status: state.phase === "FINISHED" ? "FINISHED" : "PLAYING",
     },
   });
+  if (res.count === 1 && state.phase === "FINISHED") await finalizeRanked(roomId, state);
   return res.count === 1;
 }
 
@@ -184,6 +192,7 @@ export async function botStepRoom(roomId: string, version: number, stateJson: un
       status: state.phase === "FINISHED" ? "FINISHED" : "PLAYING",
     },
   });
+  if (res.count === 1 && state.phase === "FINISHED") await finalizeRanked(roomId, state);
   return res.count === 1;
 }
 

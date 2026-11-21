@@ -6,6 +6,7 @@ import { botName, stepBots } from "@/game/bot/ai";
 import { type Action, applyAction, createGame, type Ctx, type GameState, type GameView, tick, viewFor } from "@/game/engine";
 import { Board } from "./game/Board";
 import { Button } from "./ui/Button";
+import { SkillSelect } from "./SkillSelect";
 
 const STORAGE_KEY = "dg_local_game_v1";
 const ME = "voce";
@@ -49,6 +50,7 @@ export function LocalGame() {
   const [ready, setReady] = useState(false);
   const [name, setName] = useState("Você");
   const [bots, setBots] = useState(3);
+  const [skill, setSkill] = useState(20);
   const [toast, setToast] = useState<string | null>(null);
 
   const commit = useCallback(() => {
@@ -63,16 +65,51 @@ export function LocalGame() {
     setReady(true);
   }, []);
 
-  // Laço dos bots e dos prazos
+  // Laço dos bots e dos prazos. Os bots pensam num Web Worker (a tela não trava enquanto decidem);
+  // sem suporte a workers, roda aqui mesmo como antes.
   useEffect(() => {
+    let worker: Worker | null = null;
+    try {
+      worker = new Worker(new URL("./bots.worker.ts", import.meta.url), { type: "module" });
+    } catch {
+      worker = null;
+    }
+    let pending: { id: number; sent: GameState; at: number } | null = null;
+    let seq = 0;
+    if (worker)
+      worker.onmessage = (e: MessageEvent<{ id: number; changed: boolean; state: GameState | null }>) => {
+        const p = pending;
+        pending = null;
+        if (!p || p.id !== e.data.id || !e.data.changed || !e.data.state) return;
+        // se o jogador agiu enquanto os bots pensavam, descarta (eles pensam de novo no próximo ciclo)
+        if (stateRef.current !== p.sent) return;
+        stateRef.current = e.data.state;
+        commit();
+      };
+    if (worker)
+      worker.onerror = () => {
+        // worker quebrou: volta a rodar os bots aqui
+        worker?.terminate();
+        worker = null;
+        pending = null;
+      };
     const t = setInterval(() => {
       const s = stateRef.current;
       if (!s || s.phase === "FINISHED") return;
+      if (worker) {
+        if (pending && Date.now() - pending.at < 8000) return;
+        pending = { id: ++seq, sent: s, at: Date.now() };
+        worker.postMessage({ id: pending.id, state: s, now: Date.now() });
+        return;
+      }
       const c = ctx();
       const changed = tick(s, c) || stepBots(s, c);
       if (changed) commit();
     }, 300);
-    return () => clearInterval(t);
+    return () => {
+      clearInterval(t);
+      worker?.terminate();
+    };
   }, [commit]);
 
   useEffect(() => {
@@ -110,7 +147,7 @@ export function LocalGame() {
   function start() {
     const players = [
       { id: ME, name: name.trim().slice(0, 20) || "Você" },
-      ...Array.from({ length: bots }, (_, i) => ({ id: `bot-${i + 1}`, name: botName(i), bot: true })),
+      ...Array.from({ length: bots }, (_, i) => ({ id: `bot-${i + 1}`, name: botName(i), bot: true, skill })),
     ];
     stateRef.current = createGame(players, ME, ctx());
     commit();
@@ -192,6 +229,7 @@ export function LocalGame() {
             ))}
           </select>
         </label>
+        <SkillSelect className="mt-4" value={skill} onChange={setSkill} />
         <Button variant="primary" size="lg" className="mt-6 w-full" onClick={start}>
           ▶ Nova partida local
         </Button>

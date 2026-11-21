@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "../ui/Button";
+import { SkillSelect, skillName } from "../SkillSelect";
 import type { RoomInfo } from "./types";
 
 export function WaitingRoom({
@@ -65,7 +66,7 @@ export function WaitingRoom({
             <li key={`bot${i}`} className="flex items-center justify-between rounded-lg border border-dashed border-edge bg-panel-2/60 px-3 py-2">
               <span>
                 <span className="mr-2 inline-block h-2 w-2 rounded-full bg-sky-400" />
-                Bot {i + 1} <span className="text-xs text-muted">(controlado pelo computador)</span>
+                Bot {i + 1} <span className="text-xs text-muted">(dificuldade {room.botSkill} · {skillName(room.botSkill)})</span>
               </span>
             </li>
           ))}
@@ -79,6 +80,7 @@ export function WaitingRoom({
               Remover bot
             </Button>
             <span className="text-xs text-muted">Bots jogam para vencer: sobem de nível, atrapalham humanos e o líder.</span>
+            <SkillSelect className="w-full" value={room.botSkill} disabled={busy} onChange={(v) => void roomCall("bots", { skill: v })} />
           </div>
         )}
         <div className="mt-6 flex flex-wrap gap-2">

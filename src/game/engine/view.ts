@@ -35,6 +35,8 @@ export interface PlayerView {
   hibernating: boolean;
   ready: boolean;
   bot: boolean;
+  /** Dificuldade do bot (1 a 30). */
+  skill?: number;
   /** Tipos de efeito passivo que o jogador tem (vindos da raça/classe no JSON). */
   passives: string[];
   maxClasses: number;
@@ -130,6 +132,7 @@ export function viewFor(state: GameState, me: string, now: number, online: Set<s
       hibernating: p.hibernating,
       ready: p.ready,
       bot: !!p.bot,
+      ...(p.bot ? { skill: p.skill ?? 30 } : {}),
       passives: [...new Set(identityCards(state, p).flatMap((id) => fxOf(state.cards[id].defId).map((f) => f.tipo)))],
       maxClasses: maxClasses(state, p),
       power: playerPower(state, p),
