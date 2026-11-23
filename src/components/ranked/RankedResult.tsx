@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { RatingValue } from "./RatingValue";
 
 interface MeResult {
   rating: number;
@@ -40,13 +41,14 @@ export function RankedResult({ code }: { code: string }) {
       <p className="mt-1 font-display text-2xl text-gold-2">{position}º lugar</p>
       {counted ? (
         <p className="mt-1 text-sm text-ink">
-          Rating: <b>{r.label}</b>{" "}
-          {r.games >= 5 ? (
-            <span className={d >= 0 ? "text-emerald-300" : "text-red-300"}>
-              ({d >= 0 ? "+" : ""}
-              {d})
-            </span>
-          ) : null}
+          Rating:{" "}
+          <b>
+            <RatingValue rating={r.rating} games={r.games} self />
+          </b>{" "}
+          <span className={d >= 0 ? "text-emerald-300" : "text-red-300"}>
+            ({d >= 0 ? "+" : ""}
+            {d})
+          </span>
         </p>
       ) : (
         <p className="mt-1 text-sm text-muted">Esta partida não contou para o rating.</p>

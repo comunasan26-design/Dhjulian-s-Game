@@ -25,7 +25,7 @@ describe("rating ranqueado", () => {
     expect(botSkillFor([3000])).toBe(30);
     expect(botSkillFor([100])).toBe(1);
     expect([queueWindow(0), queueWindow(30_000), queueWindow(60_000)]).toEqual([100, 250, Infinity]);
-    expect(ratingLabel(1234.6, 3)).toBe("Em colocação (3/5)");
+    expect(ratingLabel(1234.6, 3)).toBe("1235?");
     expect(ratingLabel(1234.6, 5)).toBe("1235");
   });
 

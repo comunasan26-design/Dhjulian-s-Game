@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "../ui/Button";
+import { RatingValue } from "./RatingValue";
 
 interface QueueStatus {
   status: "idle" | "searching" | "matched";
@@ -136,7 +137,7 @@ export function RankedPanel() {
         </div>
         <div className="text-right">
           <p className="text-[11px] uppercase tracking-wider text-muted">Seu rating</p>
-          <p className={me && me.games < 5 ? "whitespace-nowrap text-sm text-ink" : "font-mono text-lg text-ink"}>{me ? me.label : "…"}</p>
+          <p className="text-lg text-ink">{me ? <RatingValue rating={me.rating} games={me.games} self /> : "…"}</p>
         </div>
       </div>
       {error && <p className="mt-3 rounded-md border border-blood/50 bg-blood/10 px-3 py-2 text-sm text-red-300">{error}</p>}

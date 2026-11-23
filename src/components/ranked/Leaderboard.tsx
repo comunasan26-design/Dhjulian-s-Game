@@ -1,3 +1,5 @@
+import { RatingValue } from "./RatingValue";
+
 export interface LeaderRow {
   rank: number;
   username: string;
@@ -5,13 +7,13 @@ export interface LeaderRow {
   games: number;
 }
 
-/** Tabela do ranking (rating estilo Elo; só quem já terminou as 5 partidas de colocação). */
+/** Tabela do ranking (rating estilo Elo; "?" = ainda nas partidas de colocação). */
 export function Leaderboard({ rows, me, className = "" }: { rows: LeaderRow[]; me?: string; className?: string }) {
   return (
     <section className={`rounded-xl border border-edge bg-panel p-4 ${className}`}>
       <h2 className="mb-3 font-display text-lg text-gold-2">🏆 Ranking</h2>
       {rows.length === 0 ? (
-        <p className="py-4 text-center text-sm text-muted">Ninguém terminou as 5 partidas de colocação ainda. Seja o primeiro!</p>
+        <p className="py-4 text-center text-sm text-muted">Ninguém terminou uma partida ranqueada ainda. Seja o primeiro!</p>
       ) : (
         <ol className="space-y-1 text-sm">
           {rows.map((r) => (
@@ -23,8 +25,8 @@ export function Leaderboard({ rows, me, className = "" }: { rows: LeaderRow[]; m
                 {r.rank <= 3 ? ["🥇", "🥈", "🥉"][r.rank - 1] : `${r.rank}.`}
               </span>
               <span className="min-w-0 flex-1 truncate">{r.username}</span>
-              <span className="text-xs text-muted">{r.games} partidas</span>
-              <span className="w-12 text-right font-mono text-ink">{r.rating}</span>
+              <span className="text-xs text-muted">{r.games} {r.games === 1 ? "partida" : "partidas"}</span>
+              <RatingValue rating={r.rating} games={r.games} self={r.username === me} className="inline-block w-14 text-right text-ink" />
             </li>
           ))}
         </ol>

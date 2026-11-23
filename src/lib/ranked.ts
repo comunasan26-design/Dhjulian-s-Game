@@ -255,10 +255,10 @@ export interface LeaderRow {
   games: number;
 }
 
-/** Ranking: só quem já terminou as partidas de colocação. */
+/** Ranking: todo mundo que já terminou pelo menos 1 ranqueada (o rating conta desde a primeira; provisório até a 5ª). */
 export async function leaderboard(limit = 50): Promise<LeaderRow[]> {
   const rows = await db().user.findMany({
-    where: { rankedGames: { gte: 5 } },
+    where: { rankedGames: { gte: 1 } },
     orderBy: [{ rating: "desc" }, { rankedGames: "desc" }],
     take: limit,
     select: { username: true, rating: true, rankedGames: true },

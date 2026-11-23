@@ -345,6 +345,39 @@ describe("regras", () => {
     expect(state.combat).toBeNull();
   });
 
+  it("Canto da Sereia: o jogador encantado ajuda quem o obrigou, mesmo contra a Naga", () => {
+    const { state, ctx } = setup(3);
+    P(state, "p0").race = newCard(state, "race.tritao");
+    const cards = [give(state, "p0", "levelup.treino"), give(state, "p0", "levelup.critico")];
+    topDoor(state, "monster.naga"); // seduz o ajudante
+    applyAction(state, "p0", { type: "KICK_DOOR" }, ctx);
+    applyAction(state, "p0", { type: "ABILITY", key: "race.tritao#cantoSereia", discard: cards, params: { player: "p1" } }, ctx);
+    const calc = computeCombat(state)!;
+    expect(state.combat!.helperId).toBe("p1");
+    expect(calc.side).toEqual(["p0", "p1"]);
+    expect(calc.monsterSide).toEqual([]);
+  });
+
+  it("Poção de Invisibilidade em quem está no combate: sai do combate na hora", () => {
+    const { state, ctx } = setup(3);
+    topDoor(state, "monster.gosma");
+    applyAction(state, "p0", { type: "KICK_DOOR" }, ctx);
+    applyAction(state, "p1", { type: "OFFER_HELP", count: 0, mode: "random" }, ctx);
+    applyAction(state, "p0", { type: "ANSWER", promptId: state.prompts.find((x) => x.kind === "helpOffer")!.id, answer: { accept: true } }, ctx);
+    expect(state.combat!.helperId).toBe("p1");
+    // no ajudante: ele vai embora e o combate continua
+    const pot1 = give(state, "p2", "potion.invisibilidade");
+    applyAction(state, "p2", { type: "USE_CARD", cardId: pot1, targetId: "p1" }, ctx);
+    expect(state.combat!.helperId).toBeNull();
+    expect(computeCombat(state)!.side).toEqual(["p0"]);
+    // em quem luta: foge na hora, sem Coisas Ruins
+    const levelBefore = P(state, "p0").level;
+    const pot2 = give(state, "p0", "potion.invisibilidade");
+    applyAction(state, "p0", { type: "USE_CARD", cardId: pot2, targetId: "p0" }, ctx);
+    expect(state.combat).toBeNull();
+    expect(P(state, "p0").level).toBe(levelBefore);
+  });
+
   it("Monstro Errante fora de combate: lutar agora no seu turno ou deixar de tocaia para outro jogador", () => {
     const { state, ctx } = setup(3);
     P(state, "p0").level = 9;

@@ -6,7 +6,7 @@ import type { GameState } from "../game/engine";
 export const RATING_START = 1200;
 export const RATING_MIN = 100;
 export const RANKED_SIZE = 6;
-/** Partidas de colocação: até completar, mostra "Em colocação (X/5)" em vez do rating. */
+/** Partidas de colocação: o rating já conta desde a 1ª, mas até completar aparece com "?" (provisório). */
 export const PLACEMENT_GAMES = 5;
 export const ABANDON_PENALTY = 10;
 
@@ -123,7 +123,7 @@ export function finalPositions(state: GameState, allIds: string[]): Map<string, 
   return pos;
 }
 
-/** Texto do rating para exibir: arredondado, ou "Em colocação (X/5)" nas primeiras partidas. */
+/** Texto do rating: arredondado, com "?" enquanto as partidas de colocação não terminaram (provisório). */
 export function ratingLabel(rating: number, games: number): string {
-  return games < PLACEMENT_GAMES ? `Em colocação (${games}/${PLACEMENT_GAMES})` : String(Math.round(rating));
+  return `${Math.round(rating)}${games < PLACEMENT_GAMES ? "?" : ""}`;
 }
