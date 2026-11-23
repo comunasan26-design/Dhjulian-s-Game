@@ -240,6 +240,8 @@ export function abolethThrall(state: GameState, combat: CombatState): string | n
 
 export function helperIsTraitor(state: GameState, combat: CombatState): boolean {
   if (!combat.helperId) return false;
+  // encantado (Canto da Sereia / Amizade Duvidosa): luta do lado de quem o obrigou, sempre
+  if (combat.helperForced) return false;
   if (combat.helperTraitor) return true;
   if (combatHas(state, combat, "seduzAjudante")) return true;
   return false;
@@ -248,15 +250,16 @@ export function helperIsTraitor(state: GameState, combat: CombatState): boolean 
 export function playerSide(state: GameState, combat: CombatState): string[] {
   const ids = [combat.fighterId];
   const thrall = abolethThrall(state, combat);
-  if (combat.helperId && !helperIsTraitor(state, combat) && combat.helperId !== thrall) ids.push(combat.helperId);
+  if (combat.helperId && !helperIsTraitor(state, combat) && (combat.helperId !== thrall || combat.helperForced)) ids.push(combat.helperId);
   return ids;
 }
 
 export function monsterSidePlayers(state: GameState, combat: CombatState): string[] {
   const ids: string[] = [];
   const thrall = abolethThrall(state, combat);
-  if (combat.helperId && (helperIsTraitor(state, combat) || combat.helperId === thrall)) ids.push(combat.helperId);
-  if (thrall && !ids.includes(thrall)) ids.push(thrall);
+  const charmed = combat.helperForced ? combat.helperId : null;
+  if (combat.helperId && (helperIsTraitor(state, combat) || (combat.helperId === thrall && !charmed))) ids.push(combat.helperId);
+  if (thrall && thrall !== charmed && !ids.includes(thrall)) ids.push(thrall);
   return ids;
 }
 
@@ -625,6 +628,7 @@ export function fleeInfo(state: GameState, p: PlayerState, cm: CombatMonster): F
   });
   if (combat.desafio && p.id === combat.fighterId) return res(null, "Desafio: não dá para fugir");
   if (combat.autoFlee.includes(`${p.id}|all`)) return res("Pergaminho de Teletransporte", null);
+  if (combat.autoFlee.includes(`${p.id}|nonleg`) && !d.legendary) return res("Poção de Invisibilidade", null);
   const np = notPursued(state, p, d, specialOn);
   if (np) return res(`${d.name} ${np}`, null);
   const noFlee = passiveFxSrc(state, p, "naoPodeFugir")[0];
@@ -632,7 +636,6 @@ export function fleeInfo(state: GameState, p: PlayerState, cm: CombatMonster): F
   if (combat.cantFlee.includes(p.id)) return res(null, "Pés de Chumbo");
   const botas = !!equippedFx(state, p, "fugirDeTudo");
   if (d.cantFlee && specialOn && !botas) return res(null, `${d.name}: não dá para fugir`);
-  if (combat.autoFlee.includes(`${p.id}|nonleg`) && !d.legendary) return res("Poção de Invisibilidade", null);
   for (const { fx, source } of passiveFxSrc(state, p, "fugaAutomaticaContra"))
     if (strs(fx, "tags").some((t) => d.tags.includes(t as Tag))) return res(source, null);
 

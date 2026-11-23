@@ -523,7 +523,10 @@ export function joinHelper(
       loseLevels(state, h, 1, ctx, "Sopro venenoso do Dragão Verde");
     }
   }
-  if (combat.pendingTraitor) {
+  if (combat.pendingTraitor && forced) {
+    combat.pendingTraitor = false;
+    log(state, ctx, `🧜 O encanto mantém ${h.name} do lado de ${player(state, combat.fighterId).name}: a Ilusão Traidora não funciona.`, "curse");
+  } else if (combat.pendingTraitor) {
     combat.pendingTraitor = false;
     combat.helperTraitor = true;
     log(state, ctx, `🌀 Ilusão Traidora: ${h.name} passa para o lado do monstro!`, "curse");

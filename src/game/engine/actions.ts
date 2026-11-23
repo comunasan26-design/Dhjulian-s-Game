@@ -38,6 +38,7 @@ import {
 import { answerPrompt, type PromptAnswer, timeoutPrompt } from "./prompts";
 import { type Ctx, type GameState, type HelpDeal, type PlayerState, TIMERS, fail } from "./state";
 import {
+  activeMonsters,
   combatTags,
   computeCombat,
   equipCheck,
@@ -1100,9 +1101,22 @@ function playConsumable(state: GameState, ctx: Ctx, p: PlayerState, a: Extract<A
       maybeApplyBadStuff(state, ctx);
       return;
     }
+    // sai do combate na hora: quem luta foge (automático contra o que a carta cobre); o ajudante só vai embora
+    if (t.id !== combat.fighterId && !all && activeMonsters(combat).some((m) => defOfMonster(state, m.cardId).legendary))
+      fail(`${d.name} não funciona contra monstros Lendários.`);
     combat.autoFlee.push(`${t.id}|${all ? "all" : "nonleg"}`);
     finish();
-    log(state, ctx, `💨 ${t.name} vai fugir automaticamente (${d.name}).`, "combat");
+    if (t.id === combat.fighterId) {
+      log(state, ctx, `💨 ${t.name} sumiu do combate (${d.name})!`, "combat");
+      startFlee(state, ctx);
+    } else {
+      combat.helperId = null;
+      combat.helperDeal = null;
+      combat.helperForced = false;
+      combat.helperTraitor = false;
+      log(state, ctx, `💨 ${t.name} sumiu do combate (${d.name}) e não ajuda mais.`, "combat");
+      onCombatChanged(state, ctx);
+    }
     return;
   }
   const up = has("subirNivel");

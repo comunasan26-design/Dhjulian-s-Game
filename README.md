@@ -70,7 +70,7 @@ voltar para um banco externo (PostgreSQL).
   Quem desiste fica em último e perde 10 a mais.
 - **Rating** (`src/lib/rating.ts`): cada partida vira duelos 1x1 contra os outros 5 (vitória 1, empate 0,5, derrota 0),
   comparados com o esperado pela diferença de rating, como no xadrez. K = 48 (0–9 partidas), 32 (10–29), 20 (30+) e
-  16 (30+ e rating ≥ 2000). Começa em 1200 (oculto nas 5 partidas de colocação), mínimo 100.
+  16 (30+ e rating ≥ 2000). Começa em 1200 e conta desde a 1ª partida; até concluir as 5 de colocação aparece com “?” (provisório). Mínimo 100.
 - **Bots**: rating fixo `600 + 50 × (dificuldade − 1)`; a dificuldade de quem completa a mesa acompanha a média dos
   humanos. Toda partida conta, com qualquer número de bots (ganhar de um bot vale conforme o rating do nível dele; duelos contra bots valem metade). Os duelos humano x bot ficam
   guardados em `RankedMatch.results` para recalibrar a tabela.
@@ -99,6 +99,10 @@ src/
   aceitar ou recusar), verde = deixou passar. Quem está de fora vê o jogador à esquerda e o monstro à direita e pode
   arrastar cartas para um dos lados, ameaçar, pedir para ajudar ou deixar passar. Ao virar ajudante, a tela pisca e muda
   para a visão de quem luta. “Ver mesa” minimiza a tela de batalha.
+- **Canto da Sereia** (e Amizade Duvidosa): o jogador encantado luta sempre do lado de quem o obrigou, mesmo contra
+  monstros que seduzem o ajudante (Naga) ou a Ilusão Traidora.
+- **Poção de Invisibilidade / Pergaminho de Teletransporte** em quem está no combate: sai na hora. Quem luta foge
+  (automaticamente do que a carta cobre); o ajudante só deixa o combate.
 - **Deixar passar**: vale durante todo o combate; quem deixou passar não ameaça nem pede para ajudar até o combate mudar.
 - **Janela de ataque**: quando alguém clica em “Atacar”, os outros têm 60 s para interferir ou “Deixar passar”; qualquer
   ação que mude o combate reinicia o contador.
